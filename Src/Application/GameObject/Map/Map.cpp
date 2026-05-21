@@ -6,7 +6,7 @@ void Map::Init()
 {
     m_drawType = eDrawTypeLit;
 
-    const auto spData = ModelManager::Instance().GetModel("Assets/Map/testmap.gltf");
+    const auto spData = ModelManager::Instance().GetModel("Asset/Data/testmap.gltf");
     if (spData)
     {
         m_modelWork.SetModelData(spData);

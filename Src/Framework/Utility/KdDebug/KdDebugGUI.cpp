@@ -58,6 +58,9 @@ void KdDebugGUI::GuiProcess()
 //	}
 //	ImGui::End();
 
+	// 登録されたシーンのImGui描画を呼ぶ
+	if (m_guiCallback) { m_guiCallback(); }
+
 	// ログウィンドウ
 	m_uqLog->Draw("Log Window");
 

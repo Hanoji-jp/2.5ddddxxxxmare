@@ -21,12 +21,15 @@ public :
 	{
 		return m_objList;
 	}
-	
+
 	// オブジェクトリストに追加
 	void AddObject(const std::shared_ptr<KdGameObject>& _obj)
 	{
 		m_objList.push_back(_obj);
 	}
+
+protected:
+	virtual void DrawGui() {}
 
 protected :
 

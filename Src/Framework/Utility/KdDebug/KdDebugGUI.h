@@ -117,12 +117,18 @@ public:
 
 	void AddLog(const char* fmt, ...);
 	void ClearLog();
+
+	// ImGui描画コールバックを登録する
+	void SetGuiCallback(const std::function<void()>& _callback) { m_guiCallback = _callback; }
+	void ClearGuiCallback() { m_guiCallback = nullptr; }
 	
 private:
 	void GuiRelease();
 
 	// ImGui
 	std::unique_ptr<ImGuiAppLog> m_uqLog = nullptr;
+
+	std::function<void()> m_guiCallback = nullptr;
 
 //=====================================================
 // シングルトンパターン

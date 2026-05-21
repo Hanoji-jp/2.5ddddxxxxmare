@@ -13,6 +13,7 @@ public:
         Jump,
         Fall,
         Dead,
+        Attack,
     };
 
     Character() {}

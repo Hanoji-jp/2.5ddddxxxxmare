@@ -11,6 +11,7 @@ public :
 	{
 		Title,
 		Game,
+		Editor,
 	};
 
 	void PreUpdate();

@@ -4,17 +4,44 @@
 namespace PlayerConst
 {
     // 移動速度
-    constexpr float MoveSpeed       = 0.08f;
+    constexpr float MoveSpeed        = 0.08f;
+
+    // 加速度（入力あり）
+    constexpr float Acceleration     = 0.012f;
+
+    // 減速度（入力なし）
+    constexpr float Deceleration     = 0.018f;
+
+    // 向き補間速度（1.0fで即座、小さいほど緩やか）
+    constexpr float RotationSpeed    = 0.15f;
 
     // ジャンプ初速
-    constexpr float JumpPower       = 0.4f;
+    constexpr float JumpPower        = 0.4f;
 
     // 最大HP
-    constexpr int   MaxHp           = 5;
+    constexpr int   MaxHp            = 5;
 
     // 無敵時間（フレーム数）
-    constexpr int   InvincibleFrame = 60;
+    constexpr int   InvincibleFrame  = 60;
 
     // モデルの拡大率
-    constexpr float ModelScale      = 0.01f;
+    constexpr float ModelScale       = 1.0f;
+
+    // 近接攻撃クールダウン（フレーム）
+    constexpr int   MeleeCooldown    = 30;
+
+    // 遠距離攻撃クールダウン（フレーム）
+    constexpr int   RangedCooldown   = 45;
+
+    // アニメーションブレンドフレーム数
+    constexpr int   AnimBlendFrames  = 8;
+
+    // 矢の発射オフセット
+    constexpr float ArrowOffsetY     = 1.0f;
+
+    // モデルパス
+    constexpr const char* ModelPath  = "Asset/Data/Player.gltf";
+    constexpr const char* SwordPath  = "Asset/Data/Sword.gltf";
+    constexpr const char* BowPath    = "Asset/Data/Bow.gltf";
+    constexpr const char* ArrowPath  = "Asset/Data/Bow_Arrow.gltf";
 }

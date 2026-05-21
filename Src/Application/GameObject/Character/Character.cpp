@@ -27,7 +27,6 @@ void Character::ApplyVelocity()
 {
     Math::Vector3 pos = GetPos();
     pos += m_velocity;
-    pos.z = GameConst::FixedZ;
     SetPos(pos);
 }
 
