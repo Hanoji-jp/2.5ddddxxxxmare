@@ -19,7 +19,8 @@ namespace CameraConst
 	constexpr float LookAheadX       = 1.5f;   // 進行方向への先読みオフセット
 	constexpr float LookAheadY       = 0.2f;
 
-	// 浮遊ボブ
+	// ルーム遷移
+	constexpr float RoomTransitionSpeed = 0.8f;  // 遷移速度（約1.25秒でスゥンと切り替わる）
 	constexpr float FloatAmplitude   = 0.25f;  // 上下の浮遊幅
 	constexpr float FloatSpeed       = 0.8f;   // 浮遊の周期速度（rad/s）
 

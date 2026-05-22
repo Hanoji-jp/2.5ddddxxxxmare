@@ -31,6 +31,13 @@ private:
     float         m_wallZoomRate = 0.0f;
     // 初期化済みフラグ
     bool          m_initialized = false;
+    // クランプ範囲（Lerp で滑らかに切り替え）
+    float         m_clampMinX = -FLT_MAX;
+    float         m_clampMaxX =  FLT_MAX;
+    // 遷移後クランプ猶予タイマー（0になったらクランプ有効）
+    float         m_postTransitionTimer = 0.0f;
+    // 遷移開始時のカメラX位置（スライドの起点）
+    float         m_transitionStartX   = 0.0f;
 
     int           m_currentRoom     = 0;
     int           m_nextRoom        = 0;

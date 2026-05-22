@@ -83,32 +83,32 @@ Math::Vector3 SideScrollCamera::CalcTargetLookAt(const Math::Vector3& _targetPos
 void SideScrollCamera::Update(const Math::Vector3& _targetPos)
 {
 	// ── 1. ルーム遷移ステート更新 ──────────────────────────────
+	constexpr float kDt = 1.0f / 60.0f;
 	if (!m_rooms.empty() && m_currentRoom + 1 < static_cast<int>(m_rooms.size()))
 	{
-		const int         nextIdx  = m_currentRoom + 1;
-		const RoomBounds& cur      = m_rooms[m_currentRoom];
-		const float       startX   = cur.triggerX - cur.blendX;
-		const float       endX     = cur.triggerX + cur.blendX;
+		const RoomBounds& cur = m_rooms[m_currentRoom];
 
-		if (_targetPos.x <= startX)
+		if (!m_isTransitioning && _targetPos.x >= cur.triggerX)
 		{
-			m_isTransitioning = false;
-			m_transitionRate  = 0.0f;
-			m_nextRoom        = m_currentRoom;
+			// triggerX を踏んだ瞬間に遷移開始
+			m_nextRoom          = m_currentRoom + 1;
+			m_transitionRate    = 0.0f;
+			m_isTransitioning   = true;
+			m_transitionStartX  = m_pos.x;  // 起点を記録
 		}
-		else if (_targetPos.x >= endX)
+
+		if (m_isTransitioning)
 		{
-			m_currentRoom     = nextIdx;
-			m_nextRoom        = m_currentRoom;
-			m_isTransitioning = false;
-			m_transitionRate  = 0.0f;
-		}
-		else
-		{
-			const float span  = endX - startX;
-			m_nextRoom        = nextIdx;
-			m_transitionRate  = (span > 0.0f) ? ((_targetPos.x - startX) / span) : 1.0f;
-			m_isTransitioning = true;
+			// 時間ベースで transitionRate を 0→1 に進める
+			m_transitionRate += kDt * CameraConst::RoomTransitionSpeed;
+			if (m_transitionRate >= 1.0f)
+			{
+				m_transitionRate  = 0.0f;
+				m_currentRoom     = m_nextRoom;
+				m_isTransitioning = false;
+				m_clampMinX       = m_rooms[m_currentRoom].minX;
+				m_clampMaxX       = m_rooms[m_currentRoom].maxX;
+			}
 		}
 	}
 
@@ -132,11 +132,29 @@ void SideScrollCamera::Update(const Math::Vector3& _targetPos)
 	{
 		const RoomBounds& cur = m_rooms[m_currentRoom];
 
+		// 目標クランプ範囲（遷移中は次ルーム、通常は現ルーム）
+		const RoomBounds& targetRoom = (m_isTransitioning && m_nextRoom < static_cast<int>(m_rooms.size()))
+			? m_rooms[m_nextRoom] : cur;
+		const float targetMinX = targetRoom.minX;
+		const float targetMaxX = targetRoom.maxX;
+
+		// 初回は即セット、以降は Lerp でじわっと追従（ルーム切替時のテレポート防止）
+		if (!m_initialized)
+		{
+			m_clampMinX = targetMinX;
+			m_clampMaxX = targetMaxX;
+		}
+		else
+		{
+			m_clampMinX = std::lerp(m_clampMinX, targetMinX, CameraConst::RoomTransitionSpeed * (1.0f / 60.0f));
+			m_clampMaxX = std::lerp(m_clampMaxX, targetMaxX, CameraConst::RoomTransitionSpeed * (1.0f / 60.0f));
+		}
+
 		// ① baseOffsetZ でのクランプ境界（FOV端が壁を超えない位置）
 		const float planeDist0 = std::abs(baseOffsetZ);
 		const float halfView0  = (m_mProj._11 > 0.0f) ? (planeDist0 / m_mProj._11) : 0.0f;
-		const float clampMin0  = cur.minX + halfView0;
-		const float clampMax0  = cur.maxX - halfView0;
+		const float clampMin0  = m_clampMinX + halfView0;
+		const float clampMax0  = m_clampMaxX - halfView0;
 
 		// ② プレイヤーがクランプ境界を超えた量 → ズーム率を更新
 		const float idealX = _targetPos.x;
@@ -151,22 +169,31 @@ void SideScrollCamera::Update(const Math::Vector3& _targetPos)
 		m_wallZoomRate = std::lerp(m_wallZoomRate, targetZoomRate, cs.WallZoomLerp);
 
 		// ③ ズーム後の actualOffsetZ で halfViewX を再計算
-		//    ズームで寄った分だけ halfViewX が縮み、clampMax が広がってプレイヤーを追える
 		const float actualOffsetZ = baseOffsetZ * (1.0f - m_wallZoomRate);
 		const float planeDist1    = std::abs(actualOffsetZ);
 		const float halfView1     = (m_mProj._11 > 0.0f) ? (planeDist1 / m_mProj._11) : 0.0f;
-		const float clampMin1     = cur.minX + halfView1;
-		const float clampMax1     = cur.maxX - halfView1;
+		const float clampMin1     = m_clampMinX + halfView1;
+		const float clampMax1     = m_clampMaxX - halfView1;
 
-		// ④ 目標をズーム後クランプ範囲に収める（MAX は絶対超えない）
-		if (clampMin1 <= clampMax1)
+		// ④ 目標X を確定
+		// 遷移中は起点(遷移開始時のカメラX) → 次ルームのminX+FOV左端 へスライド
+		if (m_isTransitioning && m_nextRoom < static_cast<int>(m_rooms.size()))
 		{
-			targetPos.x    = std::clamp(idealX,          clampMin1, clampMax1);
-			targetLookAt.x = std::clamp(targetLookAt.x,  clampMin1, clampMax1);
+			const RoomBounds& nxt  = m_rooms[m_nextRoom];
+			const float nextEntryX = nxt.minX + halfView1;
+			const float t          = m_transitionRate;
+			const float smooth     = t * t * (3.0f - 2.0f * t);
+			targetPos.x    = std::lerp(m_transitionStartX, nextEntryX, smooth);
+			targetLookAt.x = targetPos.x;
+		}
+		else if (clampMin1 <= clampMax1)
+		{
+			targetPos.x    = std::clamp(idealX,         clampMin1, clampMax1);
+			targetLookAt.x = std::clamp(targetLookAt.x, clampMin1, clampMax1);
 		}
 		else
 		{
-			const float center = (cur.minX + cur.maxX) * 0.5f;
+			const float center = (m_clampMinX + m_clampMaxX) * 0.5f;
 			targetPos.x    = center;
 			targetLookAt.x = center;
 		}
@@ -187,20 +214,7 @@ void SideScrollCamera::Update(const Math::Vector3& _targetPos)
 	m_pos       = Math::Vector3::Lerp(m_pos,       targetPos,    cs.PosLerp);
 	m_lookAtPos = Math::Vector3::Lerp(m_lookAtPos, targetLookAt, cs.LookAtLerp);
 
-	// Lerp 後も壁外に出ないよう再クランプ（FOV漏れ防止）
-	if (!m_rooms.empty())
-	{
-		const RoomBounds& cur    = m_rooms[m_currentRoom];
-		const float planeDist    = std::abs(m_pos.z);
-		const float halfViewX    = (m_mProj._11 > 0.0f) ? (planeDist / m_mProj._11) : 0.0f;
-		const float clampMin     = cur.minX + halfViewX;
-		const float clampMax     = cur.maxX - halfViewX;
-		if (clampMin <= clampMax)
-		{
-			m_pos.x       = std::clamp(m_pos.x,       clampMin, clampMax);
-			m_lookAtPos.x = std::clamp(m_lookAtPos.x, clampMin, clampMax);
-		}
-	}
+	// m_pos は直接触らない。targetPos 経由の Lerp だけで収める。
 
 	// ── 6. ロール ──────────────────────────────────────────────
 	const float offsetX       = _targetPos.x - m_pos.x;
