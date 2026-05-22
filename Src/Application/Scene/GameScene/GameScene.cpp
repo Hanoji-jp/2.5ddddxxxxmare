@@ -13,7 +13,8 @@ void GameScene::Event()
 
 		if (m_editorMode)
 		{
-			// エディターカメラに切り替え（現在位置を引き継ぐ）
+			// エディターカメラに切り替え（SideScrollCamera は破棄されるので観察ポインタを先に null にする）
+			m_pCamera        = nullptr;
 			auto upEditorCam = std::make_unique<EditorCamera>();
 			m_pEditorCam     = upEditorCam.get();
 			m_camera         = std::move(upEditorCam);
@@ -53,9 +54,26 @@ void GameScene::Event()
 	}
 }
 
+void GameScene::DrawDebugExtra()
+{
+	if (m_editorMode)
+	{
+		m_roomEditor.DrawDebugLines();
+	}
+}
+
 void GameScene::DrawGui()
 {
 	m_mapEditor.DrawGui();
+	m_roomEditor.DrawGui();
+	CameraSettings::Instance().DrawGui();
+
+	if (m_roomEditor.IsDirty())
+	{
+		m_rooms = m_roomEditor.GetRooms();
+		if (m_pCamera) { m_pCamera->SetRooms(m_rooms); }
+		m_roomEditor.ClearDirty();
+	}
 }
 
 void GameScene::RebuildMapObjects()
@@ -99,16 +117,26 @@ void GameScene::Init()
 	auto spMap = std::make_shared<Map>();
 	AddObject(spMap);
 
- // ルーム定義（部屋ごとの中心にカメラを固定）
-	m_rooms.clear();
-    m_rooms.push_back({ -10.0f,  10.0f, 0.0f, 10.0f,  9.5f, 3.0f });
-	m_rooms.push_back({  10.0f,  30.0f, 0.0f, 10.0f, 29.5f, 3.0f });
-	m_rooms.push_back({  20.0f,  20.0f, 5.0f,  5.0f, FLT_MAX, 0.0f });
-
+ // ルームエディター初期化・読込
+	m_roomEditor.Load();
+	if (m_roomEditor.GetRooms().empty())
+	{
+		// CSVがない場合のデフォルトルーム
+		m_rooms.clear();
+		m_rooms.push_back({ -10.0f, 10.0f, 0.0f, 10.0f,  9.5f, 3.0f });
+		m_rooms.push_back({  10.0f, 30.0f, 0.0f, 10.0f, 29.5f, 3.0f });
+		m_rooms.push_back({  20.0f, 20.0f, 5.0f,  5.0f, FLT_MAX, 0.0f });
+		m_roomEditor.SetRooms(m_rooms);
+	}
+	m_roomEditor.ClearDirty();
+	m_rooms = m_roomEditor.GetRooms();
 	m_pCamera->SetRooms(m_rooms);
 
 	// マップエディター初期化
 	m_mapEditor.Init();
+
+	// カメラ設定読込
+	CameraSettings::Instance().Load();
 
 	// ライト設定
 	auto& ambient = KdShaderManager::Instance().WorkAmbientController();

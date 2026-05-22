@@ -9,6 +9,8 @@
 #include"../../GameObject/Map/Map.h"
 #include"../../GameObject/Map/MapObject.h"
 #include"../../Editor/MapEditor.h"
+#include"../../Editor/RoomBoundsEditor.h"
+#include"../../Camera/CameraSettings.h"
 #include"../../GameObject/Camera/EditorCamera.h"
 
 class GameScene : public BaseScene
@@ -23,6 +25,7 @@ private:
 	void Event()              override;
 	void Init()               override;
 	void DrawGui()            override;
+	void DrawDebugExtra()     override;
 	void RebuildMapObjects();
 
 	std::shared_ptr<Player> m_spPlayer   = nullptr;
@@ -31,6 +34,7 @@ private:
 
 	// インゲームマップエディター
 	MapEditor               m_mapEditor;
+	RoomBoundsEditor        m_roomEditor;
 	bool                    m_editorMode  = false;
 	bool                    m_f2Prev      = false;
 	EditorCamera*           m_pEditorCam  = nullptr;

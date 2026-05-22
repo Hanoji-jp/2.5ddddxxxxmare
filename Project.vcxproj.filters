@@ -278,6 +278,8 @@
     <ClInclude Include="Src\Application\Const\CameraConst.h" />
     <ClInclude Include="Src\Application\GameObject\Camera\CameraRoom.h" />
     <ClInclude Include="Src\Application\GameObject\Camera\RoomBounds.h" />
+    <ClInclude Include="Src\Application\Editor\RoomBoundsEditor.h" />
+    <ClInclude Include="Src\Application\Camera\CameraSettings.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Pch.cpp">
@@ -439,6 +441,8 @@
     <ClCompile Include="Src\Application\GameObject\Weapon\Bow.cpp" />
     <ClCompile Include="Src\Application\GameObject\Weapon\Arrow.cpp" />
     <ClCompile Include="Src\Application\GameObject\Character\AnimBlender.cpp" />
+    <ClCompile Include="Src\Application\Editor\RoomBoundsEditor.cpp" />
+    <ClCompile Include="Src\Application\Camera\CameraSettings.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Src\Framework\Shader\inc_KdCommon.hlsli">

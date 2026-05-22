@@ -3,54 +3,38 @@
 #include "RoomBounds.h"
 
 // 2.5D横スクロール用カメラ
-// ルーム単位でカメラ中心を固定し、境界でのみ切り替える
+// ルーム単位でカメラ中心を基準に、LookAt + ロール + 浮遊でリトルナイトメア風に動く
 class SideScrollCamera : public KdCamera
 {
 public:
     SideScrollCamera()  {}
     ~SideScrollCamera() {}
 
-    // ターゲットのワールド座標に追従して更新する
     void Update(const Math::Vector3& _targetPos);
-
-    // ルーム一覧を設定する
     void SetRooms(const std::vector<RoomBounds>& _rooms);
-
-    // 現在のルームインデックス取得
-    int GetCurrentRoomIndex() const { return m_currentRoom; }
+    int  GetCurrentRoomIndex() const { return m_currentRoom; }
 
 private:
-    // 現在ルームのカメラ中心を取得
-    Math::Vector3 GetRoomCenter() const;
+    Math::Vector3 CalcBlendedRoomCenter(const Math::Vector3& _targetPos) const;
+    Math::Vector3 CalcTargetCamPos(const Math::Vector3& _targetPos, float _floatY, float _floatX, float _offsetZ) const;
+    Math::Vector3 CalcTargetLookAt(const Math::Vector3& _targetPos) const;
 
-    // プレイヤーを少し追うカメラ中心を取得
-    Math::Vector3 GetFollowRoomCenter(const Math::Vector3& _targetPos) const;
-
-    // ルーム遷移をゆるくブレンドした目標位置を取得
-    Math::Vector3 GetBlendedRoomCenter(const Math::Vector3& _targetPos) const;
-
-    // カメラの注視点を取得
-    Math::Vector3 GetLookAtPoint(const Math::Vector3& _targetPos) const;
-
-    // カメラの現在位置
+    // 補間後のカメラ位置
     Math::Vector3 m_pos        = { 0.0f, CameraConst::OffsetY, CameraConst::OffsetZ };
-
-    // カメラの注視点
+    // 補間後の注視点
     Math::Vector3 m_lookAtPos  = { 0.0f, 0.0f, 0.0f };
+    // 現在のロール角（度）
+    float         m_rollDeg    = 0.0f;
+    // 浮遊タイマー
+    float         m_floatTimer = 0.0f;
+    // 現在のズーム率（0=通常 1=最大ズームイン）
+    float         m_wallZoomRate = 0.0f;
+    // 初期化済みフラグ
+    bool          m_initialized = false;
 
-    // 遷移先ルーム
-    int           m_nextRoom = 0;
-
-    // 遷移ブレンド量
-    float         m_transitionRate = 0.0f;
-
-    // ルーム一覧
-    std::vector<RoomBounds> m_rooms;
-
-    // 現在のルームインデックス
-    int           m_currentRoom = 0;
-
-    // 遷移中か
+    int           m_currentRoom     = 0;
+    int           m_nextRoom        = 0;
+    float         m_transitionRate  = 0.0f;
     bool          m_isTransitioning = false;
-
+    std::vector<RoomBounds> m_rooms;
 };

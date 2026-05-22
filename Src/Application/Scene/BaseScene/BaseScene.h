@@ -29,7 +29,8 @@ public :
 	}
 
 protected:
-	virtual void DrawGui() {}
+	virtual void DrawGui()        {}
+	virtual void DrawDebugExtra() {}
 
 protected :
 

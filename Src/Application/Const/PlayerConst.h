@@ -25,7 +25,7 @@ namespace PlayerConst
     constexpr int   InvincibleFrame  = 60;
 
     // モデルの拡大率
-    constexpr float ModelScale       = 1.0f;
+    constexpr float ModelScale       = 0.3f;
 
     // 近接攻撃クールダウン（フレーム）
     constexpr int   MeleeCooldown    = 30;

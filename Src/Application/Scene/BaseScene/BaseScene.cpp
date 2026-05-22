@@ -143,6 +143,7 @@ void BaseScene::DrawDebug()
 		{
 			obj->DrawDebug();
 		}
+		DrawDebugExtra();
 	}
 	KdShaderManager::Instance().m_StandardShader.EndUnLit();
 }

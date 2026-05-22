@@ -273,6 +273,7 @@
     <ClInclude Include="..\Library\tinygltf\stb_image.h" />
     <ClInclude Include="..\Library\tinygltf\stb_image_write.h" />
     <ClInclude Include="..\Library\tinygltf\tiny_gltf.h" />
+    <ClInclude Include="Src\Application\Camera\CameraSettings.h" />
     <ClInclude Include="Src\Application\Const\ArrowConst.h" />
     <ClInclude Include="Src\Application\Const\CameraConst.h" />
     <ClInclude Include="Src\Application\Const\EnemyConst.h" />
@@ -283,6 +284,7 @@
     <ClInclude Include="Src\Application\Const\UIConst.h" />
     <ClInclude Include="Src\Application\Editor\MapEditor.h" />
     <ClInclude Include="Src\Application\Editor\MapObjectData.h" />
+    <ClInclude Include="Src\Application\Editor\RoomBoundsEditor.h" />
     <ClInclude Include="Src\Application\GameObject\BackGround\BackGround.h" />
     <ClInclude Include="Src\Application\GameObject\Camera\CameraRoom.h" />
     <ClInclude Include="Src\Application\GameObject\Camera\EditorCamera.h" />
@@ -352,7 +354,9 @@
     <ClCompile Include="..\Library\imgui\imgui_stdlib.cpp" />
     <ClCompile Include="..\Library\imgui\imgui_tables.cpp" />
     <ClCompile Include="..\Library\imgui\imgui_widgets.cpp" />
+    <ClCompile Include="Src\Application\Camera\CameraSettings.cpp" />
     <ClCompile Include="Src\Application\Editor\MapEditor.cpp" />
+    <ClCompile Include="Src\Application\Editor\RoomBoundsEditor.cpp" />
     <ClCompile Include="Src\Application\GameObject\BackGround\BackGround.cpp" />
     <ClCompile Include="Src\Application\GameObject\Camera\EditorCamera.cpp" />
     <ClCompile Include="Src\Application\GameObject\Camera\SideScrollCamera.cpp" />
