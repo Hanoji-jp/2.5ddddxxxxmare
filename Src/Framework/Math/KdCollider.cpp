@@ -595,7 +595,10 @@ bool KdModelCollision::Intersects(const DirectX::BoundingSphere& target, const M
 	Math::Vector3 hitNDir;
 
 	// 当たり判定ノードとのみ当たり判定
-	for (int index : spModelData->GetCollisionMeshNodeIndices())
+	const std::vector<int>& targetIndices = m_nodeFilter.empty()
+		? spModelData->GetCollisionMeshNodeIndices() : m_nodeFilter;
+
+	for (int index : targetIndices)
 	{
 		const KdModelData::Node& dataNode = dataNodes[index];
 		const KdModelWork::Node& workNode = workNodes[index];
@@ -626,7 +629,7 @@ bool KdModelCollision::Intersects(const DirectX::BoundingSphere& target, const M
 		hitPos = tmpResult.m_hitPos;
 
 		// 最後に当たった面の法線情報を記憶しておく
-		hitNDir = tmpResult.m_hitDir;
+		hitNDir = tmpResult.m_hitNDir;
 	}
 
 	if (pRes && isHit)
@@ -635,11 +638,22 @@ bool KdModelCollision::Intersects(const DirectX::BoundingSphere& target, const M
 		pRes->m_hitPos = hitPos;
 
 		// 複数のメッシュに押された最終的な位置 - 移動前の位置 = 押し出しベクトル
-		pRes->m_hitDir = DirectX::XMVectorSubtract(DirectX::XMLoadFloat3(&pushedSphere.Center), DirectX::XMLoadFloat3(&target.Center));
+		const Math::Vector3 pushVec = DirectX::XMVectorSubtract(
+			DirectX::XMLoadFloat3(&pushedSphere.Center),
+			DirectX::XMLoadFloat3(&target.Center));
 
-		pRes->m_overlapDistance = DirectX::XMVector3Length(pRes->m_hitDir).m128_f32[0];
+		pRes->m_overlapDistance = DirectX::XMVector3Length(pushVec).m128_f32[0];
 
-		pRes->m_hitDir = DirectX::XMVector3Normalize(pRes->m_hitDir);
+		// 押し出しベクトルがゼロの場合は面法線で代用する
+		if (pRes->m_overlapDistance > 0.0001f)
+		{
+			pRes->m_hitDir = DirectX::XMVector3Normalize(pushVec);
+		}
+		else
+		{
+			pRes->m_hitDir    = hitNDir;
+			pRes->m_overlapDistance = 0.0f;
+		}
 
 		// 最後に当たった面の法線が使用される
 		pRes->m_hitNDir = hitNDir;
@@ -692,7 +706,7 @@ bool KdModelCollision::Intersects(const KdCollider::RayInfo& target, const Math:
 	const std::vector<KdModelData::Node>& dataNodes = spModelData->GetOriginalNodes();
 	const std::vector<KdModelWork::Node>& workNodes = m_shape->GetNodes();
 
-	for (int index : spModelData->GetCollisionMeshNodeIndices())
+	for (int index : (m_nodeFilter.empty() ? spModelData->GetCollisionMeshNodeIndices() : m_nodeFilter))
 	{
 		const KdModelData::Node& dataNode = dataNodes[index];
 		const KdModelWork::Node& workNode = workNodes[index];

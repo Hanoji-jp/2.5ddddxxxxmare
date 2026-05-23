@@ -276,11 +276,13 @@
     <ClInclude Include="Src\Application\Camera\CameraSettings.h" />
     <ClInclude Include="Src\Application\Const\ArrowConst.h" />
     <ClInclude Include="Src\Application\Const\CameraConst.h" />
+    <ClInclude Include="Src\Application\Const\CollisionConst.h" />
     <ClInclude Include="Src\Application\Const\EnemyConst.h" />
     <ClInclude Include="Src\Application\Const\GameConst.h" />
     <ClInclude Include="Src\Application\Const\LightConst.h" />
     <ClInclude Include="Src\Application\Const\MapConst.h" />
     <ClInclude Include="Src\Application\Const\PlayerConst.h" />
+    <ClInclude Include="Src\Application\Const\SpawnConst.h" />
     <ClInclude Include="Src\Application\Const\UIConst.h" />
     <ClInclude Include="Src\Application\Editor\MapEditor.h" />
     <ClInclude Include="Src\Application\Editor\MapObjectData.h" />
@@ -300,6 +302,7 @@
     <ClInclude Include="Src\Application\GameObject\Weapon\Bow.h" />
     <ClInclude Include="Src\Application\GameObject\Weapon\Sword.h" />
     <ClInclude Include="Src\Application\main.h" />
+    <ClInclude Include="Src\Application\Manager\CollisionManager.h" />
     <ClInclude Include="Src\Application\Manager\ModelManager.h" />
     <ClInclude Include="Src\Application\Scene\BaseScene\BaseScene.h" />
     <ClInclude Include="Src\Application\Scene\EditorScene\EditorScene.h" />

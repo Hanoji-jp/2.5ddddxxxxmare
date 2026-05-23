@@ -2,6 +2,8 @@
 #include"../SceneManager.h"
 #include"../../Const/LightConst.h"
 #include"../../../Framework/Utility/KdDebug/KdDebugGUI.h"
+#include <fstream>
+#include <sstream>
 
 void GameScene::Event()
 {
@@ -74,6 +76,27 @@ void GameScene::DrawGui()
 		if (m_pCamera) { m_pCamera->SetRooms(m_rooms); }
 		m_roomEditor.ClearDirty();
 	}
+
+	// スポーン位置エディター
+	if (ImGui::Begin("Spawn Settings"))
+	{
+		float pos[3] = { m_spawnPos.x, m_spawnPos.y, m_spawnPos.z };
+		if (ImGui::DragFloat3("Spawn Position", pos, 0.1f))
+		{
+			m_spawnPos = { pos[0], pos[1], pos[2] };
+		}
+
+		if (ImGui::Button("Apply (Respawn)"))
+		{
+			if (m_spPlayer) { m_spPlayer->SetPos(m_spawnPos); }
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("Save"))
+		{
+			SaveSpawn();
+		}
+	}
+	ImGui::End();
 }
 
 void GameScene::RebuildMapObjects()
@@ -104,7 +127,8 @@ void GameScene::Init()
 
 	// プレイヤー
 	m_spPlayer = std::make_shared<Player>();
-	m_spPlayer->SetPos(Math::Vector3(0.0f, 2.0f, 0.0f));
+	LoadSpawn();
+	m_spPlayer->SetPos(m_spawnPos);
 	AddObject(m_spPlayer);
 
 	// 敵
@@ -114,8 +138,12 @@ void GameScene::Init()
 	AddObject(spEnemy);
 
 	// マップ
-	auto spMap = std::make_shared<Map>();
-	AddObject(spMap);
+	m_spMap = std::make_shared<Map>();
+	AddObject(m_spMap);
+
+	// プレイヤーにマップコリジョンを渡す
+	if (m_spPlayer) { m_spPlayer->SetMapObject(m_spMap); }
+	if (spEnemy)    { spEnemy->SetMapObject(m_spMap); }
 
  // ルームエディター初期化・読込
 	m_roomEditor.Load();
@@ -144,3 +172,28 @@ void GameScene::Init()
 	ambient.SetDirLight(LightConst::DirLightDir, LightConst::DirLightColor);
 }
 
+void GameScene::SaveSpawn()
+{
+	std::ofstream ofs(SpawnConst::SavePath);
+	if (!ofs) { return; }
+	ofs << m_spawnPos.x << "," << m_spawnPos.y << "," << m_spawnPos.z << "\n";
+}
+
+void GameScene::LoadSpawn()
+{
+	std::ifstream ifs(SpawnConst::SavePath);
+	if (!ifs) { return; }
+
+	std::string line;
+	if (!std::getline(ifs, line)) { return; }
+
+	std::istringstream ss(line);
+	std::string token;
+	float vals[3] = { SpawnConst::DefaultX, SpawnConst::DefaultY, SpawnConst::DefaultZ };
+	int i = 0;
+	while (std::getline(ss, token, ',') && i < 3)
+	{
+		vals[i++] = std::stof(token);
+	}
+	m_spawnPos = { vals[0], vals[1], vals[2] };
+}

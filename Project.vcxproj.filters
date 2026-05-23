@@ -280,6 +280,9 @@
     <ClInclude Include="Src\Application\GameObject\Camera\RoomBounds.h" />
     <ClInclude Include="Src\Application\Editor\RoomBoundsEditor.h" />
     <ClInclude Include="Src\Application\Camera\CameraSettings.h" />
+    <ClInclude Include="Src\Application\Const\CollisionConst.h" />
+    <ClInclude Include="Src\Application\Manager\CollisionManager.h" />
+    <ClInclude Include="Src\Application\Const\SpawnConst.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Pch.cpp">

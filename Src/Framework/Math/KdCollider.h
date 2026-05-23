@@ -290,6 +290,9 @@ public:
 
 	virtual ~KdModelCollision() { m_shape.reset(); }
 
+	// 判定に使うノードインデックスを絞り込む（省略時は全COLノード）
+	void SetNodeFilter(const std::vector<int>& indices) { m_nodeFilter = indices; }
+
 	bool Intersects(const DirectX::BoundingSphere& target, const Math::Matrix& world, KdCollider::CollisionResult* pRes) override;
 	bool Intersects(const DirectX::BoundingBox& target, const Math::Matrix& world, KdCollider::CollisionResult* pRes) override;
 	bool Intersects(const DirectX::BoundingOrientedBox& target, const Math::Matrix& world, KdCollider::CollisionResult* pRes) override;
@@ -297,6 +300,7 @@ public:
 
 private:
 	std::shared_ptr<KdModelWork> m_shape;
+	std::vector<int> m_nodeFilter; // 空なら全ノード使用
 };
 
 

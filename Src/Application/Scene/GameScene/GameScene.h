@@ -12,6 +12,7 @@
 #include"../../Editor/RoomBoundsEditor.h"
 #include"../../Camera/CameraSettings.h"
 #include"../../GameObject/Camera/EditorCamera.h"
+#include"../../Const/SpawnConst.h"
 
 class GameScene : public BaseScene
 {
@@ -28,8 +29,9 @@ private:
 	void DrawDebugExtra()     override;
 	void RebuildMapObjects();
 
-	std::shared_ptr<Player> m_spPlayer   = nullptr;
-	SideScrollCamera*       m_pCamera    = nullptr;
+	std::shared_ptr<Player>  m_spPlayer   = nullptr;
+	std::shared_ptr<Map>     m_spMap      = nullptr;
+	SideScrollCamera*        m_pCamera    = nullptr;
 	std::vector<RoomBounds> m_rooms;
 
 	// インゲームマップエディター
@@ -41,4 +43,9 @@ private:
 
 	// エディター配置オブジェクトリスト
 	std::vector<std::shared_ptr<MapObject>> m_mapObjects;
+
+	// プレイヤースポーン座標
+	Math::Vector3           m_spawnPos    = { SpawnConst::DefaultX, SpawnConst::DefaultY, SpawnConst::DefaultZ };
+	void SaveSpawn();
+	void LoadSpawn();
 };

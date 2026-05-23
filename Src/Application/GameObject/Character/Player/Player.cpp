@@ -35,7 +35,10 @@ void Player::Update()
     AttackMelee();
     AttackRanged();
     Character::Update();
-    CheckGround();
+
+    // プレイヤー座標をログ出力
+    const Math::Vector3 pos = GetPos();
+    KdDebugGUI::Instance().AddLog("Player: x=%.2f  y=%.2f  z=%.2f\n", pos.x, pos.y, pos.z);
 
     // クールダウン更新
     if (m_meleeCooldown  > 0) { --m_meleeCooldown; }
@@ -68,15 +71,21 @@ void Player::PostUpdate()
     // 親クラスのPostUpdate（位置反映）を先に実行
     Character::PostUpdate();
 
-    // 位置確定後にm_mWorldを向きを含めて再構築
+    // 位置確定後にワールド行列を再構築
     {
         const Math::Vector3 pos   = GetPos();
         const float         scale = PlayerConst::ModelScale;
         const float         yaw   = std::atan2f(m_facingDir.x, m_facingDir.z);
 
+        // 論理位置（コリジョン基準）はオフセットなし
         m_mWorld = DirectX::XMMatrixScaling(scale, scale, scale)
                  * DirectX::XMMatrixRotationY(yaw)
                  * DirectX::XMMatrixTranslation(pos.x, pos.y, pos.z);
+
+        // 描画専用行列にだけピボット補正オフセットを乗せる
+        m_drawWorld = DirectX::XMMatrixScaling(scale, scale, scale)
+                    * DirectX::XMMatrixRotationY(yaw)
+                    * DirectX::XMMatrixTranslation(pos.x, pos.y + PlayerConst::ModelOffsetY, pos.z);
     }
 
     // 消滅した矢を除去
@@ -94,10 +103,9 @@ void Player::PostUpdate()
 
 void Player::DrawLit()
 {
-    // プレイヤー本体のみ描画（武器はボーン追従実装待ち）
     if (m_modelWork.IsEnable())
     {
-        KdShaderManager::Instance().m_StandardShader.DrawModel(m_modelWork, m_mWorld);
+        KdShaderManager::Instance().m_StandardShader.DrawModel(m_modelWork, m_drawWorld);
     }
 }
 
@@ -188,23 +196,6 @@ void Player::AttackRanged()
         arrow->Init();
         arrow->Launch(spawnPos, m_facingDir);
         m_arrows.push_back(arrow);
-    }
-}
-
-void Player::CheckGround()
-{
-    // 簡易着地判定：Y座標が0以下になったら地面とみなす
-    Math::Vector3 pos = GetPos();
-    if (pos.y <= 0.0f)
-    {
-        pos.y        = 0.0f;
-        m_velocity.y = 0.0f;
-        m_isGround   = true;
-        SetPos(pos);
-    }
-    else
-    {
-        m_isGround = false;
     }
 }
 

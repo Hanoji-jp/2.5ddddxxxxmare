@@ -24,13 +24,14 @@ private:
     void Jump();
     void AttackMelee();
     void AttackRanged();
-    void CheckGround() override;
-
     // アニメーション切り替え
     void ChangeAnim(const std::string& _animName, bool _isLoop = true);
 
     KdModelWork  m_modelWork;
     AnimBlender  m_animBlender;
+
+    // 描画専用ワールド行列（ピボット補正オフセットを含む。コリジョンには使わない）
+    Math::Matrix m_drawWorld;
 
     // 現在再生中のアニメーション名（同アニメの再セット防止）
     std::string  m_currentAnimName;

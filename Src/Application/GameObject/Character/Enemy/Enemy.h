@@ -28,7 +28,6 @@ public:
 protected:
     void Patrol();
     void Chase();
-    void CheckGround() override;
 
     AIState m_aiState = AIState::Patrol;
 

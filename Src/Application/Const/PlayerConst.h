@@ -27,6 +27,9 @@ namespace PlayerConst
     // モデルの拡大率
     constexpr float ModelScale       = 0.3f;
 
+    // モデルのピボット補正（足元がずれている場合に調整）
+    constexpr float ModelOffsetY     = -0.56f;
+
     // 近接攻撃クールダウン（フレーム）
     constexpr int   MeleeCooldown    = 30;
 

@@ -73,28 +73,3 @@ void Enemy::Chase()
     m_velocity.x = (dx > 0.0f) ? EnemyConst::MoveSpeed : -EnemyConst::MoveSpeed;
 }
 
-void Enemy::CheckGround()
-{
-    Math::Vector3 pos = GetPos();
-    if (pos.y <= 0.0f)
-    {
-        pos.y        = 0.0f;
-        m_velocity.y = 0.0f;
-        m_isGround   = true;
-
-        // 巡回の折り返し
-        if (m_aiState == AIState::Patrol)
-        {
-            constexpr float PatrolRange = 5.0f;
-            constexpr float PatrolOriginX = 0.0f;
-            if (GetPos().x >  PatrolOriginX + PatrolRange) { m_patrolRight = false; }
-            if (GetPos().x <  PatrolOriginX - PatrolRange) { m_patrolRight = true;  }
-        }
-
-        SetPos(pos);
-    }
-    else
-    {
-        m_isGround = false;
-    }
-}
