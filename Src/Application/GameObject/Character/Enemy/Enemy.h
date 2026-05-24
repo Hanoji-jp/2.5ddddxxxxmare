@@ -1,7 +1,13 @@
 ﻿#pragma once
 #include "../Character.h"
+#include "../AnimBlender.h"
 #include "../../../Const/EnemyConst.h"
 
+//==========================================================
+// Enemy  ─ 敵共通の抽象基底クラス
+//   近距離型 : EnemyMelee
+//   遠距離型 : EnemyRanged
+//==========================================================
 class Enemy : public Character
 {
 public:
@@ -11,30 +17,52 @@ public:
         Patrol,   // 巡回
         Chase,    // 追跡
         Attack,   // 攻撃
+        Retreat,  // 後退（遠距離型用）
         Dead,     // 死亡
     };
 
-    Enemy()          { Init(); }
+    Enemy()          {}
     virtual ~Enemy() {}
 
-    void Init()    override;
-    void Update()  override;
-    void DrawLit() override;
+    void Update()     override;
+    void PostUpdate() override;
+    void DrawLit()    override;
 
     bool IsVisible() const override { return true; }
 
     void SetTarget(const std::weak_ptr<KdGameObject>& _target) { m_wpTarget = _target; }
 
-protected:
-    void Patrol();
-    void Chase();
+    void Expire() { m_isExpired = true; }
 
-    AIState m_aiState = AIState::Patrol;
+    // 攻撃射程（派生クラスで実装）
+    virtual float GetAttackRange() const = 0;
+
+protected:
+    // 各AIアクション（派生クラスで override 可）
+    virtual void Patrol();
+    virtual void Chase();
+    virtual void DoAttack() = 0;   // 攻撃の実装は派生クラス必須
+
+    // モデル・アニメ初期化ヘルパー
+    void InitModel(const char* _path);
+
+    // アニメ切り替えヘルパー
+    void ChangeAnim(const std::string& _name, bool _loop = true);
+
+    // 向きを目標方向に向ける
+    void FaceTarget();
+
+    AIState m_aiState     = AIState::Patrol;
+    int     m_attackCool  = 0;
+
+    // 巡回用：スポーン位置を起点に左右折り返し
+    Math::Vector3 m_spawnPos   = { 0.0f, 0.0f, 0.0f };
+    bool          m_patrolRight = true;
+
+    Math::Vector3 m_facingDir  = { 0.0f, 0.0f, 1.0f };
 
     std::weak_ptr<KdGameObject> m_wpTarget;
 
-    KdModelWork m_modelWork;
-
-    // 巡回折り返し用フラグ
-    bool m_patrolRight = true;
+    KdModelWork  m_modelWork;
+    AnimBlender  m_animBlender;
 };

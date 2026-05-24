@@ -9,8 +9,8 @@ MinFollowWeightY,0.01
 LookAtHeight,2.95
 LookAheadX,0.5
 LookAheadY,2.5
-FloatAmplitude,4.12
-FloatSpeed,0.14
+FloatAmplitude,0.445
+FloatSpeed,0.79
 RollMaxDeg,0.3
 RollLerp,0.365
 RollSensitivity,0.785

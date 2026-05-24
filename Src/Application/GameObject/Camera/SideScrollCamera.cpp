@@ -59,7 +59,7 @@ Math::Vector3 SideScrollCamera::CalcTargetCamPos(const Math::Vector3& _targetPos
 	const float dy = _targetPos.y - roomCenter.y;
 	const float wy = std::clamp(cs.FollowWeightY, cs.MinFollowWeightY, 1.0f);
 
-	// Y はプレイヤー直追尾（roomCenter 経由をやめて誤差をなくす）
+	// Y はプレイヤー直追尾
 	return
 	{
 		_targetPos.x + _floatX,
@@ -211,10 +211,24 @@ void SideScrollCamera::Update(const Math::Vector3& _targetPos)
 	}
 
 	// ── 5. 位置・注視点をゆっくり補間（ふわふわ） ──────────────
+	// カメラYがプレイヤーより下に落ちると上を向いてしまうため、
+	// targetYの最低値をプレイヤーY + 最小オフセットで保証する
+	const float minCamY = _targetPos.y + CameraConst::MinCamOffsetY;
+	if (targetPos.y < minCamY) { targetPos.y = minCamY; }
+
 	m_pos       = Math::Vector3::Lerp(m_pos,       targetPos,    cs.PosLerp);
 	m_lookAtPos = Math::Vector3::Lerp(m_lookAtPos, targetLookAt, cs.LookAtLerp);
 
-	// m_pos は直接触らない。targetPos 経由の Lerp だけで収める。
+	// lerp後も下回っていたら即座に矯正（初回やラグ対策）
+	if (m_pos.y < minCamY) { m_pos.y = minCamY; }
+
+	// ── 最終安全ガード ─────────────────────────────────────────
+	// 注視点YがカメラYを超えると前方ベクトルが上向きになり空しか映らなくなる
+	constexpr float kLookAtMargin = 0.5f;
+	if (m_lookAtPos.y >= m_pos.y - kLookAtMargin)
+	{
+		m_lookAtPos.y = m_pos.y - kLookAtMargin;
+	}
 
 	// ── 6. ロール ──────────────────────────────────────────────
 	const float offsetX       = _targetPos.x - m_pos.x;
@@ -228,6 +242,18 @@ void SideScrollCamera::Update(const Math::Vector3& _targetPos)
 	const Math::Vector3 worldUp(0.0f, 1.0f, 0.0f);
 
 	Math::Vector3 fwd = m_lookAtPos - m_pos;
+
+	// プレイヤーがカメラに近づきすぎると前方ベクトルが上を向く問題を防ぐ
+	// 水平距離に対してピッチ（仰角）を最大 CameraConst::MaxPitchDeg 度に制限
+	{
+		const float horizLen = std::sqrtf(fwd.x * fwd.x + fwd.z * fwd.z);
+		const float maxTan   = std::tanf(DirectX::XMConvertToRadians(CameraConst::MaxPitchDeg));
+		if (horizLen > 0.0f && fwd.y > horizLen * maxTan)
+		{
+			fwd.y = horizLen * maxTan;
+		}
+	}
+
 	fwd.Normalize();
 
 	Math::Vector3 right;

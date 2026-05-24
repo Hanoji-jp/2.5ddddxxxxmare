@@ -49,6 +49,11 @@ void GameScene::Event()
 			RebuildMapObjects();
 			m_mapEditor.ClearDirty();
 		}
+		if (m_enemyEditor.IsDirty())
+		{
+			RebuildEnemies();
+			m_enemyEditor.ClearDirty();
+		}
 	}
 	else
 	{
@@ -61,6 +66,7 @@ void GameScene::DrawDebugExtra()
 	if (m_editorMode)
 	{
 		m_roomEditor.DrawDebugLines();
+		m_enemyEditor.DrawDebugSpheres();
 	}
 }
 
@@ -68,6 +74,7 @@ void GameScene::DrawGui()
 {
 	m_mapEditor.DrawGui();
 	m_roomEditor.DrawGui();
+	m_enemyEditor.DrawGui();
 	CameraSettings::Instance().DrawGui();
 
 	if (m_roomEditor.IsDirty())
@@ -118,6 +125,41 @@ void GameScene::RebuildMapObjects()
 	}
 }
 
+void GameScene::RebuildEnemies()
+{
+	// 既存の敵をシーンから除去
+	for (auto& e : m_enemies)
+	{
+		e->Expire();
+	}
+	m_enemies.clear();
+
+	// EnemyPlacementEditor のデータから敵を生成
+	for (const auto& data : m_enemyEditor.GetPlacements())
+	{
+		std::shared_ptr<Enemy> spEnemy;
+
+		if (data.type == EnemyType::Melee)
+		{
+			auto sp = std::make_shared<EnemyMelee>();
+			sp->SetPos(data.position);
+			spEnemy = sp;
+		}
+		else
+		{
+			auto sp = std::make_shared<EnemyRanged>();
+			sp->SetPos(data.position);
+			spEnemy = sp;
+		}
+
+		if (m_spMap)    { spEnemy->SetMapObject(m_spMap); }
+		if (m_spPlayer) { spEnemy->SetTarget(m_spPlayer); }
+
+		m_enemies.push_back(spEnemy);
+		AddObject(spEnemy);
+	}
+}
+
 void GameScene::Init()
 {
 	// カメラ（BaseSceneのm_cameraに所有権を渡し、観察用ポインタだけ保持）
@@ -131,19 +173,16 @@ void GameScene::Init()
 	m_spPlayer->SetPos(m_spawnPos);
 	AddObject(m_spPlayer);
 
-	// 敵
-	auto spEnemy = std::make_shared<Enemy>();
-	spEnemy->SetPos(Math::Vector3(5.0f, 0.0f, 0.0f));
-	spEnemy->SetTarget(m_spPlayer);
-	AddObject(spEnemy);
+	// 近距離型の敵
+	// 遠距離型の敵
+	// → エディター配置データから生成するのでハードコードなし
 
 	// マップ
 	m_spMap = std::make_shared<Map>();
 	AddObject(m_spMap);
 
-	// プレイヤーにマップコリジョンを渡す
+	// プレイヤーにマップコリジョンを渡してからシーンに追加
 	if (m_spPlayer) { m_spPlayer->SetMapObject(m_spMap); }
-	if (spEnemy)    { spEnemy->SetMapObject(m_spMap); }
 
  // ルームエディター初期化・読込
 	m_roomEditor.Load();
@@ -162,6 +201,14 @@ void GameScene::Init()
 
 	// マップエディター初期化
 	m_mapEditor.Init();
+
+	// 敵配置エディター（Loadはコンストラクタ内で実行済み）→敵を生成
+	// m_spMap と m_spPlayer が準備できた後に呼ぶ
+	if (m_enemyEditor.IsDirty())
+	{
+		RebuildEnemies();
+		m_enemyEditor.ClearDirty();
+	}
 
 	// カメラ設定読込
 	CameraSettings::Instance().Load();

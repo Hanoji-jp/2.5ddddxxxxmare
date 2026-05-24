@@ -26,7 +26,7 @@ struct CameraSettings
     float LookAheadY      =  0.2f;
 
     // ── 浮遊ボブ ────────────────────────────────────────────
-    float FloatAmplitude  =  0.06f;  // 上下の浮遊幅（控えめ）
+    float FloatAmplitude  =  0.005f;  // 上下の浮遊幅（極小）
     float FloatSpeed      =  0.5f;   // 浮遊の周期速度（ゆったり）
 
     // ── ロール（左右傾き） ───────────────────────────────────

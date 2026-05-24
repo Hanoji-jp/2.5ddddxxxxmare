@@ -107,6 +107,12 @@ void Player::DrawLit()
     {
         KdShaderManager::Instance().m_StandardShader.DrawModel(m_modelWork, m_drawWorld);
     }
+
+    // 矢の描画
+    for (const auto& arrow : m_arrows)
+    {
+        arrow->DrawLit();
+    }
 }
 
 void Player::Move()

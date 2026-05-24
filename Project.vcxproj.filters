@@ -283,6 +283,10 @@
     <ClInclude Include="Src\Application\Const\CollisionConst.h" />
     <ClInclude Include="Src\Application\Manager\CollisionManager.h" />
     <ClInclude Include="Src\Application\Const\SpawnConst.h" />
+    <ClInclude Include="Src\Application\GameObject\Character\Enemy\EnemyMelee.h" />
+    <ClInclude Include="Src\Application\GameObject\Character\Enemy\EnemyRanged.h" />
+    <ClInclude Include="Src\Application\Editor\EnemyPlacementData.h" />
+    <ClInclude Include="Src\Application\Editor\EnemyPlacementEditor.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Pch.cpp">
@@ -446,6 +450,9 @@
     <ClCompile Include="Src\Application\GameObject\Character\AnimBlender.cpp" />
     <ClCompile Include="Src\Application\Editor\RoomBoundsEditor.cpp" />
     <ClCompile Include="Src\Application\Camera\CameraSettings.cpp" />
+    <ClCompile Include="Src\Application\GameObject\Character\Enemy\EnemyMelee.cpp" />
+    <ClCompile Include="Src\Application\GameObject\Character\Enemy\EnemyRanged.cpp" />
+    <ClCompile Include="Src\Application\Editor\EnemyPlacementEditor.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Src\Framework\Shader\inc_KdCommon.hlsli">

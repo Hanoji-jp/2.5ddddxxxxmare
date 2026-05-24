@@ -29,6 +29,13 @@ namespace CameraConst
 	constexpr float RollLerp         = 0.05f;  // ロールの補間速度
 	constexpr float RollSensitivity  = 0.15f;  // プレイヤーオフセットからロールへの変換係数
 
+	// ピッチ制限（カメラが上を向かないようにする最大仰角）
+	constexpr float MaxPitchDeg      = 30.0f;  // 上向き最大角度（度）
+
+	// カメラY最低オフセット（プレイヤーY + この値 より下には行かない）
+	// OffsetY と同じかそれ以上にしておくこと
+	constexpr float MinCamOffsetY    = 3.0f;
+
 	// ルーム遷移
 	constexpr float TransitionLerp   = 0.07f;
 }
