@@ -19,8 +19,14 @@ void Enemy::InitModel(const char* _path)
 
 void Enemy::ChangeAnim(const std::string& _name, bool _loop)
 {
+    // 同じアニメーションなら再セットしない（リセット防止）
+    if (m_currentAnimName == _name) { return; }
+
     const auto spAnim = m_modelWork.GetAnimation(_name);
-    if (spAnim) { m_animBlender.ChangeAnimation(spAnim, _loop, EnemyConst::AnimBlendFrames); }
+    if (!spAnim) { return; }
+
+    m_animBlender.ChangeAnimation(spAnim, _loop, EnemyConst::AnimBlendFrames);
+    m_currentAnimName = _name;
 }
 
 void Enemy::FaceTarget()
@@ -65,11 +71,24 @@ void Enemy::Update()
     {
     case AIState::Patrol:  Patrol();   break;
     case AIState::Chase:   Chase();    break;
-    case AIState::Attack:  DoAttack(); break;
-    default:                           break;
+    case AIState::Attack:
+        // 攻撃中は減速して停止
+        m_moveVelocity = Math::Vector3::Lerp(m_moveVelocity, Math::Vector3::Zero,
+            EnemyConst::Deceleration / EnemyConst::MoveSpeed);
+        if (m_moveVelocity.LengthSquared() < 0.0001f) { m_moveVelocity = Math::Vector3::Zero; }
+        m_velocity.x = m_moveVelocity.x;
+        m_velocity.z = m_moveVelocity.z;
+        DoAttack();
+        break;
+    default: break;
     }
 
     // アニメーション更新
+    // 移動していなければ Idle にフォールバック
+    if (m_moveVelocity.LengthSquared() < 0.0001f && m_aiState != AIState::Attack)
+    {
+        ChangeAnim("Idle");
+    }
     m_animBlender.Update(m_modelWork);
 
     Character::Update();
@@ -97,16 +116,30 @@ void Enemy::DrawLit()
 
 void Enemy::Patrol()
 {
-    m_velocity.x = m_patrolRight ? EnemyConst::MoveSpeed : -EnemyConst::MoveSpeed;
-
     // スポーン地点から PatrolRange を超えたら折り返す
     const float dx = GetPos().x - m_spawnPos.x;
     if (dx >  EnemyConst::PatrolRange) { m_patrolRight = false; }
     if (dx < -EnemyConst::PatrolRange) { m_patrolRight = true;  }
 
-    // 向きをセット
-    m_facingDir.x = m_patrolRight ? 1.0f : -1.0f;
-    m_facingDir.z = 0.0f;
+    // 目標速度を決めて Lerp で加速
+    const float targetX = m_patrolRight ? EnemyConst::MoveSpeed : -EnemyConst::MoveSpeed;
+    const Math::Vector3 targetVel = { targetX, 0.0f, 0.0f };
+    m_moveVelocity = Math::Vector3::Lerp(m_moveVelocity, targetVel,
+        EnemyConst::Acceleration / EnemyConst::MoveSpeed);
+
+    // Slerp で向きを補間
+    const Math::Vector3 targetDir = { targetX > 0.0f ? 1.0f : -1.0f, 0.0f, 0.0f };
+    const Math::Quaternion fromRot = Math::Quaternion::CreateFromYawPitchRoll(
+        std::atan2f(m_facingDir.x, m_facingDir.z), 0.0f, 0.0f);
+    const Math::Quaternion toRot = Math::Quaternion::CreateFromYawPitchRoll(
+        std::atan2f(targetDir.x, targetDir.z), 0.0f, 0.0f);
+    const Math::Quaternion blendRot = Math::Quaternion::Slerp(fromRot, toRot, EnemyConst::RotationSpeed);
+    m_facingDir = Math::Vector3::Transform({ 0.0f, 0.0f, 1.0f },
+        Math::Matrix::CreateFromQuaternion(blendRot));
+    m_facingDir.y = 0.0f;
+
+    m_velocity.x = m_moveVelocity.x;
+    m_velocity.z = m_moveVelocity.z;
 
     ChangeAnim("Walk");
 }
@@ -116,11 +149,28 @@ void Enemy::Chase()
     const auto spTarget = m_wpTarget.lock();
     if (!spTarget) { return; }
 
-    const float dx = spTarget->GetPos().x - GetPos().x;
-    const float dz = spTarget->GetPos().z - GetPos().z;
-    m_velocity.x = (dx > 0.0f) ?  EnemyConst::MoveSpeed : -EnemyConst::MoveSpeed;
-    m_velocity.z = (dz > 0.0f) ?  EnemyConst::MoveSpeed : -EnemyConst::MoveSpeed;
+    Math::Vector3 toTarget = spTarget->GetPos() - GetPos();
+    toTarget.y = 0.0f;
+    if (toTarget.LengthSquared() < 1e-4f) { return; }
+    toTarget.Normalize();
 
-    FaceTarget();
+    // 目標速度へ Lerp で加速
+    const Math::Vector3 targetVel = toTarget * EnemyConst::MoveSpeed;
+    m_moveVelocity = Math::Vector3::Lerp(m_moveVelocity, targetVel,
+        EnemyConst::Acceleration / EnemyConst::MoveSpeed);
+
+    m_velocity.x = m_moveVelocity.x;
+    m_velocity.z = m_moveVelocity.z;
+
+    // Slerp で向きを補間
+    const Math::Quaternion fromRot = Math::Quaternion::CreateFromYawPitchRoll(
+        std::atan2f(m_facingDir.x, m_facingDir.z), 0.0f, 0.0f);
+    const Math::Quaternion toRot = Math::Quaternion::CreateFromYawPitchRoll(
+        std::atan2f(toTarget.x, toTarget.z), 0.0f, 0.0f);
+    const Math::Quaternion blendRot = Math::Quaternion::Slerp(fromRot, toRot, EnemyConst::RotationSpeed);
+    m_facingDir = Math::Vector3::Transform({ 0.0f, 0.0f, 1.0f },
+        Math::Matrix::CreateFromQuaternion(blendRot));
+    m_facingDir.y = 0.0f;
+
     ChangeAnim("Walk");
 }

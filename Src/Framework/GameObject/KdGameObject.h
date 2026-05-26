@@ -49,6 +49,9 @@ public:
 
 	virtual bool IsExpired() const { return m_isExpired; }
 
+	// オブジェクトを消滅させる（次フレームで除去される）
+	void Expire() { m_isExpired = true; }
+
 	virtual bool IsVisible()	const { return false; }
 	virtual bool IsRideable()	const { return false; }
 

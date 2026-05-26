@@ -1,32 +1,37 @@
 ﻿#include "../../../../Pch.h"
 #include "EnemyMelee.h"
+#include "../Character.h"
 
 void EnemyMelee::Init()
 {
-	// スポーン位置を記録
-	m_spawnPos = GetPos();
-
 	InitModel(EnemyConst::MeleeModelPath);
+
+	// モデル初期化後にスポーン位置を記録（SetPos 後に呼ばれることが前提）
+	m_spawnPos = GetPos();
 }
 
 void EnemyMelee::DoAttack()
 {
-	// 攻撃中は移動しない
-	m_velocity.x = 0.0f;
-	m_velocity.z = 0.0f;
-
 	FaceTarget();
 
-	// クールダウン中は待機アニメ
+	// クールダウン中は待機
 	if (m_attackCool > 0)
 	{
 		ChangeAnim("Idle");
 		return;
 	}
 
-	// 攻撃を実行（仮：当たり判定フラグのみ。後でヒットボックス実装）
-	// TODO: プレイヤーへのダメージ処理を追加
-	ChangeAnim("Idle");
+	// ターゲットにダメージを与える
+	const auto spTarget = m_wpTarget.lock();
+	if (spTarget)
+	{
+		// Character にキャストしてダメージを与える
+		if (auto* pChar = dynamic_cast<Character*>(spTarget.get()))
+		{
+			pChar->TakeDamage(EnemyConst::MeleeDamage);
+		}
+	}
 
+	ChangeAnim("Idle");
 	m_attackCool = EnemyConst::MeleeAttackCool;
 }

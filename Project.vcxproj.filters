@@ -287,6 +287,12 @@
     <ClInclude Include="Src\Application\GameObject\Character\Enemy\EnemyRanged.h" />
     <ClInclude Include="Src\Application\Editor\EnemyPlacementData.h" />
     <ClInclude Include="Src\Application\Editor\EnemyPlacementEditor.h" />
+    <ClInclude Include="Src\Application\Const\CheckpointConst.h" />
+    <ClInclude Include="Src\Application\GameObject\Checkpoint\Checkpoint.h" />
+    <ClInclude Include="Src\Application\GameObject\UI\HpUI.h" />
+    <ClInclude Include="Src\Application\Editor\CheckpointEditor.h" />
+    <ClInclude Include="Src\Application\Const\PlanetConst.h" />
+    <ClInclude Include="Src\Application\Manager\PlanetGravityManager.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Pch.cpp">
@@ -453,6 +459,10 @@
     <ClCompile Include="Src\Application\GameObject\Character\Enemy\EnemyMelee.cpp" />
     <ClCompile Include="Src\Application\GameObject\Character\Enemy\EnemyRanged.cpp" />
     <ClCompile Include="Src\Application\Editor\EnemyPlacementEditor.cpp" />
+    <ClCompile Include="Src\Application\GameObject\Checkpoint\Checkpoint.cpp" />
+    <ClCompile Include="Src\Application\GameObject\UI\HpUI.cpp" />
+    <ClCompile Include="Src\Application\Editor\CheckpointEditor.cpp" />
+    <ClCompile Include="Src\Application\Manager\PlanetGravityManager.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Src\Framework\Shader\inc_KdCommon.hlsli">

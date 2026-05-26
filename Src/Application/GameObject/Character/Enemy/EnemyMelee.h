@@ -8,7 +8,7 @@
 class EnemyMelee : public Enemy
 {
 public:
-	EnemyMelee()          { Init(); }
+	EnemyMelee()          {}
 	virtual ~EnemyMelee() {}
 
 	void Init() override;

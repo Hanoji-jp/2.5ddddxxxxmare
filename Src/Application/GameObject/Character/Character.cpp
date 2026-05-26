@@ -20,13 +20,55 @@ void Character::DrawDebug()
 
 void Character::ApplyGravity()
 {
+    // 惑星影響圏内かチェック（m_isGround に関係なく毎フレーム更新する）
+    m_pCurrentPlanet = PlanetGravityManager::Instance().FindNearestPlanet(GetPos());
+
+    // m_upDir は着地中も毎フレーム更新（傾き表示に使うため）
+    // シリンダー重力: XY平面の輸軸から外向きになる（Z成分は無視）
+    if (m_pCurrentPlanet)
+    {
+        const Math::Vector3 pos     = GetPos();
+        const Math::Vector3 center  = m_pCurrentPlanet->Position;
+        const Math::Vector2 toXY    = { pos.x - center.x, pos.y - center.y };
+        const float xyDist = toXY.Length();
+        if (xyDist > 0.001f)
+        {
+            m_upDir = { toXY.x / xyDist, toXY.y / xyDist, 0.0f };
+        }
+    }
+    else
+    {
+        m_upDir = { 0.0f, 1.0f, 0.0f };
+    }
+
     if (m_isGround) { return; }
 
-    m_velocity.y += GameConst::Gravity;
-
-    if (m_velocity.y < GameConst::MaxFallSpeed)
+    if (m_pCurrentPlanet)
     {
-        m_velocity.y = GameConst::MaxFallSpeed;
+        // シリンダー軸方向への重力（XY平面のみ、Zは変えない）
+        const Math::Vector3 pos     = GetPos();
+        const Math::Vector3 center  = m_pCurrentPlanet->Position;
+        const Math::Vector2 toXY    = { center.x - pos.x, center.y - pos.y };
+        const float xyDist = toXY.Length();
+        if (xyDist > 0.001f)
+        {
+            const Math::Vector3 gravDir = { toXY.x / xyDist, toXY.y / xyDist, 0.0f };
+
+            const float radialVel = m_velocity.Dot(gravDir);
+            const float newRadial = std::min(radialVel + PlanetConst::GravityAccel,
+                                             PlanetConst::MaxFallSpeed);
+            m_velocity += gravDir * (newRadial - radialVel);
+        }
+        // Z成分は変えない（横スクロールのZ固定を尊重）
+    }
+    else
+    {
+        // 通常重力
+        m_velocity.y += GameConst::Gravity;
+        if (m_velocity.y < GameConst::MaxFallSpeed)
+        {
+            m_velocity.y = GameConst::MaxFallSpeed;
+        }
     }
 }
 
@@ -41,8 +83,49 @@ void Character::CheckGround()
 {
     m_isGround = false;
 
+    // シリンダー重力上にいる場合はXY距離ベースで着地判定
+    if (m_pCurrentPlanet)
+    {
+        const Math::Vector3 pos    = GetPos();
+        const Math::Vector3 center = m_pCurrentPlanet->Position;
+        const Math::Vector2 toXY   = { pos.x - center.x, pos.y - center.y };
+        const float xyDist = toXY.Length();
+        const float diff   = xyDist - m_pCurrentPlanet->SurfaceRadius;
+
+        // ジャンプ直後（外向きに速度がある）は着地判定をスキップして浮き上がらせる
+        const Math::Vector3 outDir = (xyDist > 0.001f)
+            ? Math::Vector3{ toXY.x / xyDist, toXY.y / xyDist, 0.0f }
+            : Math::Vector3{ 0.0f, 1.0f, 0.0f };
+        const float outwardVel = m_velocity.Dot(outDir);
+        if (outwardVel > 0.001f) { return; }   // 外向きに動いている = 上昇中
+
+        if (diff <= PlanetConst::GroundSnapTolerance)
+        {
+            // めり込み時のみ表面にスナップ
+            if (diff < 0.0f && xyDist > 0.001f)
+            {
+                SetPos({ center.x + outDir.x * m_pCurrentPlanet->SurfaceRadius,
+                         center.y + outDir.y * m_pCurrentPlanet->SurfaceRadius,
+                         pos.z });
+            }
+
+            // 中心方向（落下方向）の速度成分を減衰させる（即ゼロにせず滑らかに着地）
+            const float radialVel = m_velocity.Dot(-outDir);
+            if (radialVel > 0.0f)
+            {
+                m_velocity -= (-outDir) * radialVel * (1.0f - GameConst::LandingDamping);
+            }
+            m_isGround = true;
+        }
+        return;
+    }
+
+    // 通常マップ上のレイキャスト着地判定
     const auto spMap = m_wpMap.lock();
     if (!spMap) { return; }
+
+    // 上方向に速度がある（ジャンプ直後）は着地判定をスキップ
+    if (m_velocity.y > 0.001f) { return; }
 
     Math::Vector3 pos = GetPos();
 
@@ -67,11 +150,23 @@ void Character::CheckGround()
 
         if (pBest)
         {
-            // 着地Y座標にスナップ
-            pos.y = pBest->m_hitPos.y;
-            SetPos(pos);
-            m_velocity.y = 0.0f;
-            m_isGround   = true;
+            const float floorY      = pBest->m_hitPos.y;
+            const float penetration = floorY - pos.y;   // 正 = めり込み、負 = 床より上
+
+            // 着地許容範囲内（めり込み〜SnapDist 浮いている）
+            if (penetration > -CollisionConst::GroundSnapDist)
+            {
+                // 常に床にスナップ（浮いたまま着地フラグだけ立つのを防ぐ）
+                pos.y = floorY;
+                SetPos(pos);
+                // 落下速度を減衰させる
+                if (m_velocity.y < 0.0f)
+                {
+                    m_velocity.y *= GameConst::LandingDamping;
+                    if (std::abs(m_velocity.y) < 0.001f) { m_velocity.y = 0.0f; }
+                }
+                m_isGround = true;
+            }
         }
     }
 }

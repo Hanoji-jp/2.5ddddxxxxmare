@@ -6,10 +6,11 @@ namespace CollisionConst
     constexpr const char* ColPrefix     = "col_";
 
     // 床判定レイの長さ（キャラクター足元から下に飛ばす）
-    constexpr float GroundRayLength     = 1.5f;
+    constexpr float GroundRayLength     = 2.5f;
 
     // 床とみなすレイ起点のオフセット（足元より少し上から）
-    constexpr float GroundRayOffset     = 0.5f;
+    // MaxFallSpeed(1.0f) より大きくしないとトンネリングが起きる
+    constexpr float GroundRayOffset     = 1.2f;
 
     // 壁判定：水平レイの長さ（キャラクター半径）
     constexpr float WallRayLength       = 0.4f;

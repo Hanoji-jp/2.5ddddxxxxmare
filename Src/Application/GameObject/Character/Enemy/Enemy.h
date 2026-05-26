@@ -56,10 +56,16 @@ protected:
     int     m_attackCool  = 0;
 
     // 巡回用：スポーン位置を起点に左右折り返し
-    Math::Vector3 m_spawnPos   = { 0.0f, 0.0f, 0.0f };
+    Math::Vector3 m_spawnPos    = { 0.0f, 0.0f, 0.0f };
     bool          m_patrolRight = true;
 
-    Math::Vector3 m_facingDir  = { 0.0f, 0.0f, 1.0f };
+    // 移動慣性速度（プレイヤーと同様の加減速用）
+    Math::Vector3 m_moveVelocity = { 0.0f, 0.0f, 0.0f };
+
+    Math::Vector3 m_facingDir   = { 0.0f, 0.0f, 1.0f };
+
+    // 現在再生中のアニメ名（同名再セット防止）
+    std::string m_currentAnimName;
 
     std::weak_ptr<KdGameObject> m_wpTarget;
 

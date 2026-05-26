@@ -55,8 +55,14 @@ void Player::Update()
         else
             ChangeAnim("Idle", true);
         break;
-    case State::Jump:   ChangeAnim("Jump",   false); break;
-    case State::Fall:   ChangeAnim("Fall",   true);  break;
+    case State::Jump:
+        // Jumpアニメがない場合は Idle で代用
+        if (!ChangeAnimIfExist("Jump", false)) { ChangeAnim("Idle", true); }
+        break;
+    case State::Fall:
+        // Fallアニメがない場合は Idle で代用
+        if (!ChangeAnimIfExist("Fall", true)) { ChangeAnim("Idle", true); }
+        break;
     case State::Attack: ChangeAnim("Attack", false); break;
     case State::Dead:   ChangeAnim("Dead",   false); break;
     default: break;
@@ -75,17 +81,44 @@ void Player::PostUpdate()
     {
         const Math::Vector3 pos   = GetPos();
         const float         scale = PlayerConst::ModelScale;
-        const float         yaw   = std::atan2f(m_facingDir.x, m_facingDir.z);
+        const Math::Vector3 up    = GetUpDir();   // 惑星表面の法線（XY平面、Zは0）
 
-        // 論理位置（コリジョン基準）はオフセットなし
-        m_mWorld = DirectX::XMMatrixScaling(scale, scale, scale)
-                 * DirectX::XMMatrixRotationY(yaw)
-                 * DirectX::XMMatrixTranslation(pos.x, pos.y, pos.z);
+        // ----- 正規直交基底を構築（行列式 = +1 を保証） -----
+        // forward: モデルがデフォルトで向く軸（＋Z方向）に対応させる
+        //   円周上の接線 = (-up.y, up.x, 0)。左向き（-X側）を正とし
+        //   m_facingDir.x の符号で反転する
+        const Math::Vector3 tangent = { -up.y, up.x, 0.0f };
+        // m_facingSign は接線方向に対する左右符号（+1/-1）
+        // up が反転しても tangent との関係で向きが決まるため歪みが起きない
+        const float         fSign   = m_facingSign;
 
-        // 描画専用行列にだけピボット補正オフセットを乗せる
-        m_drawWorld = DirectX::XMMatrixScaling(scale, scale, scale)
-                    * DirectX::XMMatrixRotationY(yaw)
-                    * DirectX::XMMatrixTranslation(pos.x, pos.y + PlayerConst::ModelOffsetY, pos.z);
+        // モデルのローカル Z（前方）→ ワールドの tangent 方向へ
+        const Math::Vector3 modelFwd = tangent * fSign;           // forward 軸
+        // モデルのローカル Y（上方）→ ワールドの up 方向へ
+        const Math::Vector3 modelUp  = up;                        // up 軸
+        // モデルのローカル X（右方）→ cross(up, forward) で確定
+        //   det = +1 になるよう cross の順序を合わせる
+        Math::Vector3 modelRight;
+        modelUp.Cross(modelFwd, modelRight);
+        modelRight.Normalize();
+
+        // DirectX 行メジャー行列（行ベクトル用）:
+        //   行0 = Right, 行1 = Up, 行2 = Forward
+        const Math::Matrix rot(
+            modelRight.x, modelRight.y, modelRight.z, 0.0f,
+            modelUp.x,    modelUp.y,    modelUp.z,    0.0f,
+            modelFwd.x,   modelFwd.y,   modelFwd.z,   0.0f,
+            0.0f,         0.0f,         0.0f,          1.0f);
+
+        const Math::Matrix scaleMat = DirectX::XMMatrixScaling(scale, scale, scale);
+        const Math::Matrix transMat = DirectX::XMMatrixTranslation(pos.x, pos.y, pos.z);
+        const Math::Matrix transDrawMat = DirectX::XMMatrixTranslation(
+            pos.x + up.x * PlayerConst::ModelOffsetY,
+            pos.y + up.y * PlayerConst::ModelOffsetY,
+            pos.z + up.z * PlayerConst::ModelOffsetY);
+
+        m_mWorld    = scaleMat * rot * transMat;
+        m_drawWorld = scaleMat * rot * transDrawMat;
     }
 
     // 消滅した矢を除去
@@ -117,59 +150,73 @@ void Player::DrawLit()
 
 void Player::Move()
 {
-    // 入力取得
+    // 入力取得（Z軸移動なし）
     Math::Vector3 input = { 0.0f, 0.0f, 0.0f };
 
-    if (GetAsyncKeyState(VK_RIGHT) & 0x8000) { input.x += 1.0f; }
-    if (GetAsyncKeyState(VK_LEFT)  & 0x8000) { input.x -= 1.0f; }
-    if (GetAsyncKeyState(VK_UP)    & 0x8000) { input.z += 1.0f; }
-    if (GetAsyncKeyState(VK_DOWN)  & 0x8000) { input.z -= 1.0f; }
+    if (GetAsyncKeyState(VK_RIGHT) & 0x8000) { input.x -= 1.0f; }
+    if (GetAsyncKeyState(VK_LEFT)  & 0x8000) { input.x += 1.0f; }
+    if (GetAsyncKeyState(VK_UP)    & 0x8000) { input.y += 1.0f; }
+    if (GetAsyncKeyState(VK_DOWN)  & 0x8000) { input.y -= 1.0f; }
 
     if (input.LengthSquared() > 0.0f)
     {
-        // 入力方向に向かって加速
         input = DirectX::XMVector3Normalize(input);
-        const Math::Vector3 targetVel = input * PlayerConst::MoveSpeed;
 
-        m_moveVelocity = Math::Vector3::Lerp(m_moveVelocity, targetVel, PlayerConst::Acceleration / PlayerConst::MoveSpeed);
+        const Math::Vector3 up = GetUpDir();   // XY平面内の法線（Z=0）
 
-        // 向きをSlerpで滑らかに補間
-        const Math::Quaternion fromRot = Math::Quaternion::CreateFromYawPitchRoll(
-            std::atan2f(m_facingDir.x, m_facingDir.z), 0.0f, 0.0f);
-        const Math::Quaternion toRot = Math::Quaternion::CreateFromYawPitchRoll(
-            std::atan2f(input.x, input.z), 0.0f, 0.0f);
-        const Math::Quaternion blendRot = Math::Quaternion::Slerp(fromRot, toRot, PlayerConst::RotationSpeed);
+        // up に直交する接線方向を求める（XY平面内、Z固定）
+        // up = (ux, uy, 0) なら tangent = (-uy, ux, 0)
+        const Math::Vector3 tangent = { -up.y, up.x, 0.0f };
 
-        // 補間した向きをfacingDirに反映
-        m_facingDir = Math::Vector3::Transform({ 0.0f, 0.0f, 1.0f },
-            Math::Matrix::CreateFromQuaternion(blendRot));
-        m_facingDir.y = 0.0f;
-        m_state     = State::Walk;
+        // 入力の XY を接線・法線ベースに変換
+        Math::Vector3 worldInput = tangent * input.x + up * input.y;
+        // up 成分（radial 方向）を除去して接線のみにする
+        worldInput -= up * worldInput.Dot(up);
+
+        if (worldInput.LengthSquared() > 0.0001f)
+        {
+            worldInput = DirectX::XMVector3Normalize(worldInput);
+
+            const Math::Vector3 targetVel = worldInput * PlayerConst::MoveSpeed;
+            m_moveVelocity = Math::Vector3::Lerp(m_moveVelocity, targetVel,
+                PlayerConst::Acceleration / PlayerConst::MoveSpeed);
+
+            // 向き更新: tangent とのドット積で左右符号を即時決定する
+            // Lerp+スナップは初期値(±1)から抜け出せなくなるバグがあるため使わない
+            m_facingSign = (tangent.Dot(worldInput) >= 0.0f) ? 1.0f : -1.0f;
+        }
+
+        m_state = State::Walk;
     }
     else
     {
-        // 入力なし：減速して止まる
-        m_moveVelocity = Math::Vector3::Lerp(m_moveVelocity, Math::Vector3::Zero, PlayerConst::Deceleration / PlayerConst::MoveSpeed);
-
-        // 十分遅くなったら完全停止
+        m_moveVelocity = Math::Vector3::Lerp(m_moveVelocity, Math::Vector3::Zero,
+            PlayerConst::Deceleration / PlayerConst::MoveSpeed);
         if (m_moveVelocity.LengthSquared() < 0.0001f)
         {
             m_moveVelocity = Math::Vector3::Zero;
         }
-
         if (m_isGround) { m_state = State::Idle; }
+        else if (m_state != State::Jump) { m_state = State::Fall; }
     }
 
-    // 慣性速度をvelocityのXZに反映
-    m_velocity.x = m_moveVelocity.x;
-    m_velocity.z = m_moveVelocity.z;
+    // velocity に反映（radial 成分は保持、接線成分だけ置き換え）
+    const Math::Vector3 up = GetUpDir();
+    Math::Vector3 surfaceVel = m_moveVelocity;
+    surfaceVel -= up * surfaceVel.Dot(up);
+
+    const float radialVel = m_velocity.Dot(up);
+    m_velocity = surfaceVel + up * radialVel;
+    m_velocity.z = 0.0f;   // Z は常に固定
 }
 
 void Player::Jump()
 {
     if (m_isGround && (GetAsyncKeyState(VK_SPACE) & 0x8000))
     {
-        m_velocity.y = PlayerConst::JumpPower;
+        // 惑星上なら法線方向（上方向）へジャンプ
+        const Math::Vector3 jumpVec = GetUpDir() * PlayerConst::JumpPower;
+        m_velocity += jumpVec;
         m_isGround   = false;
         m_state      = State::Jump;
     }
@@ -200,7 +247,11 @@ void Player::AttackRanged()
 
         const auto arrow = std::make_shared<Arrow>();
         arrow->Init();
-        arrow->Launch(spawnPos, m_facingDir);
+        // 矢の発射方向: 現在の up から接線を求め m_facingSign で向きを決める
+        const Math::Vector3 arrowUp      = GetUpDir();
+        const Math::Vector3 arrowTangent = { -arrowUp.y, arrowUp.x, 0.0f };
+        const Math::Vector3 arrowDir     = arrowTangent * m_facingSign;
+        arrow->Launch(spawnPos, arrowDir);
         m_arrows.push_back(arrow);
     }
 }
@@ -218,4 +269,14 @@ void Player::ChangeAnim(const std::string& _animName, bool _isLoop)
 
     m_animBlender.ChangeAnimation(spAnim, _isLoop, PlayerConst::AnimBlendFrames);
     m_currentAnimName = _animName;
+}
+
+bool Player::ChangeAnimIfExist(const std::string& _animName, bool _isLoop)
+{
+    const auto& spData = m_modelWork.GetData();
+    if (!spData) { return false; }
+    const auto spAnim = spData->GetAnimation(_animName);
+    if (!spAnim) { return false; }
+    ChangeAnim(_animName, _isLoop);
+    return true;
 }

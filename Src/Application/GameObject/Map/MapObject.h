@@ -13,8 +13,6 @@ public:
 
     bool IsVisible() const override { return true; }
 
-    void Expire() { m_isExpired = true; }
-
 private:
     KdModelWork m_modelWork;
 };

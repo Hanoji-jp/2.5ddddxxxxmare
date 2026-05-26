@@ -3,8 +3,8 @@
 
 void EnemyRanged::Init()
 {
-	m_spawnPos = GetPos();
 	InitModel(EnemyConst::RangedModelPath);
+	m_spawnPos = GetPos();
 }
 
 void EnemyRanged::PostUpdate()

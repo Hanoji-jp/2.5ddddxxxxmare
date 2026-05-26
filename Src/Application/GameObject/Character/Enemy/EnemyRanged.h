@@ -10,7 +10,7 @@
 class EnemyRanged : public Enemy
 {
 public:
-	EnemyRanged()          { Init(); }
+	EnemyRanged()          {}
 	virtual ~EnemyRanged() {}
 
 	void Init()       override;

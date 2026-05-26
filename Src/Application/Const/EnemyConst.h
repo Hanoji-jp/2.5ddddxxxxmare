@@ -9,6 +9,15 @@ namespace EnemyConst
     // 移動速度（基本）
     constexpr float MoveSpeed        = 0.04f;
 
+    // 加速度（プレイヤーと同様の Lerp 係数）
+    constexpr float Acceleration     = 0.008f;
+
+    // 減速度
+    constexpr float Deceleration     = 0.012f;
+
+    // 向き補間速度（Slerp の t 値）
+    constexpr float RotationSpeed    = 0.15f;
+
     // 最大HP
     constexpr int   MaxHp            = 3;
 
@@ -35,6 +44,9 @@ namespace EnemyConst
 
     // 攻撃クールダウン（フレーム）
     constexpr int   MeleeAttackCool  = 60;
+
+    // 近接攻撃のダメージ量
+    constexpr int   MeleeDamage      = 1;
 
     // -------------------------------------------------------
     // 遠距離型（EnemyRanged）固有

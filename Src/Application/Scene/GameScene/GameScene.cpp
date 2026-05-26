@@ -32,7 +32,8 @@ void GameScene::Event()
 			m_pCamera->SetRooms(m_rooms);
 			m_pEditorCam   = nullptr;
 
-			KdDebugGUI::Instance().ClearGuiCallback();
+			// HP UIはゲーム中も常時表示するのでコールバックは維持
+			KdDebugGUI::Instance().SetGuiCallback([this] { DrawGui(); });
 		}
 	}
 	m_f2Prev = f2Now;
@@ -54,10 +55,38 @@ void GameScene::Event()
 			RebuildEnemies();
 			m_enemyEditor.ClearDirty();
 		}
+		if (m_checkpointEditor.IsDirty())
+		{
+			RebuildCheckpoints();
+			m_checkpointEditor.ClearDirty();
+		}
 	}
 	else
 	{
 		if (m_spPlayer && m_pCamera) { m_pCamera->Update(m_spPlayer->GetPos()); }
+
+		// ── 落下死チェック ──────────────────────────────
+		if (m_spPlayer && !m_spPlayer->IsExpired())
+		{
+			if (m_spPlayer->GetPos().y < CheckpointConst::DeathY)
+			{
+				Respawn();
+			}
+		}
+
+		// ── チェックポイント更新 ─────────────────────────
+		for (auto& cp : m_checkpoints)
+		{
+			if (cp->IsActivated())
+			{
+				// このチェックポイントを有効化、他を無効化
+				m_respawnPos = cp->GetPos();
+				for (auto& other : m_checkpoints)
+				{
+					if (other != cp) { other->Deactivate(); }
+				}
+			}
+		}
 	}
 }
 
@@ -67,15 +96,23 @@ void GameScene::DrawDebugExtra()
 	{
 		m_roomEditor.DrawDebugLines();
 		m_enemyEditor.DrawDebugSpheres();
+		m_checkpointEditor.DrawDebugSpheres();
+		PlanetGravityManager::Instance().DrawDebugSpheres();
 	}
 }
 
 void GameScene::DrawGui()
 {
+	// HP UI は常時表示（エディターモード問わず）
+	if (m_spHpUI) { m_spHpUI->DrawGui(); }
+
+	// エディターモード時のみエディターGUIを表示
 	m_mapEditor.DrawGui();
 	m_roomEditor.DrawGui();
 	m_enemyEditor.DrawGui();
+	m_checkpointEditor.DrawGui();
 	CameraSettings::Instance().DrawGui();
+	PlanetGravityManager::Instance().DrawGui();
 
 	if (m_roomEditor.IsDirty())
 	{
@@ -104,6 +141,14 @@ void GameScene::DrawGui()
 		}
 	}
 	ImGui::End();
+}
+
+void GameScene::Respawn()
+{
+	if (!m_spPlayer) { return; }
+	m_spPlayer->SetPos(m_respawnPos);
+	// HPを全回復（Player側にリセット関数があれば呼ぶ）
+	m_spPlayer->Init();
 }
 
 void GameScene::RebuildMapObjects()
@@ -143,12 +188,14 @@ void GameScene::RebuildEnemies()
 		{
 			auto sp = std::make_shared<EnemyMelee>();
 			sp->SetPos(data.position);
+			sp->Init();
 			spEnemy = sp;
 		}
 		else
 		{
 			auto sp = std::make_shared<EnemyRanged>();
 			sp->SetPos(data.position);
+			sp->Init();
 			spEnemy = sp;
 		}
 
@@ -160,6 +207,22 @@ void GameScene::RebuildEnemies()
 	}
 }
 
+void GameScene::RebuildCheckpoints()
+{
+	// 既存チェックポイントを除去
+	for (auto& cp : m_checkpoints) { cp->Expire(); }
+	m_checkpoints.clear();
+
+	for (const auto& pos : m_checkpointEditor.GetPositions())
+	{
+		auto cp = std::make_shared<Checkpoint>();
+		cp->SetPos(pos);
+		cp->SetPlayer(m_spPlayer);
+		m_checkpoints.push_back(cp);
+		AddObject(cp);
+	}
+}
+
 void GameScene::Init()
 {
 	// カメラ（BaseSceneのm_cameraに所有権を渡し、観察用ポインタだけ保持）
@@ -167,22 +230,24 @@ void GameScene::Init()
 	m_pCamera      = upCamera.get();
 	m_camera       = std::move(upCamera);
 
+	// マップ（先にAddObjectしてPostUpdate→CalcNodeMatricesが敵より前に走るようにする）
+	m_spMap = std::make_shared<Map>();
+	AddObject(m_spMap);
+
 	// プレイヤー
 	m_spPlayer = std::make_shared<Player>();
 	LoadSpawn();
 	m_spPlayer->SetPos(m_spawnPos);
+	m_spPlayer->SetMapObject(m_spMap);
 	AddObject(m_spPlayer);
 
-	// 近距離型の敵
-	// 遠距離型の敵
-	// → エディター配置データから生成するのでハードコードなし
+	// リスポーン座標の初期値をスポーン座標と揃える
+	m_respawnPos = m_spawnPos;
 
-	// マップ
-	m_spMap = std::make_shared<Map>();
-	AddObject(m_spMap);
-
-	// プレイヤーにマップコリジョンを渡してからシーンに追加
-	if (m_spPlayer) { m_spPlayer->SetMapObject(m_spMap); }
+	// HP UI
+	m_spHpUI = std::make_shared<HpUI>();
+	m_spHpUI->SetPlayer(m_spPlayer);
+	AddObject(m_spHpUI);
 
  // ルームエディター初期化・読込
 	m_roomEditor.Load();
@@ -203,11 +268,17 @@ void GameScene::Init()
 	m_mapEditor.Init();
 
 	// 敵配置エディター（Loadはコンストラクタ内で実行済み）→敵を生成
-	// m_spMap と m_spPlayer が準備できた後に呼ぶ
 	if (m_enemyEditor.IsDirty())
 	{
 		RebuildEnemies();
 		m_enemyEditor.ClearDirty();
+	}
+
+	// チェックポイントエディター → チェックポイント生成
+	if (m_checkpointEditor.IsDirty())
+	{
+		RebuildCheckpoints();
+		m_checkpointEditor.ClearDirty();
 	}
 
 	// カメラ設定読込
@@ -217,6 +288,9 @@ void GameScene::Init()
 	auto& ambient = KdShaderManager::Instance().WorkAmbientController();
 	ambient.SetAmbientLight(LightConst::AmbientColor);
 	ambient.SetDirLight(LightConst::DirLightDir, LightConst::DirLightColor);
+
+	// HP UI を常時表示するためゲーム開始時からコールバックをセット
+	KdDebugGUI::Instance().SetGuiCallback([this] { DrawGui(); });
 }
 
 void GameScene::SaveSpawn()

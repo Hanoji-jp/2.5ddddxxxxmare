@@ -26,6 +26,7 @@ private:
     void AttackRanged();
     // アニメーション切り替え
     void ChangeAnim(const std::string& _animName, bool _isLoop = true);
+    bool ChangeAnimIfExist(const std::string& _animName, bool _isLoop = true);
 
     KdModelWork  m_modelWork;
     AnimBlender  m_animBlender;
@@ -43,8 +44,8 @@ private:
     // 飛翔中の矢リスト（シーンへの追加は GameScene が行う想定）
     std::vector<std::shared_ptr<Arrow>> m_arrows;
 
-    // 向いている方向（XZ平面。初期値は右向き）
-    Math::Vector3 m_facingDir    = { 1.0f, 0.0f, 0.0f };
+    // 接線方向の左右符号（+1 = tangent 向き、-1 = 逆向き）
+    float m_facingSign = 1.0f;
 
     // XZ移動の慣性速度（加減速に使用）
     Math::Vector3 m_moveVelocity = { 0.0f, 0.0f, 0.0f };
