@@ -31,6 +31,11 @@ public:
 		float			DissolveEdgeRange = 0.03f;	// 0 ～ 1
 
 		Math::Vector3	DissolveEmissive = { 0.0f, 1.0f, 1.0f };
+
+		// トリプレーナーUV
+		int				UseTriplanar   = 0;		// 有効フラグ
+		float			TriplanarScale = 0.1f;	// ワールド座標スケール
+		Math::Vector2	_tripad        = {};	// パディング
 	};
 
 	// 定数バッファ(メッシュ単位更新)
@@ -59,6 +64,15 @@ public:
 	//================================================
 	// 設定・取得
 	//================================================
+
+	// トリプレーナーUV 設定（scale: ワールド座標に掛ける値。小さいほど細かくタイリング）
+	void SetTriplanarUV(bool enable, float scale = 0.1f)
+	{
+		auto& cb = m_cb0_Obj.Work();
+		cb.UseTriplanar   = enable ? 1 : 0;
+		cb.TriplanarScale = scale;
+		m_dirtyCBObj = true;
+	}
 
 	// UVタイリング設定
 	void SetUVTiling(const Math::Vector2& tiling)

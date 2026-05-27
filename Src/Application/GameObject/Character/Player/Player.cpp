@@ -1,6 +1,7 @@
 ﻿#include "../../../../Pch.h"
 #include "Player.h"
 #include "../../../Manager/ModelManager.h"
+#include "../../../Manager/ManualGravityZoneManager.h"
 
 void Player::Init()
 {
@@ -30,6 +31,62 @@ void Player::Init()
 
 void Player::Update()
 {
+    // 手動重力ゾーンチェック
+    const bool canUseManualGravity = ManualGravityZoneManager::Instance().CanUseManualGravity(GetPos());
+
+    // 重力切り替え（矢印キー）- ゾーン内でのみ有効、空中では1回まで
+    if (canUseManualGravity)
+    {
+        // 空中制限チェック：地上 or 空中1回まで
+        const bool canSwitch = m_isGround || CanSwitchGravityInAir();
+
+        if (canSwitch && (GetAsyncKeyState(VK_DOWN) & 0x8000))  // ↓キー
+        {
+            if (GetManualGravity() != ManualGravityDir::Down)
+            {
+                SetManualGravity(ManualGravityDir::Down);
+                if (!m_isGround) { ConsumeAirGravitySwitch(); }
+            }
+        }
+        else if (canSwitch && (GetAsyncKeyState(VK_UP) & 0x8000))  // ↑キー
+        {
+            if (GetManualGravity() != ManualGravityDir::Up)
+            {
+                SetManualGravity(ManualGravityDir::Up);
+                if (!m_isGround) { ConsumeAirGravitySwitch(); }
+            }
+        }
+        else if (canSwitch && (GetAsyncKeyState(VK_LEFT) & 0x8000))  // ←キー
+        {
+            if (GetManualGravity() != ManualGravityDir::Left)
+            {
+                SetManualGravity(ManualGravityDir::Left);
+                if (!m_isGround) { ConsumeAirGravitySwitch(); }
+            }
+        }
+        else if (canSwitch && (GetAsyncKeyState(VK_RIGHT) & 0x8000))  // →キー
+        {
+            if (GetManualGravity() != ManualGravityDir::Right)
+            {
+                SetManualGravity(ManualGravityDir::Right);
+                if (!m_isGround) { ConsumeAirGravitySwitch(); }
+            }
+        }
+        // Rキーで自動モードに戻す（空中制限なし）
+        else if (GetAsyncKeyState('R') & 0x8000)
+        {
+            SetManualGravity(ManualGravityDir::None);
+        }
+    }
+    else
+    {
+        // ゾーン外では手動重力を無効化
+        if (GetManualGravity() != ManualGravityDir::None)
+        {
+            SetManualGravity(ManualGravityDir::None);
+        }
+    }
+
     Move();
     Jump();
     AttackMelee();
@@ -153,10 +210,10 @@ void Player::Move()
     // 入力取得（Z軸移動なし）
     Math::Vector3 input = { 0.0f, 0.0f, 0.0f };
 
-    if (GetAsyncKeyState(VK_RIGHT) & 0x8000) { input.x -= 1.0f; }
-    if (GetAsyncKeyState(VK_LEFT)  & 0x8000) { input.x += 1.0f; }
-    if (GetAsyncKeyState(VK_UP)    & 0x8000) { input.y += 1.0f; }
-    if (GetAsyncKeyState(VK_DOWN)  & 0x8000) { input.y -= 1.0f; }
+    if (GetAsyncKeyState('D') & 0x8000) { input.x -= 1.0f; }  // D = 右
+    if (GetAsyncKeyState('A') & 0x8000) { input.x += 1.0f; }  // A = 左
+    if (GetAsyncKeyState('W') & 0x8000) { input.y += 1.0f; }  // W = 上
+    if (GetAsyncKeyState('S') & 0x8000) { input.y -= 1.0f; }  // S = 下
 
     if (input.LengthSquared() > 0.0f)
     {

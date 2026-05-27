@@ -41,7 +41,23 @@ float4 main(VSOutput In) : SV_Target0
 	//------------------------------------------
 	// 材質色
 	//------------------------------------------
-	float4 baseColor = g_baseTex.Sample(g_ss, In.UV) * g_BaseColor * In.Color;
+	float4 baseColor;
+	if (g_UseTriplanar)
+	{
+		// ワールド法線の絶対値を重みに使う（シャープさは pow で調整）
+		float3 blend = pow(abs(normalize(In.wN)), 4.0f);
+		blend /= (blend.x + blend.y + blend.z + 1e-5f);
+
+		float3 scaledPos = In.wPos * g_TriplanarScale;
+		float4 cx = g_baseTex.Sample(g_ss, scaledPos.yz);
+		float4 cy = g_baseTex.Sample(g_ss, scaledPos.xz);
+		float4 cz = g_baseTex.Sample(g_ss, scaledPos.xy);
+		baseColor = (cx * blend.x + cy * blend.y + cz * blend.z) * g_BaseColor * In.Color;
+	}
+	else
+	{
+		baseColor = g_baseTex.Sample(g_ss, In.UV) * g_BaseColor * In.Color;
+	}
 	
 	// Alphaテスト
 	if( baseColor.a < 0.05f )

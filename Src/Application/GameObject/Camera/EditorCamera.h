@@ -13,6 +13,7 @@ public:
     ~EditorCamera() {}
 
     void Update();
+    void SetPos(const Math::Vector3& _pos) { m_pos = _pos; }
 
 private:
     void RotateByMouse();

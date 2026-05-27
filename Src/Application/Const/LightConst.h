@@ -11,4 +11,8 @@ namespace LightConst
 
     // 平行光の色（RGBを下げると柔らかくなる）
     constexpr Math::Vector3 DirLightColor    = { 0.6f, 0.6f, 0.65f };
+
+    // ポイントライトのデフォルト値
+    constexpr Math::Vector3 PointLightDefaultColor  = { 1.0f, 0.9f, 0.7f };
+    constexpr float         PointLightDefaultRadius = 15.0f;
 }

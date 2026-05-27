@@ -8,19 +8,18 @@
 #include"../../GameObject/BackGround/BackGround.h"
 #include"../../GameObject/Camera/SideScrollCamera.h"
 #include"../../GameObject/Camera/RoomBounds.h"
-#include"../../GameObject/Map/Map.h"
-#include"../../GameObject/Map/MapObject.h"
-#include"../../Editor/MapEditor.h"
 #include"../../Editor/RoomBoundsEditor.h"
 #include"../../Editor/EnemyPlacementEditor.h"
 #include"../../Editor/CheckpointEditor.h"
 #include"../../Manager/PlanetGravityManager.h"
+#include"../../Manager/ManualGravityZoneManager.h"
 #include"../../Camera/CameraSettings.h"
 #include"../../GameObject/Camera/EditorCamera.h"
 #include"../../Const/SpawnConst.h"
 #include"../../GameObject/Checkpoint/Checkpoint.h"
 #include"../../Const/CheckpointConst.h"
 #include"../../GameObject/UI/HpUI.h"
+#include"../../GameObject/Light/PointLightObject.h"
 
 class GameScene : public BaseScene
 {
@@ -35,26 +34,23 @@ private:
 	void Init()               override;
 	void DrawGui()            override;
 	void DrawDebugExtra()     override;
-	void RebuildMapObjects();
+	void DrawUnLitExtra()     override;  // 背景Box描画
+	void DrawLitExtra()       override;  // 惑星モデル描画
+
 	void RebuildEnemies();
 	void RebuildCheckpoints();
 
 	std::shared_ptr<Player>  m_spPlayer   = nullptr;
-	std::shared_ptr<Map>     m_spMap      = nullptr;
 	SideScrollCamera*        m_pCamera    = nullptr;
 	std::vector<RoomBounds> m_rooms;
 
 	// インゲームマップエディター
-	MapEditor               m_mapEditor;
 	RoomBoundsEditor        m_roomEditor;
 	EnemyPlacementEditor    m_enemyEditor;
 	CheckpointEditor        m_checkpointEditor;
 	bool                    m_editorMode  = false;
 	bool                    m_f2Prev      = false;
 	EditorCamera*           m_pEditorCam  = nullptr;
-
-	// エディター配置オブジェクトリスト
-	std::vector<std::shared_ptr<MapObject>> m_mapObjects;
 
 	// エディター配置敵リスト
 	std::vector<std::shared_ptr<Enemy>> m_enemies;
@@ -68,6 +64,9 @@ private:
 
 	// HP UI
 	std::shared_ptr<HpUI>   m_spHpUI;
+
+	// ポイントライトリスト
+	std::vector<std::shared_ptr<PointLightObject>> m_pointLights;
 
 	void Respawn();
 	void SaveSpawn();

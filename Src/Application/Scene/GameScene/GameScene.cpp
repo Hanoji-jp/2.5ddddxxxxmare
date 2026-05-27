@@ -7,6 +7,8 @@
 
 void GameScene::Event()
 {
+	// 惑星のワールド行列を毎フレーム更新（エディターで位置変更した場合にも追従）
+	PlanetGravityManager::Instance().PostUpdate();
 	// F2でエディターモードのトグル（チャタリング防止）
 	const bool f2Now = (GetAsyncKeyState(VK_F2) & 0x8000) != 0;
 	if (f2Now && !m_f2Prev)
@@ -19,6 +21,17 @@ void GameScene::Event()
 			m_pCamera        = nullptr;
 			auto upEditorCam = std::make_unique<EditorCamera>();
 			m_pEditorCam     = upEditorCam.get();
+
+			// プレイヤーの位置からエディターカメラを開始
+			if (m_spPlayer)
+			{
+				Math::Vector3 playerPos = m_spPlayer->GetPos();
+				// カメラを少し後ろと上に配置
+				playerPos.z -= 15.0f;
+				playerPos.y += 3.0f;
+				m_pEditorCam->SetPos(playerPos);
+			}
+
 			m_camera         = std::move(upEditorCam);
 
 			KdDebugGUI::Instance().SetGuiCallback([this] { DrawGui(); });
@@ -44,13 +57,7 @@ void GameScene::Event()
 		if (m_pEditorCam) { m_pEditorCam->Update(); }
 
 		// エディターのDirtyチェック → オブジェクト再構築
-		m_mapEditor.Update();
-		if (m_mapEditor.IsDirty())
-		{
-			RebuildMapObjects();
-			m_mapEditor.ClearDirty();
-		}
-		if (m_enemyEditor.IsDirty())
+
 		{
 			RebuildEnemies();
 			m_enemyEditor.ClearDirty();
@@ -63,9 +70,14 @@ void GameScene::Event()
 	}
 	else
 	{
-		if (m_spPlayer && m_pCamera) { m_pCamera->Update(m_spPlayer->GetPos()); }
+		if (m_spPlayer && m_pCamera)
+		{
+			m_pCamera->Update(m_spPlayer->GetPos(), m_spPlayer->GetUpDir());
+		}
 
 		// ── 落下死チェック ──────────────────────────────
+		// 一旦無効化
+		/*
 		if (m_spPlayer && !m_spPlayer->IsExpired())
 		{
 			if (m_spPlayer->GetPos().y < CheckpointConst::DeathY)
@@ -73,6 +85,7 @@ void GameScene::Event()
 				Respawn();
 			}
 		}
+		*/
 
 		// ── チェックポイント更新 ─────────────────────────
 		for (auto& cp : m_checkpoints)
@@ -92,13 +105,26 @@ void GameScene::Event()
 
 void GameScene::DrawDebugExtra()
 {
+	// 手動重力ゾーンは常時表示
+	ManualGravityZoneManager::Instance().DrawDebugShapes();
+
 	if (m_editorMode)
 	{
 		m_roomEditor.DrawDebugLines();
 		m_enemyEditor.DrawDebugSpheres();
 		m_checkpointEditor.DrawDebugSpheres();
-		PlanetGravityManager::Instance().DrawDebugSpheres();
+		PlanetGravityManager::Instance().DrawDebugShapes();
 	}
+}
+
+void GameScene::DrawUnLitExtra()
+{
+	ManualGravityZoneManager::Instance().DrawUnLit();
+}
+
+void GameScene::DrawLitExtra()
+{
+	PlanetGravityManager::Instance().DrawLit();
 }
 
 void GameScene::DrawGui()
@@ -107,12 +133,70 @@ void GameScene::DrawGui()
 	if (m_spHpUI) { m_spHpUI->DrawGui(); }
 
 	// エディターモード時のみエディターGUIを表示
-	m_mapEditor.DrawGui();
 	m_roomEditor.DrawGui();
 	m_enemyEditor.DrawGui();
 	m_checkpointEditor.DrawGui();
 	CameraSettings::Instance().DrawGui();
 	PlanetGravityManager::Instance().DrawGui();
+	ManualGravityZoneManager::Instance().DrawGui();
+
+	// 太陽光（ディレクショナルライト）エディター
+	if (ImGui::Begin("Sun Light"))
+	{
+		auto& ambient = KdShaderManager::Instance().WorkAmbientController();
+
+		static float s_dirLightDir[3]   = { LightConst::DirLightDir.x,   LightConst::DirLightDir.y,   LightConst::DirLightDir.z };
+		static float s_dirLightColor[3] = { LightConst::DirLightColor.x, LightConst::DirLightColor.y, LightConst::DirLightColor.z };
+		static float s_ambientColor[4]  = { LightConst::AmbientColor.x,  LightConst::AmbientColor.y,  LightConst::AmbientColor.z, LightConst::AmbientColor.w };
+
+		// 平行光の方向
+		if (ImGui::DragFloat3("Direction", s_dirLightDir, 0.01f, -1.0f, 1.0f))
+		{
+			Math::Vector3 dir = { s_dirLightDir[0], s_dirLightDir[1], s_dirLightDir[2] };
+			dir.Normalize();
+			ambient.SetDirLight(dir, { s_dirLightColor[0], s_dirLightColor[1], s_dirLightColor[2] });
+		}
+
+		// 平行光の色
+		if (ImGui::ColorEdit3("Sun Color", s_dirLightColor))
+		{
+			Math::Vector3 dir = { s_dirLightDir[0], s_dirLightDir[1], s_dirLightDir[2] };
+			ambient.SetDirLight(dir, { s_dirLightColor[0], s_dirLightColor[1], s_dirLightColor[2] });
+		}
+
+		// 環境光の色と強度（アルファが全体の明るさ）
+		if (ImGui::ColorEdit4("Ambient Color", s_ambientColor))
+		{
+			ambient.SetAmbientLight({ s_ambientColor[0], s_ambientColor[1], s_ambientColor[2], s_ambientColor[3] });
+		}
+		ImGui::SameLine();
+		ImGui::TextDisabled("(A=Intensity)");
+	}
+	ImGui::End();
+
+	// ポイントライトエディター
+	if (ImGui::Begin("Point Lights"))
+	{
+		if (ImGui::Button("Add Light"))
+		{
+			auto spLight = std::make_shared<PointLightObject>();
+			m_pointLights.push_back(spLight);
+			AddObject(spLight);
+		}
+
+		for (int i = static_cast<int>(m_pointLights.size()) - 1; i >= 0; --i)
+		{
+			m_pointLights[i]->DrawGui();
+			ImGui::SameLine();
+			const std::string btnLabel = "Remove##" + std::to_string(i);
+			if (ImGui::Button(btnLabel.c_str()))
+			{
+				m_pointLights[i]->Expire();
+				m_pointLights.erase(m_pointLights.begin() + i);
+			}
+		}
+	}
+	ImGui::End();
 
 	if (m_roomEditor.IsDirty())
 	{
@@ -151,25 +235,6 @@ void GameScene::Respawn()
 	m_spPlayer->Init();
 }
 
-void GameScene::RebuildMapObjects()
-{
-	// 既存のMapObjectをリストから除去
-	for (auto& obj : m_mapObjects)
-	{
-		obj->Expire();
-	}
-	m_mapObjects.clear();
-
-	// MapEditorのデータからMapObjectを再生成してシーンに追加
-	for (const auto& data : m_mapEditor.GetObjectDataList())
-	{
-		auto spObj = std::make_shared<MapObject>();
-		spObj->Init(data);
-		m_mapObjects.push_back(spObj);
-		AddObject(spObj);
-	}
-}
-
 void GameScene::RebuildEnemies()
 {
 	// 既存の敵をシーンから除去
@@ -199,7 +264,6 @@ void GameScene::RebuildEnemies()
 			spEnemy = sp;
 		}
 
-		if (m_spMap)    { spEnemy->SetMapObject(m_spMap); }
 		if (m_spPlayer) { spEnemy->SetTarget(m_spPlayer); }
 
 		m_enemies.push_back(spEnemy);
@@ -230,19 +294,26 @@ void GameScene::Init()
 	m_pCamera      = upCamera.get();
 	m_camera       = std::move(upCamera);
 
-	// マップ（先にAddObjectしてPostUpdate→CalcNodeMatricesが敵より前に走るようにする）
-	m_spMap = std::make_shared<Map>();
-	AddObject(m_spMap);
-
 	// プレイヤー
 	m_spPlayer = std::make_shared<Player>();
 	LoadSpawn();
 	m_spPlayer->SetPos(m_spawnPos);
-	m_spPlayer->SetMapObject(m_spMap);
 	AddObject(m_spPlayer);
 
 	// リスポーン座標の初期値をスポーン座標と揃える
 	m_respawnPos = m_spawnPos;
+
+	// スカイボックス背景
+	auto spBG = std::make_shared<BackGround>();
+	AddObject(spBG);
+
+	// デフォルトのポイントライトを1個配置
+	{
+		auto spLight = std::make_shared<PointLightObject>();
+		spLight->SetPos({ 0.0f, 10.0f, 0.0f });
+		m_pointLights.push_back(spLight);
+		AddObject(spLight);
+	}
 
 	// HP UI
 	m_spHpUI = std::make_shared<HpUI>();
@@ -261,11 +332,11 @@ void GameScene::Init()
 		m_roomEditor.SetRooms(m_rooms);
 	}
 	m_roomEditor.ClearDirty();
+
+	// 手動重力ゾーン読み込み
+	ManualGravityZoneManager::Instance().Load();
 	m_rooms = m_roomEditor.GetRooms();
 	m_pCamera->SetRooms(m_rooms);
-
-	// マップエディター初期化
-	m_mapEditor.Init();
 
 	// 敵配置エディター（Loadはコンストラクタ内で実行済み）→敵を生成
 	if (m_enemyEditor.IsDirty())

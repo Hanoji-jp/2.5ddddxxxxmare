@@ -10,13 +10,13 @@ public:
     SideScrollCamera()  {}
     ~SideScrollCamera() {}
 
-    void Update(const Math::Vector3& _targetPos);
+    void Update(const Math::Vector3& _targetPos, const Math::Vector3& _upDir = { 0.0f, 1.0f, 0.0f });
     void SetRooms(const std::vector<RoomBounds>& _rooms);
     int  GetCurrentRoomIndex() const { return m_currentRoom; }
 
 private:
     Math::Vector3 CalcBlendedRoomCenter(const Math::Vector3& _targetPos) const;
-    Math::Vector3 CalcTargetCamPos(const Math::Vector3& _targetPos, float _floatY, float _floatX, float _offsetZ) const;
+    Math::Vector3 CalcTargetCamPos(const Math::Vector3& _targetPos, float _floatY, float _floatX, float _offsetZ, float _upSign) const;
     Math::Vector3 CalcTargetLookAt(const Math::Vector3& _targetPos) const;
 
     // 補間後のカメラ位置
@@ -25,6 +25,8 @@ private:
     Math::Vector3 m_lookAtPos  = { 0.0f, 0.0f, 0.0f };
     // 現在のロール角（度）
     float         m_rollDeg    = 0.0f;
+    // 現在のupDir（重力方向に合わせてカメラ位置を調整）
+    Math::Vector3 m_upDir      = { 0.0f, 1.0f, 0.0f };
     // 浮遊タイマー
     float         m_floatTimer = 0.0f;
     // 現在のズーム率（0=通常 1=最大ズームイン）

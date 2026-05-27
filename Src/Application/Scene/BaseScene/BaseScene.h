@@ -31,6 +31,8 @@ public :
 protected:
 	virtual void DrawGui()        {}
 	virtual void DrawDebugExtra() {}
+	virtual void DrawUnLitExtra() {}  // 背景など objList 外の UnLit 描画用
+	virtual void DrawLitExtra()   {}  // 惑星など objList 外のモデル描画用
 
 protected :
 

@@ -21,15 +21,16 @@ void KdDebugGUI::GuiInit(int w, int h)
 	// ImGui::StyleColorsDark();
 	ImGui::StyleColorsClassic();
 	// Setup Platform/Renderer bindings
-	ImGui_ImplWin32_Init(Application::Instance().GetWindowHandle(), ImVec2(w,h));
+	ImGui_ImplWin32_Init(Application::Instance().GetWindowHandle());
 	ImGui_ImplDX11_Init(KdDirect3D::Instance().WorkDev(), KdDirect3D::Instance().WorkDevContext());
 
 #include "imgui/ja_glyph_ranges.h"
 	ImGuiIO& io = ImGui::GetIO();
+	// ベースフォントを明示的なサイズで追加（MergeModeと競合しないように）
+	io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\msgothic.ttc", 13.0f, nullptr, io.Fonts->GetGlyphRangesDefault());
+	// 日本語グリフをMergeModeで追加
 	ImFontConfig config;
 	config.MergeMode = true;
-	io.Fonts->AddFontDefault();
-	// 日本語対応
 	io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\msgothic.ttc", 13.0f, &config, glyphRangesJapanese);
 	m_uqLog = std::make_unique<ImGuiAppLog>();
 }

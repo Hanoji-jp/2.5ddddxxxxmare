@@ -262,12 +262,8 @@
     <ClInclude Include="Src\Application\GameObject\Camera\SideScrollCamera.h" />
     <ClInclude Include="Src\Application\GameObject\BackGround\BackGround.h" />
     <ClInclude Include="Src\Application\Manager\ModelManager.h" />
-    <ClInclude Include="Src\Application\GameObject\Map\Map.h" />
     <ClInclude Include="Src\Application\Const\MapConst.h" />
-    <ClInclude Include="Src\Application\Editor\MapObjectData.h" />
-    <ClInclude Include="Src\Application\Editor\MapEditor.h" />
     <ClInclude Include="Src\Application\Scene\EditorScene\EditorScene.h" />
-    <ClInclude Include="Src\Application\GameObject\Map\MapObject.h" />
     <ClInclude Include="Src\Application\GameObject\Camera\EditorCamera.h" />
     <ClInclude Include="Src\Application\GameObject\Weapon\Sword.h" />
     <ClInclude Include="Src\Application\GameObject\Weapon\Bow.h" />
@@ -293,6 +289,8 @@
     <ClInclude Include="Src\Application\Editor\CheckpointEditor.h" />
     <ClInclude Include="Src\Application\Const\PlanetConst.h" />
     <ClInclude Include="Src\Application\Manager\PlanetGravityManager.h" />
+    <ClInclude Include="Src\Application\GameObject\Light\PointLightObject.h" />
+    <ClInclude Include="Src\Application\Manager\ManualGravityZoneManager.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Pch.cpp">
@@ -445,9 +443,6 @@
     <ClCompile Include="Src\Application\GameObject\Camera\SideScrollCamera.cpp" />
     <ClCompile Include="Src\Application\GameObject\BackGround\BackGround.cpp" />
     <ClCompile Include="Src\Application\Manager\ModelManager.cpp" />
-    <ClCompile Include="Src\Application\GameObject\Map\Map.cpp" />
-    <ClCompile Include="Src\Application\Editor\MapEditor.cpp" />
-    <ClCompile Include="Src\Application\GameObject\Map\MapObject.cpp" />
     <ClCompile Include="Src\Application\Scene\EditorScene\EditorScene.cpp" />
     <ClCompile Include="Src\Application\GameObject\Camera\EditorCamera.cpp" />
     <ClCompile Include="Src\Application\GameObject\Weapon\Sword.cpp" />
@@ -463,6 +458,8 @@
     <ClCompile Include="Src\Application\GameObject\UI\HpUI.cpp" />
     <ClCompile Include="Src\Application\Editor\CheckpointEditor.cpp" />
     <ClCompile Include="Src\Application\Manager\PlanetGravityManager.cpp" />
+    <ClCompile Include="Src\Application\GameObject\Light\PointLightObject.cpp" />
+    <ClCompile Include="Src\Application\Manager\ManualGravityZoneManager.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Src\Framework\Shader\inc_KdCommon.hlsli">

@@ -1,14 +1,15 @@
 ﻿#pragma once
 
-// 背景オブジェクト（2.5D奥行き表現用）
+// スカイボックス背景オブジェクト
 class BackGround : public KdGameObject
 {
 public:
     BackGround()          { Init(); }
     virtual ~BackGround() {}
 
-    void Init()    override;
-    void DrawLit() override;
+    void Init()      override;
+    void Update()    override;
+    void DrawUnLit() override;
 
     bool IsVisible() const override { return true; }
 

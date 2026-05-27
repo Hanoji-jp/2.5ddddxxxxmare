@@ -51,19 +51,32 @@ Math::Vector3 SideScrollCamera::CalcBlendedRoomCenter(const Math::Vector3& _targ
 }
 
 // 目標カメラ位置（ルーム中心 + 部分追従 + 浮遊ボブ）
-Math::Vector3 SideScrollCamera::CalcTargetCamPos(const Math::Vector3& _targetPos, float _floatY, float _floatX, float _offsetZ) const
+Math::Vector3 SideScrollCamera::CalcTargetCamPos(const Math::Vector3& _targetPos, float _floatY, float _floatX, float _offsetZ, float _upSign) const
 {
 	const auto& cs = CameraSettings::Instance();
 	const Math::Vector3 roomCenter = CalcBlendedRoomCenter(_targetPos);
 
-	const float dy = _targetPos.y - roomCenter.y;
-	const float wy = std::clamp(cs.FollowWeightY, cs.MinFollowWeightY, 1.0f);
+	// 重力方向に応じてオフセット方向を反転
+	// upSign = +1 → 通常重力（カメラ上）、upSign = -1 → 反転重力（カメラ下）
+	constexpr float kInvertedExtraOffset = 5.0f;  // 重力反転時の追加下げオフセット
+	const float offsetY = cs.OffsetY * _upSign - (1.0f - _upSign) * 0.5f * kInvertedExtraOffset;
+	float camY = _targetPos.y + offsetY + _floatY;
 
-	// Y はプレイヤー直追尾
+	// 視野の縦幅を考慮（FOV 45度、距離15の場合、縦方向の視野は約±7.5）
+	constexpr float kViewHalfHeight = 10.0f;  // 余裕を持たせる
+	constexpr float kScreenMargin = 0.5f;
+
+	// upSignに応じてクランプ方向を変える
+	const float minCamY = _targetPos.y - kViewHalfHeight + kScreenMargin;
+	const float maxCamY = _targetPos.y + kViewHalfHeight - kScreenMargin;
+
+	if (camY < minCamY) { camY = minCamY; }
+	else if (camY > maxCamY) { camY = maxCamY; }
+
 	return
 	{
 		_targetPos.x + _floatX,
-		_targetPos.y + cs.OffsetY + _floatY,
+		camY,
 		_offsetZ
 	};
 }
@@ -80,8 +93,16 @@ Math::Vector3 SideScrollCamera::CalcTargetLookAt(const Math::Vector3& _targetPos
 	};
 }
 
-void SideScrollCamera::Update(const Math::Vector3& _targetPos)
+void SideScrollCamera::Update(const Math::Vector3& _targetPos, const Math::Vector3& _upDir)
 {
+	// upDirをSlerpで滑らかに追従（急な切り替えを防ぐ）
+	constexpr float kUpSlerpSpeed = 0.05f;
+	m_upDir = Math::Vector3::Lerp(m_upDir, _upDir, kUpSlerpSpeed);
+	m_upDir.Normalize();
+
+	// upDir.yが負 → 重力反転中（上下逆）
+	const float upSign = (m_upDir.y >= 0.0f) ? 1.0f : -1.0f;
+
 	// ── 1. ルーム遷移ステート更新 ──────────────────────────────
 	constexpr float kDt = 1.0f / 60.0f;
 	if (!m_rooms.empty() && m_currentRoom + 1 < static_cast<int>(m_rooms.size()))
@@ -124,7 +145,7 @@ void SideScrollCamera::Update(const Math::Vector3& _targetPos)
 	const float baseOffsetZ = cs.OffsetZ;
 
 	// ── 4. 目標位置・注視点 ────────────────────────────────────
-	Math::Vector3 targetPos    = CalcTargetCamPos(_targetPos, floatY, floatX, baseOffsetZ);
+	Math::Vector3 targetPos    = CalcTargetCamPos(_targetPos, floatY, floatX, baseOffsetZ, upSign);
 	Math::Vector3 targetLookAt = CalcTargetLookAt(_targetPos);
 
 	// ── 4c. クランプ＋ズーム（クランプに当たったらちょいズーム）────

@@ -6,7 +6,10 @@ namespace CollisionConst
     constexpr const char* ColPrefix     = "col_";
 
     // 床判定レイの長さ（キャラクター足元から下に飛ばす）
-    constexpr float GroundRayLength     = 2.5f;
+    constexpr float GroundRayLength        = 2.5f;
+
+    // 惑星重力無効化用：マップ床検出レイの長さ（長めに設定して床の真上を広く検知）
+    constexpr float MapGroundDetectLength  = 30.0f;
 
     // 床とみなすレイ起点のオフセット（足元より少し上から）
     // MaxFallSpeed(1.0f) より大きくしないとトンネリングが起きる
@@ -16,9 +19,10 @@ namespace CollisionConst
     constexpr float WallRayLength       = 0.4f;
 
     // 壁判定：レイを飛ばす高さ（複数段）
-    constexpr float WallRayOffsetY0     = 0.3f;   // 足元付近
-    constexpr float WallRayOffsetY1     = 0.9f;   // 腰付近
-    constexpr float WallRayOffsetY2     = 1.5f;   // 胸付近
+    constexpr float WallRayOffsetY0     = 0.15f;  // 足元（床面より少し上、コーナー干渉を避ける）
+    constexpr float WallRayOffsetY1     = 0.5f;   // 足元付近
+    constexpr float WallRayOffsetY2     = 1.0f;   // 腰付近
+    constexpr float WallRayOffsetY3     = 1.5f;   // 胸付近
 
     // 壁判定スフィア半径（旧、残置）
     constexpr float WallSphereRadius    = 0.4f;

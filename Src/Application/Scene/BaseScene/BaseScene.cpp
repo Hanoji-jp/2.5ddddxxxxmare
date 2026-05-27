@@ -82,6 +82,7 @@ void BaseScene::Draw()
 		{
 			obj->DrawUnLit();
 		}
+		DrawUnLitExtra();
 	}
 	KdShaderManager::Instance().m_StandardShader.EndUnLit();
 
@@ -93,6 +94,7 @@ void BaseScene::Draw()
 		{
 			obj->DrawLit();
 		}
+		DrawLitExtra();
 	}
 	KdShaderManager::Instance().m_StandardShader.EndLit();
 
