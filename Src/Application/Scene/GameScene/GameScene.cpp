@@ -67,12 +67,45 @@ void GameScene::Event()
 			RebuildCheckpoints();
 			m_checkpointEditor.ClearDirty();
 		}
+		if (m_warpHoleEditor.IsDirty())
+		{
+			const auto& holes = m_warpHoleEditor.GetHoles();
+			// 数が変わった場合は全再構築、変わっていなければ SetData で座標だけ更新
+			if (holes.size() != m_warpHoles.size())
+			{
+				RebuildWarpHoles();
+			}
+			else
+			{
+				for (int i = 0; i < static_cast<int>(holes.size()); ++i)
+				{
+					m_warpHoles[i]->SetData(holes[i]);
+				}
+			}
+			m_warpHoleEditor.ClearDirty();
+		}
 	}
 	else
 	{
 		if (m_spPlayer && m_pCamera)
 		{
 			m_pCamera->Update(m_spPlayer->GetPos(), m_spPlayer->GetUpDir());
+		}
+
+		// ── ワープホール判定 ─────────────────────────────
+		if (m_spPlayer && !m_spPlayer->IsExpired())
+		{
+			Math::Vector3 playerPos = m_spPlayer->GetPos();
+			Math::Vector3 playerVel = m_spPlayer->GetVelocity();
+			for (auto& wh : m_warpHoles)
+			{
+				if (wh->TryWarp(playerPos, playerVel))
+				{
+					m_spPlayer->SetPos(playerPos);
+					m_spPlayer->SetVelocity(playerVel);
+					break;
+				}
+			}
 		}
 
 		// ── 落下死チェック ──────────────────────────────
@@ -113,6 +146,7 @@ void GameScene::DrawDebugExtra()
 		m_roomEditor.DrawDebugLines();
 		m_enemyEditor.DrawDebugSpheres();
 		m_checkpointEditor.DrawDebugSpheres();
+		m_warpHoleEditor.DrawDebug();
 		PlanetGravityManager::Instance().DrawDebugShapes();
 	}
 }
@@ -136,6 +170,7 @@ void GameScene::DrawGui()
 	m_roomEditor.DrawGui();
 	m_enemyEditor.DrawGui();
 	m_checkpointEditor.DrawGui();
+	m_warpHoleEditor.DrawGui();
 	CameraSettings::Instance().DrawGui();
 	PlanetGravityManager::Instance().DrawGui();
 	ManualGravityZoneManager::Instance().DrawGui();
@@ -287,6 +322,19 @@ void GameScene::RebuildCheckpoints()
 	}
 }
 
+void GameScene::RebuildWarpHoles()
+{
+	for (auto& wh : m_warpHoles) { wh->Expire(); }
+	m_warpHoles.clear();
+
+	for (const auto& data : m_warpHoleEditor.GetHoles())
+	{
+		auto sp = std::make_shared<WarpHole>(data);
+		m_warpHoles.push_back(sp);
+		AddObject(sp);
+	}
+}
+
 void GameScene::Init()
 {
 	// カメラ（BaseSceneのm_cameraに所有権を渡し、観察用ポインタだけ保持）
@@ -351,6 +399,11 @@ void GameScene::Init()
 		RebuildCheckpoints();
 		m_checkpointEditor.ClearDirty();
 	}
+
+	// ワープホールエディター → ワープホール生成
+	m_warpHoleEditor.Load();
+	RebuildWarpHoles();
+	m_warpHoleEditor.ClearDirty();
 
 	// カメラ設定読込
 	CameraSettings::Instance().Load();

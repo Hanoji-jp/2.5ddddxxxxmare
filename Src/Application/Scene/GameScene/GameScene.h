@@ -11,6 +11,8 @@
 #include"../../Editor/RoomBoundsEditor.h"
 #include"../../Editor/EnemyPlacementEditor.h"
 #include"../../Editor/CheckpointEditor.h"
+#include"../../Editor/WarpHoleEditor.h"
+#include"../../GameObject/Gimmick/WarpHole.h"
 #include"../../Manager/PlanetGravityManager.h"
 #include"../../Manager/ManualGravityZoneManager.h"
 #include"../../Camera/CameraSettings.h"
@@ -39,6 +41,7 @@ private:
 
 	void RebuildEnemies();
 	void RebuildCheckpoints();
+	void RebuildWarpHoles();
 
 	std::shared_ptr<Player>  m_spPlayer   = nullptr;
 	SideScrollCamera*        m_pCamera    = nullptr;
@@ -48,6 +51,10 @@ private:
 	RoomBoundsEditor        m_roomEditor;
 	EnemyPlacementEditor    m_enemyEditor;
 	CheckpointEditor        m_checkpointEditor;
+	WarpHoleEditor          m_warpHoleEditor;
+
+	// ワープホールオブジェクトリスト
+	std::vector<std::shared_ptr<WarpHole>> m_warpHoles;
 	bool                    m_editorMode  = false;
 	bool                    m_f2Prev      = false;
 	EditorCamera*           m_pEditorCam  = nullptr;

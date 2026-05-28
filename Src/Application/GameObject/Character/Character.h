@@ -44,6 +44,10 @@ public:
     // 物理・速度計算用「上」方向（即切り替え、重力切り替え直後も正確）
     const Math::Vector3& GetPhysicsUpDir() const { return m_upDir; }
 
+    // 速度アクセサ（ワープなど外部から速度を書き換える場合に使用）
+    const Math::Vector3& GetVelocity() const { return m_velocity; }
+    void SetVelocity(const Math::Vector3& v)  { m_velocity = v; }
+
     virtual void TakeDamage(int _damage);
 
     // マップオブジェクトをセット（コリジョン判定に使用）

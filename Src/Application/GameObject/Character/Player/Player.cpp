@@ -118,20 +118,34 @@ void Player::PostUpdate()
         const Math::Vector3 up    = GetUpDir();   // 惑星表面の法線（XY平面、Zは0）
 
         // ----- 正規直交基底を構築（行列式 = +1 を保証） -----
-        // forward: モデルがデフォルトで向く軸（＋Z方向）に対応させる
-        //   円周上の接線 = (-up.y, up.x, 0)。左向き（-X側）を正とし
-        //   m_facingDir.x の符号で反転する
-        const Math::Vector3 tangent = { -up.y, up.x, 0.0f };
-        // m_facingSign は接線方向に対する左右符号（+1/-1）
-        // up が反転しても tangent との関係で向きが決まるため歪みが起きない
-        const float         fSign   = m_facingSign;
+        // Move()と同じ切り替えロジックでtangentを計算（操作とモデル向きを一致させる）
+        const bool onSphere = (m_pCurrentPlanet && m_pCurrentPlanet->Shape == PlanetShape::Sphere);
+        Math::Vector3 tangentBase;
+        if (onSphere)
+        {
+            tangentBase = { -up.y, up.x, 0.0f };
+            if (tangentBase.LengthSquared() < 0.0001f) { tangentBase = { 0.0f, 0.0f, 1.0f }; }
+            tangentBase.Normalize();
+        }
+        else
+        {
+            tangentBase = (std::abs(up.x) < 0.9f)
+                ? Math::Vector3{ -1.0f, 0.0f, 0.0f }
+                : Math::Vector3{ 0.0f, (up.x > 0.0f ? -1.0f : 1.0f), 0.0f };
+        }
+        const float fSign = m_facingSign;
 
-        // モデルのローカル Z（前方）→ ワールドの tangent 方向へ
-        const Math::Vector3 modelFwd = tangent * fSign;           // forward 軸
-        // モデルのローカル Y（上方）→ ワールドの up 方向へ
-        const Math::Vector3 modelUp  = up;                        // up 軸
-        // モデルのローカル X（右方）→ cross(up, forward) で確定
-        //   det = +1 になるよう cross の順序を合わせる
+        // fwd候補（tangent*fSign）からup成分を除去して再直交化 → 歪み防止
+        Math::Vector3 modelFwd = tangentBase * fSign;
+        modelFwd -= up * modelFwd.Dot(up);
+        if (modelFwd.LengthSquared() > 0.0001f)
+            modelFwd.Normalize();
+        else
+            modelFwd = tangentBase * fSign; // 縮退ケース：そのまま使う
+
+        const Math::Vector3 modelUp = up;
+
+        // right = cross(up, fwd)：元と同じ順序でハンドネスを保持
         Math::Vector3 modelRight;
         modelUp.Cross(modelFwd, modelRight);
         modelRight.Normalize();
@@ -198,12 +212,24 @@ void Player::Move()
 
         const Math::Vector3 up = GetUpDir();   // XY平面内の法線（Z=0）
 
-        // 画面左右は常に世界空間X軸基準で固定（重力反転しても操作感が変わらない）
-        // A=左(+X方向)、D=右(-X方向) を保つため tangent は常に {-1,0,0}
-        // ただし up が真横（±X）を向く場合は up から計算する
-        const Math::Vector3 tangent = (std::abs(up.x) < 0.9f)
-            ? Math::Vector3{ -1.0f, 0.0f, 0.0f }
-            : Math::Vector3{ 0.0f, (up.x > 0.0f ? -1.0f : 1.0f), 0.0f };
+        // Sphere惑星上: up が可変なので up から接線を計算（縮退防止）
+        // Box/Zone重力: up が ±Y に近い → 固定X軸基準で操作感を一定に保つ
+        const bool onSphere = (m_pCurrentPlanet && m_pCurrentPlanet->Shape == PlanetShape::Sphere);
+        Math::Vector3 tangent;
+        if (onSphere)
+        {
+            // up に直交する接線を up から計算
+            tangent = { -up.y, up.x, 0.0f };
+            if (tangent.LengthSquared() < 0.0001f) { tangent = { 0.0f, 0.0f, 1.0f }; }
+            tangent.Normalize();
+        }
+        else
+        {
+            // Box/Zone: 固定X軸基準（重力反転しても A=左・D=右 を保つ）
+            tangent = (std::abs(up.x) < 0.9f)
+                ? Math::Vector3{ -1.0f, 0.0f, 0.0f }
+                : Math::Vector3{ 0.0f, (up.x > 0.0f ? -1.0f : 1.0f), 0.0f };
+        }
 
         // 入力の XY を接線・法線ベースに変換
         Math::Vector3 worldInput = tangent * input.x + up * input.y;

@@ -286,10 +286,12 @@
     <ClInclude Include="Src\Application\Const\PlayerConst.h" />
     <ClInclude Include="Src\Application\Const\SpawnConst.h" />
     <ClInclude Include="Src\Application\Const\UIConst.h" />
+    <ClInclude Include="Src\Application\Const\WarpHoleConst.h" />
     <ClInclude Include="Src\Application\Editor\CheckpointEditor.h" />
     <ClInclude Include="Src\Application\Editor\EnemyPlacementData.h" />
     <ClInclude Include="Src\Application\Editor\EnemyPlacementEditor.h" />
     <ClInclude Include="Src\Application\Editor\RoomBoundsEditor.h" />
+    <ClInclude Include="Src\Application\Editor\WarpHoleEditor.h" />
     <ClInclude Include="Src\Application\GameObject\BackGround\BackGround.h" />
     <ClInclude Include="Src\Application\GameObject\Camera\CameraRoom.h" />
     <ClInclude Include="Src\Application\GameObject\Camera\EditorCamera.h" />
@@ -302,6 +304,7 @@
     <ClInclude Include="Src\Application\GameObject\Character\Enemy\EnemyRanged.h" />
     <ClInclude Include="Src\Application\GameObject\Character\Player\Player.h" />
     <ClInclude Include="Src\Application\GameObject\Checkpoint\Checkpoint.h" />
+    <ClInclude Include="Src\Application\GameObject\Gimmick\WarpHole.h" />
     <ClInclude Include="Src\Application\GameObject\Light\PointLightObject.h" />
     <ClInclude Include="Src\Application\GameObject\UI\HpUI.h" />
     <ClInclude Include="Src\Application\GameObject\Weapon\Arrow.h" />
@@ -369,6 +372,7 @@
     <ClCompile Include="Src\Application\Editor\CheckpointEditor.cpp" />
     <ClCompile Include="Src\Application\Editor\EnemyPlacementEditor.cpp" />
     <ClCompile Include="Src\Application\Editor\RoomBoundsEditor.cpp" />
+    <ClCompile Include="Src\Application\Editor\WarpHoleEditor.cpp" />
     <ClCompile Include="Src\Application\GameObject\BackGround\BackGround.cpp" />
     <ClCompile Include="Src\Application\GameObject\Camera\EditorCamera.cpp" />
     <ClCompile Include="Src\Application\GameObject\Camera\SideScrollCamera.cpp" />
@@ -379,6 +383,7 @@
     <ClCompile Include="Src\Application\GameObject\Character\Enemy\EnemyRanged.cpp" />
     <ClCompile Include="Src\Application\GameObject\Character\Player\Player.cpp" />
     <ClCompile Include="Src\Application\GameObject\Checkpoint\Checkpoint.cpp" />
+    <ClCompile Include="Src\Application\GameObject\Gimmick\WarpHole.cpp" />
     <ClCompile Include="Src\Application\GameObject\Light\PointLightObject.cpp" />
     <ClCompile Include="Src\Application\GameObject\UI\HpUI.cpp" />
     <ClCompile Include="Src\Application\GameObject\Weapon\Arrow.cpp" />

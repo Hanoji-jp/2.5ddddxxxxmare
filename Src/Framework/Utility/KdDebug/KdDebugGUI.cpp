@@ -24,6 +24,10 @@ void KdDebugGUI::GuiInit(int w, int h)
 	ImGui_ImplWin32_Init(Application::Instance().GetWindowHandle());
 	ImGui_ImplDX11_Init(KdDirect3D::Instance().WorkDev(), KdDirect3D::Instance().WorkDevContext());
 
+	// ゲームウィンドウ外へのフロート + ドッキング（ドラッグ結合）を有効化
+	ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+	ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+
 #include "imgui/ja_glyph_ranges.h"
 	ImGuiIO& io = ImGui::GetIO();
 	// ベースフォントを明示的なサイズで追加（MergeModeと競合しないように）
@@ -46,6 +50,25 @@ void KdDebugGUI::GuiProcess()
 	ImGui_ImplDX11_NewFrame();
 	ImGui_ImplWin32_NewFrame();
 	ImGui::NewFrame();
+
+	// 画面全体を覆う DockSpace を作成（ウィンドウ同士をドラッグで結合できる）
+	{
+		const ImGuiViewport* viewport = ImGui::GetMainViewport();
+		ImGui::SetNextWindowPos(viewport->WorkPos);
+		ImGui::SetNextWindowSize(viewport->WorkSize);
+		ImGui::SetNextWindowViewport(viewport->ID);
+		ImGuiWindowFlags dockFlags =
+			ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse |
+			ImGuiWindowFlags_NoResize   | ImGuiWindowFlags_NoMove     |
+			ImGuiWindowFlags_NoNavFocus |
+			ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoDocking;
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+		ImGui::Begin("##DockSpaceRoot", nullptr, dockFlags);
+		ImGui::PopStyleVar();
+		ImGui::DockSpace(ImGui::GetID("##MainDockSpace"),
+			ImVec2(0, 0), ImGuiDockNodeFlags_PassthruCentralNode);
+		ImGui::End();
+	}
 
 	//===========================================================
 	// 以下にImGui描画処理を記述
@@ -82,6 +105,22 @@ void KdDebugGUI::GuiProcess()
 	//===========================================================
 	ImGui::Render();
 	ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+
+	// ゲームウィンドウ外のImGuiウィンドウを更新・描画
+	// RenderPlatformWindowsDefault はレンダーターゲットを書き換えるため前後で保存・復元する
+	if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+	{
+		ID3D11RenderTargetView* prevRTV = nullptr;
+		ID3D11DepthStencilView* prevDSV = nullptr;
+		KdDirect3D::Instance().WorkDevContext()->OMGetRenderTargets(1, &prevRTV, &prevDSV);
+
+		ImGui::UpdatePlatformWindows();
+		ImGui::RenderPlatformWindowsDefault();
+
+		KdDirect3D::Instance().WorkDevContext()->OMSetRenderTargets(1, &prevRTV, prevDSV);
+		if (prevRTV) { prevRTV->Release(); }
+		if (prevDSV) { prevDSV->Release(); }
+	}
 }
 
 void KdDebugGUI::AddLog(const char* fmt,...)
