@@ -42,114 +42,128 @@ void Character::DrawDebug()
 
 void Character::ApplyGravity()
 {
-    // 手動重力モードの処理
-    if (m_manualGravityDir != ManualGravityDir::None)
-    {
-        // 手動重力モード中でも惑星情報を取得（着地判定用）
-        const GravityInfluenceResult gravResult = PlanetGravityManager::Instance().ComputeGravityInfluence(GetPos());
-        m_currentPlanetIndex = gravResult.dominantPlanetIdx;
-        m_pCurrentPlanet     = PlanetGravityManager::Instance().GetPlanet(m_currentPlanetIndex);
-
-        // Sphere惑星の重力圏に入ったら、自動的に惑星重力モードに切り替え
-        if (m_pCurrentPlanet && m_pCurrentPlanet->Shape == PlanetShape::Sphere && gravResult.hasInfluence)
-        {
-            m_manualGravityDir = ManualGravityDir::None;
-            // 以下、通常の惑星重力処理を実行（fall through）
-        }
-        else
-        {
-            // 手動重力方向を決定
-            Math::Vector3 gravDir = { 0.0f, -1.0f, 0.0f };
-            Math::Vector3 targetUp = { 0.0f, 1.0f, 0.0f };
-
-            switch (m_manualGravityDir)
-            {
-            case ManualGravityDir::Down:
-                gravDir = { 0.0f, -1.0f, 0.0f };
-                targetUp = { 0.0f, 1.0f, 0.0f };
-                break;
-            case ManualGravityDir::Up:
-                gravDir = { 0.0f, 1.0f, 0.0f };
-                targetUp = { 0.0f, -1.0f, 0.0f };
-                break;
-            case ManualGravityDir::Left:
-                gravDir = { -1.0f, 0.0f, 0.0f };
-                targetUp = { 1.0f, 0.0f, 0.0f };
-                break;
-            case ManualGravityDir::Right:
-                gravDir = { 1.0f, 0.0f, 0.0f };
-                targetUp = { -1.0f, 0.0f, 0.0f };
-                break;
-            }
-
-            // 物理用upDirは即スナップ（壁判定・重力計算に使用）
-            m_upDir = targetUp;
-
-            // 見た目用upDirVisualはSlerpで補間（モデル回転に使用）
-            const Math::Quaternion fromQ  = Math::Quaternion::FromToRotation({ 0.0f, 1.0f, 0.0f }, m_upDirVisual);
-            const Math::Quaternion toQ    = Math::Quaternion::FromToRotation({ 0.0f, 1.0f, 0.0f }, targetUp);
-            const Math::Quaternion blendQ = Math::Quaternion::Slerp(fromQ, toQ, PlanetConst::UpDirSlerpSpeed);
-            m_upDirVisual = Math::Vector3::Transform({ 0.0f, 1.0f, 0.0f }, Math::Matrix::CreateFromQuaternion(blendQ));
-            m_upDirVisual.Normalize();
-
-            // 地面に接地している場合は重力加速を適用しない
-            if (m_isGround) { return; }
-
-            // 手動重力方向に加速
-            const float radialVel = m_velocity.Dot(gravDir);
-            const float newRadial = std::min(radialVel + PlanetConst::GravityAccel, PlanetConst::MaxFallSpeed);
-            if (newRadial > radialVel)
-            {
-                m_velocity += gravDir * (newRadial - radialVel);
-            }
-
-            return; // 手動モードでは惑星重力を無視
-        }
-    }
-
-    // 以下、通常の惑星重力モード
-    // 重力合成結果を取得
-    const GravityInfluenceResult gravResult = PlanetGravityManager::Instance().ComputeGravityInfluence(GetPos());
-
-    // 最も影響力が強い惑星を保持（着地判定用）
+    const GravityInfluenceResult gravResult = PlanetGravityManager::Instance().ComputeGravityInfluence(GetPos(), -m_upDir);
+    m_prevPlanetIndex    = m_currentPlanetIndex;
     m_currentPlanetIndex = gravResult.dominantPlanetIdx;
     m_pCurrentPlanet     = PlanetGravityManager::Instance().GetPlanet(m_currentPlanetIndex);
 
-    // m_upDir（物理用）は即スナップ、m_upDirVisual（見た目用）はSlerp
-    Math::Vector3 targetUp = gravResult.dominantUpDir;
-    {
-        m_upDir = targetUp;  // 物理用は即確定
+    const bool inManualZone = ManualGravityZoneManager::Instance().CanUseManualGravity(GetPos());
+    const bool hasManual    = (m_manualGravityDir != ManualGravityDir::None);
 
-        const Math::Quaternion fromQ  = Math::Quaternion::FromToRotation({ 0.0f, 1.0f, 0.0f }, m_upDirVisual);
-        const Math::Quaternion toQ    = Math::Quaternion::FromToRotation({ 0.0f, 1.0f, 0.0f }, targetUp);
-        const Math::Quaternion blendQ = Math::Quaternion::Slerp(fromQ, toQ, PlanetConst::UpDirSlerpSpeed);
-        m_upDirVisual = Math::Vector3::Transform({ 0.0f, 1.0f, 0.0f }, Math::Matrix::CreateFromQuaternion(blendQ));
-        m_upDirVisual.Normalize();
+    // ── ケース① ゾーン外 + 手動あり + 惑星圏内 → 惑星に捕まる、手動リセット ──
+    if (!inManualZone && hasManual && gravResult.hasInfluence)
+    {
+        m_manualGravityDir = ManualGravityDir::None;
+        // fall through → 惑星重力ブロックで処理
     }
 
-    // 地面に接地している場合は重力加速を適用しない
-    if (m_isGround) { return; }
-
-    // 合成重力方向に加速
-    if (gravResult.hasInfluence)
+    // ── ケース②③ 手動重力モード（ゾーン内 or ゾーン外惑星圏外）──
+    if (m_manualGravityDir != ManualGravityDir::None)
     {
+        Math::Vector3 gravDir  = { 0.0f, -1.0f, 0.0f };
+        Math::Vector3 targetUp = { 0.0f,  1.0f, 0.0f };
+        switch (m_manualGravityDir)
+        {
+        case ManualGravityDir::Down: gravDir = { 0.0f, -1.0f, 0.0f }; targetUp = { 0.0f,  1.0f, 0.0f }; break;
+        case ManualGravityDir::Up:   gravDir = { 0.0f,  1.0f, 0.0f }; targetUp = { 0.0f, -1.0f, 0.0f }; break;
+        default: break;
+        }
+
+        m_upDir = targetUp;
+        const Math::Quaternion fromQ  = Math::Quaternion::FromToRotation({ 0.0f, 1.0f, 0.0f }, m_upDirVisual);
+        const Math::Quaternion toQ    = Math::Quaternion::FromToRotation({ 0.0f, 1.0f, 0.0f }, targetUp);
+        m_upDirVisual = Math::Vector3::Transform({ 0.0f, 1.0f, 0.0f },
+            Math::Matrix::CreateFromQuaternion(Math::Quaternion::Slerp(fromQ, toQ, PlanetConst::UpDirSlerpSpeed)));
+        m_upDirVisual.Normalize();
+
+        if (m_isGround) { return; }
+        const float radialVel = m_velocity.Dot(gravDir);
+        const float newRadial = std::min(radialVel + PlanetConst::GravityAccel, PlanetConst::MaxFallSpeed);
+        if (newRadial > radialVel) { m_velocity += gravDir * (newRadial - radialVel); }
+        return;
+    }
+
+    // ── ケース④ 惑星重力（NormalGravityゾーン内のみ惑星引力オフ、ManualGravityゾーンは手動入力がある場合のみオフ）──
+    Math::Vector3 zoneGravDir;
+    const bool inNormalZone = ManualGravityZoneManager::Instance().IsInNormalGravityZone(GetPos(), zoneGravDir);
+    // 惑星引力を無効にするのはどちらのゾーン内でも常にオフ
+    const bool suppressPlanet = inNormalZone || inManualZone;
+
+    if (gravResult.hasInfluence && !suppressPlanet)
+    {
+        const Math::Vector3 targetUp = -gravResult.totalGravityDir;
+
+        {
+            const Math::Quaternion fromQ = Math::Quaternion::FromToRotation({ 0.0f, 1.0f, 0.0f }, m_upDir);
+            const Math::Quaternion toQ   = Math::Quaternion::FromToRotation({ 0.0f, 1.0f, 0.0f }, targetUp);
+            m_upDir = Math::Vector3::Transform({ 0.0f, 1.0f, 0.0f },
+                Math::Matrix::CreateFromQuaternion(Math::Quaternion::Slerp(fromQ, toQ, 1.0f)));
+            m_upDir.Normalize();
+        }
+        {
+            const Math::Quaternion fromQ = Math::Quaternion::FromToRotation({ 0.0f, 1.0f, 0.0f }, m_upDirVisual);
+            const Math::Quaternion toQ   = Math::Quaternion::FromToRotation({ 0.0f, 1.0f, 0.0f }, m_upDir);
+            m_upDirVisual = Math::Vector3::Transform({ 0.0f, 1.0f, 0.0f },
+                Math::Matrix::CreateFromQuaternion(Math::Quaternion::Slerp(fromQ, toQ, PlanetConst::UpDirSlerpSpeed)));
+            m_upDirVisual.Normalize();
+        }
+
+        if (m_isGround) { return; }
         const Math::Vector3 gravDir = gravResult.totalGravityDir;
         const float radialVel = m_velocity.Dot(gravDir);
         const float newRadial = std::min(radialVel + PlanetConst::GravityAccel, PlanetConst::MaxFallSpeed);
-        if (newRadial > radialVel)
-        {
-            m_velocity += gravDir * (newRadial - radialVel);
-        }
+        if (newRadial > radialVel) { m_velocity += gravDir * (newRadial - radialVel); }
+        return;
     }
-    else
+
+    // ── ケース⑤ NormalGravityゾーン ──
+    if (inNormalZone)
     {
-        // 惑星の影響がない場合は通常の下方向重力
-        m_velocity.y += GameConst::Gravity;
-        if (m_velocity.y < GameConst::MaxFallSpeed)
+        const Math::Vector3 targetUp = -zoneGravDir;
+
+        // m_upDir を slerp で滑らかに更新
         {
-            m_velocity.y = GameConst::MaxFallSpeed;
+            const Math::Quaternion fromQ = Math::Quaternion::FromToRotation({ 0.0f, 1.0f, 0.0f }, m_upDir);
+            const Math::Quaternion toQ   = Math::Quaternion::FromToRotation({ 0.0f, 1.0f, 0.0f }, targetUp);
+            m_upDir = Math::Vector3::Transform({ 0.0f, 1.0f, 0.0f },
+                Math::Matrix::CreateFromQuaternion(Math::Quaternion::Slerp(fromQ, toQ, 1.0f)));
+            m_upDir.Normalize();
         }
+        // m_upDirVisual も slerp で更新（これがないとキャラクターの見た目が狂う）
+        {
+            const Math::Quaternion fromQ = Math::Quaternion::FromToRotation({ 0.0f, 1.0f, 0.0f }, m_upDirVisual);
+            const Math::Quaternion toQ   = Math::Quaternion::FromToRotation({ 0.0f, 1.0f, 0.0f }, targetUp);
+            m_upDirVisual = Math::Vector3::Transform({ 0.0f, 1.0f, 0.0f },
+                Math::Matrix::CreateFromQuaternion(Math::Quaternion::Slerp(fromQ, toQ, PlanetConst::UpDirSlerpSpeed)));
+            m_upDirVisual.Normalize();
+        }
+
+        if (m_isGround) { return; }
+        const float radialVel = m_velocity.Dot(zoneGravDir);
+        const float newRadial = std::min(radialVel + PlanetConst::GravityAccel, PlanetConst::MaxFallSpeed);
+        if (newRadial > radialVel) { m_velocity += zoneGravDir * (newRadial - radialVel); }
+        return;
     }
+
+    // ── ケース⑥ ManualGravityゾーン内で手動入力なし → 通常下向き重力 ──
+    if (inManualZone)
+    {
+        constexpr Math::Vector3 kDefaultGravDir = { 0.0f, -1.0f, 0.0f };
+        constexpr Math::Vector3 kDefaultUp      = { 0.0f,  1.0f, 0.0f };
+        m_upDir = kDefaultUp;
+        const Math::Quaternion fromQ = Math::Quaternion::FromToRotation({ 0.0f, 1.0f, 0.0f }, m_upDirVisual);
+        const Math::Quaternion toQ   = Math::Quaternion::FromToRotation({ 0.0f, 1.0f, 0.0f }, kDefaultUp);
+        m_upDirVisual = Math::Vector3::Transform({ 0.0f, 1.0f, 0.0f },
+            Math::Matrix::CreateFromQuaternion(Math::Quaternion::Slerp(fromQ, toQ, PlanetConst::UpDirSlerpSpeed)));
+        m_upDirVisual.Normalize();
+        if (m_isGround) { return; }
+        const float radialVel = m_velocity.Dot(kDefaultGravDir);
+        const float newRadial = std::min(radialVel + PlanetConst::GravityAccel, PlanetConst::MaxFallSpeed);
+        if (newRadial > radialVel) { m_velocity += kDefaultGravDir * (newRadial - radialVel); }
+        return;
+    }
+
+    // ── ケース⑦ 無重力 ──
 }
 
 void Character::ApplyVelocity()
@@ -163,65 +177,83 @@ void Character::CheckGround()
 {
     m_isGround = false;
 
-    // 惑星重力下にいる場合は着地判定
-    if (m_pCurrentPlanet)
+    // ---- Box 惑星の着地判定：レイキャストで面を検出 ----
     {
-        // ---- Box 惑星の着地判定（AABB 面スナップ） ----
-        if (m_pCurrentPlanet->Shape == PlanetShape::Box)
+        const Math::Vector3 pos    = GetPos();
+        const Math::Vector3 rayDir = -m_upDir; // 重力方向（下）へレイを飛ばす
+
+        // 足元より少し上からレイを開始し、SnapDist 先まで飛ばす
+        const float           rayLen   = CollisionConst::GroundRayOffset + CollisionConst::GroundSnapDist;
+        const Math::Vector3   rayStart = pos + m_upDir * CollisionConst::GroundRayOffset;
+        const KdCollider::RayInfo ray(KdCollider::TypeGround, rayStart, rayDir, rayLen);
+
+        // ジャンプ直後（上方向に速度あり）はスキップ
+        if (m_velocity.Dot(m_upDir) <= 0.001f)
         {
-            const Math::Vector3 pos   = GetPos();
-            const Math::Vector3 lp    = pos - m_pCurrentPlanet->Position;
-            const Math::Vector3& half = m_pCurrentPlanet->BoxHalfExtents;
-            const float penX = half.x - std::abs(lp.x);
-            const float penY = half.y - std::abs(lp.y);
+            const auto& planets = PlanetGravityManager::Instance().GetPlanets();
+            int   bestIdx  = -1;
+            float bestDist = FLT_MAX; // レイ起点からヒットまでの距離（小さいほど近い）
+            Math::Vector3 bestNormal = m_upDir;
+            Math::Vector3 bestHitPos = pos;
 
-            // 最近傍面の外向き法線
-            Math::Vector3 outDir;
-            if (penX < penY)
-                outDir = { (lp.x >= 0.0f ? 1.0f : -1.0f), 0.0f, 0.0f };
-            else
-                outDir = { 0.0f, (lp.y >= 0.0f ? 1.0f : -1.0f), 0.0f };
-
-            // outDir が m_upDir と向きが一致しない面は「壁」→ CheckWall に任せてスキップ
-            // 内積 < 0.7 なら地面ではなく壁とみなす
-            constexpr float kGroundDotThreshold = 0.7f;
-            if (outDir.Dot(m_upDir) < kGroundDotThreshold) { return; }
-
-            // ジャンプ直後はスキップ
-            if (m_velocity.Dot(outDir) > 0.001f) { return; }
-
-            // プレイヤーが面にどれだけ近いか（内部なら正、外部なら負）
-            const float distToFace = (outDir.x != 0.0f)
-                ? (half.x - std::abs(lp.x))
-                : (half.y - std::abs(lp.y));
-
-            // 面の外側～内側 GroundSnapDist の範囲なら着地
-            // 外側: distToFace < 0 で abs(distToFace) < GroundSnapDist
-            // 内側: distToFace > 0 で常に着地可能とする
-            const bool nearFace = (distToFace >= 0.0f) || (distToFace > -CollisionConst::GroundSnapDist);
-
-            if (nearFace)
+            for (int i = 0; i < static_cast<int>(planets.size()); ++i)
             {
-                // 面上にスナップ
+                const PlanetData& p = planets[i];
+                if (p.Shape != PlanetShape::Box || !p.pCollider) { continue; }
+
+                std::list<KdCollider::CollisionResult> results;
+                if (!p.pCollider->Intersects(ray, p.mWorld, &results)) { continue; }
+
+                for (const auto& r : results)
+                {
+                    // ヒット面法線が m_upDir と同じ向き（床面）のみ対象
+                    if (r.m_hitNDir.Dot(m_upDir) < 0.7f) { continue; }
+
+                    // overlapDistance = rayLen - hitDist なので hitDist = rayLen - overlapDistance
+                    const float hitDist = rayLen - r.m_overlapDistance;
+                    if (hitDist < bestDist)
+                    {
+                        bestDist   = hitDist;
+                        bestIdx    = i;
+                        bestNormal = r.m_hitNDir;
+                        bestHitPos = r.m_hitPos;
+                    }
+                }
+            }
+
+            if (bestIdx >= 0)
+            {
+                // ヒット面上にスナップ（瞬時）
                 Math::Vector3 corrected = pos;
-                if (outDir.x != 0.0f)
-                    corrected.x = m_pCurrentPlanet->Position.x + outDir.x * (half.x + 0.001f);
-                else
-                    corrected.y = m_pCurrentPlanet->Position.y + outDir.y * (half.y + 0.001f);
+                corrected += m_upDir * (CollisionConst::GroundRayOffset - bestDist + 0.001f);
                 SetPos(corrected);
 
-                const float inwardVel = m_velocity.Dot(-outDir);
+                // m_upDir を bestNormal へ lerp で滑らかに近づける（床から落ちる瞬間のカクつき防止）
+                const Math::Quaternion fromQ = Math::Quaternion::FromToRotation({ 0.0f, 1.0f, 0.0f }, m_upDir);
+                const Math::Quaternion toQ   = Math::Quaternion::FromToRotation({ 0.0f, 1.0f, 0.0f }, bestNormal);
+                m_upDir = Math::Vector3::Transform({ 0.0f, 1.0f, 0.0f },
+                    Math::Matrix::CreateFromQuaternion(Math::Quaternion::Slerp(fromQ, toQ, CollisionConst::GroundUpDirSlerpSpeed)));
+                m_upDir.Normalize();
+
+                const float inwardVel = m_velocity.Dot(-bestNormal);
                 if (inwardVel > 0.0f)
+                    m_velocity += bestNormal * inwardVel * GameConst::LandingDamping;
+
+                if (m_prevPlanetIndex != bestIdx)
                 {
-                    m_velocity += outDir * inwardVel * GameConst::LandingDamping;
+                    const float radial = m_velocity.Dot(bestNormal);
+                    m_velocity = bestNormal * radial;
                 }
                 m_isGround = true;
-                m_airGravitySwitchCount = 0;  // 着地で空中切り替え回数リセット
+                m_airGravitySwitchCount = 0;
+                return;
             }
-            return;
         }
+    }
 
-        // ---- Sphere 惑星の着地判定（既存レイキャスト） ----
+    // 惑星重力下にいる場合は着地判定（Sphere等）
+    if (m_pCurrentPlanet)
+    {
         if (!m_pCurrentPlanet->pCollider) { return; }
         const Math::Vector3 pos    = GetPos();
         const Math::Vector3 center = m_pCurrentPlanet->Position;
@@ -293,6 +325,12 @@ void Character::CheckGround()
             {
                 m_velocity += outDir * inwardVel * GameConst::LandingDamping;
             }
+            // 惑星輸送時（異なる惑星に移動）は接線方向の慣性もクリア
+            if (m_prevPlanetIndex != m_currentPlanetIndex)
+            {
+                const float radial = m_velocity.Dot(outDir);
+                m_velocity = outDir * radial;
+            }
             m_isGround = true;
             m_airGravitySwitchCount = 0;  // 着地で空中切り替え回数リセット
         }
@@ -354,7 +392,6 @@ void Character::CheckWall()
 {
     Math::Vector3 pos = GetPos();
 
-    // upDir に垂直な2軸（right, forward）を構成
     const Math::Vector3 worldFwd = (std::abs(m_upDir.z) < 0.9f)
         ? Math::Vector3{ 0.0f, 0.0f, 1.0f }
         : Math::Vector3{ 1.0f, 0.0f, 0.0f };
@@ -365,12 +402,9 @@ void Character::CheckWall()
     rightAxis.Cross(m_upDir, fwdAxis);
     fwdAxis.Normalize();
 
-    // 4軸方向のみ（斜めは不要：合成で補正される）
     static const Math::Vector2 dirs[4] = {
-        { 1.0f,  0.0f},
-        {-1.0f,  0.0f},
-        { 0.0f,  1.0f},
-        { 0.0f, -1.0f},
+        { 1.0f,  0.0f}, {-1.0f,  0.0f},
+        { 0.0f,  1.0f}, { 0.0f, -1.0f},
     };
     static const float heights[3] = {
         CollisionConst::WallRayOffsetY0,
@@ -378,95 +412,131 @@ void Character::CheckWall()
         CollisionConst::WallRayOffsetY2,
     };
 
-    // レイ対象：Box惑星コライダー or 通常マップ
-    // ※手動重力時は m_pCurrentPlanet が更新されていない場合があるので直接取得する
-    const PlanetData* pWallPlanet = m_pCurrentPlanet;
-    if (!pWallPlanet)
+    // ---- レイキャスト押し出し共通処理 ----
+    // Box惑星用：KdCollider + Matrix
+    auto doPlanetRayPush = [&](const KdCollider& collider, const Math::Matrix& mat)
     {
-        const GravityInfluenceResult r = PlanetGravityManager::Instance().ComputeGravityInfluence(GetPos());
-        pWallPlanet = PlanetGravityManager::Instance().GetPlanet(r.dominantPlanetIdx);
+        float pushRightMax = 0.0f, pushRightMin = 0.0f;
+        float pushFwdMax   = 0.0f, pushFwdMin   = 0.0f;
+
+        for (float h : heights)
+        {
+            const Math::Vector3 rayOrigin = pos + m_upDir * h;
+            for (const Math::Vector2& d : dirs)
+            {
+                const Math::Vector3 rayDir = rightAxis * d.x + fwdAxis * d.y;
+                const KdCollider::RayInfo ray(KdCollider::TypeBump, rayOrigin, rayDir, CollisionConst::WallRayLength);
+
+                std::list<KdCollider::CollisionResult> results;
+                if (!collider.Intersects(ray, mat, &results)) { continue; }
+
+                float maxOverlap = 0.0f;
+                for (const auto& r : results)
+                {
+                    if (r.m_hitNDir.Dot(rayDir) > 0.0f) { continue; }
+                    if (std::isfinite(r.m_overlapDistance) && r.m_overlapDistance > maxOverlap)
+                        maxOverlap = r.m_overlapDistance;
+                }
+                if (maxOverlap <= 0.0f) { continue; }
+
+                const Math::Vector3 push = -rayDir * maxOverlap;
+                const float dr = push.Dot(rightAxis);
+                const float df = push.Dot(fwdAxis);
+                if (dr > 0.0f) pushRightMax = std::max(pushRightMax, dr);
+                else           pushRightMin = std::min(pushRightMin, dr);
+                if (df > 0.0f) pushFwdMax   = std::max(pushFwdMax,   df);
+                else           pushFwdMin   = std::min(pushFwdMin,   df);
+            }
+        }
+
+        const Math::Vector3 totalPush =
+            rightAxis * (pushRightMax + pushRightMin) +
+            fwdAxis   * (pushFwdMax   + pushFwdMin);
+
+        if (totalPush.LengthSquared() > 0.0f)
+        {
+            pos += totalPush;
+            const float pushLen = totalPush.Length();
+            if (pushLen > 0.0001f)
+            {
+                const Math::Vector3 pushNorm = totalPush / pushLen;
+                const float velIntoWall = m_velocity.Dot(-pushNorm);
+                if (velIntoWall > 0.0f)
+                    m_velocity += pushNorm * velIntoWall;
+            }
+        }
+    };
+
+    // マップ用：KdGameObject（Matrixなし）
+    auto doMapRayPush = [&](const std::shared_ptr<KdGameObject>& mapObj)
+    {
+        float pushRightMax = 0.0f, pushRightMin = 0.0f;
+        float pushFwdMax   = 0.0f, pushFwdMin   = 0.0f;
+
+        for (float h : heights)
+        {
+            const Math::Vector3 rayOrigin = pos + m_upDir * h;
+            for (const Math::Vector2& d : dirs)
+            {
+                const Math::Vector3 rayDir = rightAxis * d.x + fwdAxis * d.y;
+                const KdCollider::RayInfo ray(KdCollider::TypeBump, rayOrigin, rayDir, CollisionConst::WallRayLength);
+
+                std::list<KdCollider::CollisionResult> results;
+                if (!mapObj->Intersects(ray, &results)) { continue; }
+
+                float maxOverlap = 0.0f;
+                for (const auto& r : results)
+                {
+                    if (r.m_hitNDir.Dot(rayDir) > 0.0f) { continue; }
+                    if (std::isfinite(r.m_overlapDistance) && r.m_overlapDistance > maxOverlap)
+                        maxOverlap = r.m_overlapDistance;
+                }
+                if (maxOverlap <= 0.0f) { continue; }
+
+                const Math::Vector3 push = -rayDir * maxOverlap;
+                const float dr = push.Dot(rightAxis);
+                const float df = push.Dot(fwdAxis);
+                if (dr > 0.0f) pushRightMax = std::max(pushRightMax, dr);
+                else           pushRightMin = std::min(pushRightMin, dr);
+                if (df > 0.0f) pushFwdMax   = std::max(pushFwdMax,   df);
+                else           pushFwdMin   = std::min(pushFwdMin,   df);
+            }
+        }
+
+        const Math::Vector3 totalPush =
+            rightAxis * (pushRightMax + pushRightMin) +
+            fwdAxis   * (pushFwdMax   + pushFwdMin);
+
+        if (totalPush.LengthSquared() > 0.0f)
+        {
+            pos += totalPush;
+            const float pushLen = totalPush.Length();
+            if (pushLen > 0.0001f)
+            {
+                const Math::Vector3 pushNorm = totalPush / pushLen;
+                const float velIntoWall = m_velocity.Dot(-pushNorm);
+                if (velIntoWall > 0.0f)
+                    m_velocity += pushNorm * velIntoWall;
+            }
+        }
+    };
+
+    // ---- Box 惑星（KdBoxCollision が pRes を正しく返すようになったのでレイキャスト可能）----
+    const auto& planets = PlanetGravityManager::Instance().GetPlanets();
+    for (const auto& p : planets)
+    {
+        if (p.Shape != PlanetShape::Box || !p.pCollider) { continue; }
+        doPlanetRayPush(*p.pCollider, p.mWorld);
     }
 
-    const bool hasPlanetCol = pWallPlanet
-        && pWallPlanet->Shape == PlanetShape::Box
-        && pWallPlanet->pCollider;
+    // ---- 通常マップ ----
     const auto spMap = m_wpMap.lock();
-
-    if (!hasPlanetCol && !spMap) { return; }
-
-    // デバッグ
-    if (!m_pDebugWire) { m_pDebugWire = std::make_unique<KdDebugWireFrame>(); }
-    m_pDebugWire->AddDebugSphere(pos + m_upDir * CollisionConst::WallSphereOffsetY,
-                                 CollisionConst::WallSphereRadius, { 1,1,0,1 });
-
-    float pushRightMax = 0.0f, pushRightMin = 0.0f;
-    float pushFwdMax   = 0.0f, pushFwdMin   = 0.0f;
-
-    for (float h : heights)
+    if (spMap)
     {
-        const Math::Vector3 rayOrigin = pos + m_upDir * h;
-
-        for (const Math::Vector2& d : dirs)
-        {
-            const Math::Vector3 rayDir = rightAxis * d.x + fwdAxis * d.y;
-            const KdCollider::RayInfo ray(KdCollider::TypeBump, rayOrigin, rayDir, CollisionConst::WallRayLength);
-
-            std::list<KdCollider::CollisionResult> results;
-            bool hit = false;
-
-            if (hasPlanetCol)
-                hit = pWallPlanet->pCollider->Intersects(ray, pWallPlanet->mWorld, &results);
-            else if (spMap)
-                hit = spMap->Intersects(ray, &results);
-
-            if (!hit) { continue; }
-
-            float maxOverlap = 0.0f;
-            for (auto& r : results)
-            {
-                if (!std::isfinite(r.m_overlapDistance) || r.m_overlapDistance <= 0.0f) { continue; }
-                if (r.m_overlapDistance > maxOverlap)
-                    maxOverlap = r.m_overlapDistance;
-            }
-            if (maxOverlap <= 0.0f) { continue; }
-
-            // m_overlapDistance = WallRayLength - ヒット距離 = そのまま押し出し量
-            const float pushDist = maxOverlap;
-            if (pushDist <= 0.0f) { continue; }
-
-            const Math::Vector3 push = -rayDir * pushDist;
-            const float dr = push.Dot(rightAxis);
-            const float df = push.Dot(fwdAxis);
-
-            if (dr > 0.0f) { pushRightMax = std::max(pushRightMax, dr); }
-            else           { pushRightMin = std::min(pushRightMin, dr); }
-            if (df > 0.0f) { pushFwdMax   = std::max(pushFwdMax,   df); }
-            else           { pushFwdMin   = std::min(pushFwdMin,   df); }
-        }
+        doMapRayPush(spMap);
     }
 
-    const Math::Vector3 totalPush =
-        rightAxis * (pushRightMax + pushRightMin) +
-        fwdAxis   * (pushFwdMax   + pushFwdMin);
-
-    if (totalPush.LengthSquared() > 0.0f)
-    {
-        // 完全に押し出す
-        pos += totalPush;
-        SetPos(pos);
-
-        // 壁方向へのvelocityを完全にカット
-        const float pushLen = totalPush.Length();
-        if (pushLen > 0.0001f)
-        {
-            const Math::Vector3 pushNorm = totalPush / pushLen;
-            const float velIntoWall = m_velocity.Dot(-pushNorm);
-            if (velIntoWall > 0.0f)
-            {
-                m_velocity += pushNorm * velIntoWall;
-            }
-        }
-    }
+    SetPos(pos);
 }
 
     void Character::TakeDamage(int _damage)

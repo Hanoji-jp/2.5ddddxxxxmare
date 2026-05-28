@@ -16,7 +16,8 @@ namespace CollisionConst
     constexpr float GroundRayOffset     = 1.2f;
 
     // 壁判定：水平レイの長さ（キャラクター半径）
-    constexpr float WallRayLength       = 0.4f;
+    // 壁から一定距離を保つことでbottom裏面へのめり込みを防ぐ
+    constexpr float WallRayLength       = 0.7f;
 
     // 壁判定：レイを飛ばす高さ（複数段）
     constexpr float WallRayOffsetY0     = 0.15f;  // 足元（床面より少し上、コーナー干渉を避ける）
@@ -29,7 +30,10 @@ namespace CollisionConst
     constexpr float WallSphereOffsetY   = 0.8f;
 
     // 着地時のスナップ許容距離
-    constexpr float GroundSnapDist      = 0.5f;
+    constexpr float GroundSnapDist          = 0.5f;
+
+    // 着地時の m_upDir 補正速度（lerp係数）：1.0f=瞬時、小さいほど滑らか
+    constexpr float GroundUpDirSlerpSpeed   = 0.3f;
 
     // 壁レイ方向（8方向）の数
     constexpr int   WallRayDirCount     = 8;

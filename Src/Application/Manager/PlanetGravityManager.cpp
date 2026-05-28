@@ -134,7 +134,7 @@ void PlanetGravityManager::DrawGui()
 			// Box各面の重力モード設定
 			ImGui::Separator();
 			ImGui::Text("Box Face Gravity Modes:");
-			const char* modeNames[] = { "Inward", "Down", "Up", "Left", "Right" };
+			const char* modeNames[] = { "Inward", "Outward", "Inherit", "Down", "Up", "Left", "Right" };
 
 			int topMode = static_cast<int>(p.BoxFaceGravityTop);
 			if (ImGui::Combo("Top Face", &topMode, modeNames, IM_ARRAYSIZE(modeNames)))
@@ -258,7 +258,8 @@ const PlanetData* PlanetGravityManager::FindNearestPlanet(const Math::Vector3& _
 	return GetPlanet(FindNearestPlanetIndex(_charPos));
 }
 
-GravityInfluenceResult PlanetGravityManager::ComputeGravityInfluence(const Math::Vector3& _charPos) const
+GravityInfluenceResult PlanetGravityManager::ComputeGravityInfluence(const Math::Vector3& _charPos,
+	const Math::Vector3& currentGravDir) const
 {
 	GravityInfluenceResult result;
 	Math::Vector3 totalGravity = { 0.0f, 0.0f, 0.0f };
@@ -339,6 +340,15 @@ GravityInfluenceResult PlanetGravityManager::ComputeGravityInfluence(const Math:
 					upDir   = faceOutDir;
 					gravDir = -upDir;
 					break;
+				case BoxFaceGravityMode::Outward:
+					gravDir = faceOutDir;
+					upDir   = -faceOutDir;
+					break;
+				case BoxFaceGravityMode::Inherit:
+					// 現在の重力方向をそのまま継承
+					gravDir = currentGravDir;
+					upDir   = -currentGravDir;
+					break;
 				case BoxFaceGravityMode::Down:
 					gravDir = { 0.0f, -1.0f, 0.0f };
 					upDir   = { 0.0f,  1.0f, 0.0f };
@@ -389,8 +399,14 @@ GravityInfluenceResult PlanetGravityManager::ComputeGravityInfluence(const Math:
 		}
 
 		// 影響力計算：距離の2乗に反比例 × 惑星固有の重力強度
-		const float influence = (PlanetConst::GravityInfluenceStrength * p.GravityStrength) / 
-								(dist * dist + PlanetConst::GravityInfluenceEpsilon);
+		const float rawInfluence = (PlanetConst::GravityInfluenceStrength * p.GravityStrength) /
+								   (dist * dist + PlanetConst::GravityInfluenceEpsilon);
+
+		// 重力圏の外縁に近づくほど重力を 0 にフェードアウト（ふわ〜と離れていく感）
+		// t = 1.0（表面付近）→ t = 0.0（重力圏の端）のスムーズステップ
+		const float t = 1.0f - std::min(dist / p.GravityRadius, 1.0f);
+		const float falloff = t * t * (3.0f - 2.0f * t);  // smoothstep
+		const float influence = rawInfluence * falloff;
 
 		// 重力ベクトルを加算
 		totalGravity += gravDir * influence;

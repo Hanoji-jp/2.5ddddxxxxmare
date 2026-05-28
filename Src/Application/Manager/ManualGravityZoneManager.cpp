@@ -32,12 +32,12 @@ bool ManualGravityZoneManager::CanUseManualGravity(const Math::Vector3& _pos) co
 	// ゾーンが1つもない場合はどこでも使用可能
 	if (m_zones.empty()) { return true; }
 
-	// いずれかのゾーン内にいれば使用可能
+	// ManualGravityタイプのゾーン内にいれば使用可能
 	for (const auto& zone : m_zones)
 	{
 		if (!zone.bEnabled) { continue; }
+		if (zone.Type != ZoneType::ManualGravity) { continue; }
 
-		// AABB 判定
 		const Math::Vector3 localPos = _pos - zone.Center;
 		if (std::abs(localPos.x) <= zone.HalfExtents.x &&
 			std::abs(localPos.y) <= zone.HalfExtents.y &&
@@ -47,6 +47,31 @@ bool ManualGravityZoneManager::CanUseManualGravity(const Math::Vector3& _pos) co
 		}
 	}
 
+	return false;
+}
+
+bool ManualGravityZoneManager::IsInNormalGravityZone(const Math::Vector3& _pos, Math::Vector3& gravDirOut) const
+{
+	for (const auto& zone : m_zones)
+	{
+		if (!zone.bEnabled) { continue; }
+		if (zone.Type != ZoneType::NormalGravity) { continue; }
+
+		const Math::Vector3 localPos = _pos - zone.Center;
+		if (std::abs(localPos.x) <= zone.HalfExtents.x &&
+			std::abs(localPos.y) <= zone.HalfExtents.y &&
+			std::abs(localPos.z) <= zone.HalfExtents.z)
+		{
+			switch (zone.GravityDir)
+			{
+			case ZoneGravityDir::Down:  gravDirOut = {  0.0f, -1.0f, 0.0f }; break;
+			case ZoneGravityDir::Up:    gravDirOut = {  0.0f,  1.0f, 0.0f }; break;
+			case ZoneGravityDir::Left:  gravDirOut = { -1.0f,  0.0f, 0.0f }; break;
+			case ZoneGravityDir::Right: gravDirOut = {  1.0f,  0.0f, 0.0f }; break;
+			}
+			return true;
+		}
+	}
 	return false;
 }
 
@@ -78,9 +103,11 @@ void ManualGravityZoneManager::DrawDebugShapes() const
 		if (!zone.bEnabled) { continue; }
 
 		const bool selected = (i == m_selectedIndex);
-		const Math::Color color = selected 
-			? Math::Color(1.0f, 1.0f, 0.0f, 0.8f)  // 選択中：黄色
-			: Math::Color(0.0f, 1.0f, 1.0f, 0.6f); // 通常：シアン
+		const Math::Color color = selected
+			? Math::Color(1.0f, 1.0f, 0.0f, 0.8f)   // 選択中：黄色
+			: (zone.Type == ZoneType::NormalGravity
+				? Math::Color(1.0f, 0.4f, 0.0f, 0.8f)   // NormalGravity：オレンジ
+				: Math::Color(0.0f, 1.0f, 1.0f, 0.6f)); // ManualGravity：シアン
 
 		const float z = zone.Center.z;
 
@@ -151,6 +178,26 @@ void ManualGravityZoneManager::DrawGui()
 
 		ImGui::Text("Zone %d Settings:", m_selectedIndex);
 
+		// ZoneType選択
+		const char* zoneTypeNames[] = { "Manual Gravity", "Normal Gravity (-Y)" };
+		int typeIdx = static_cast<int>(zone.Type);
+		if (ImGui::Combo("Zone Type", &typeIdx, zoneTypeNames, IM_ARRAYSIZE(zoneTypeNames)))
+		{
+			zone.Type = static_cast<ZoneType>(typeIdx);
+		}
+		if (zone.Type == ZoneType::NormalGravity)
+		{
+			ImGui::SameLine();
+			ImGui::TextColored({ 1.0f, 0.4f, 0.0f, 1.0f }, "<- 重力固定ゾーン");
+
+			const char* dirNames[] = { "Down (-Y)", "Up (+Y)", "Left (-X)", "Right (+X)" };
+			int dirIdx = static_cast<int>(zone.GravityDir);
+			if (ImGui::Combo("Gravity Dir", &dirIdx, dirNames, IM_ARRAYSIZE(dirNames)))
+			{
+				zone.GravityDir = static_cast<ZoneGravityDir>(dirIdx);
+			}
+		}
+
 		float center[3] = { zone.Center.x, zone.Center.y, zone.Center.z };
 		if (ImGui::DragFloat3("Center", center, 0.5f, -1000.0f, 1000.0f))
 		{
@@ -198,7 +245,9 @@ void ManualGravityZoneManager::Save() const
 			<< zone.HalfExtents.x << ","
 			<< zone.HalfExtents.y << ","
 			<< zone.HalfExtents.z << ","
-			<< (zone.bEnabled ? 1 : 0) << "\n";
+			<< (zone.bEnabled ? 1 : 0) << ","
+			<< static_cast<int>(zone.Type) << ","
+			<< static_cast<int>(zone.GravityDir) << "\n";
 	}
 }
 
@@ -228,6 +277,12 @@ void ManualGravityZoneManager::Load()
 		zone.HalfExtents.y = std::stof(tokens[4]);
 		zone.HalfExtents.z = std::stof(tokens[5]);
 		zone.bEnabled = (std::stoi(tokens[6]) != 0);
+		zone.Type = (tokens.size() >= 8)
+			? static_cast<ZoneType>(std::stoi(tokens[7]))
+			: ZoneType::ManualGravity;
+		zone.GravityDir = (tokens.size() >= 9)
+			? static_cast<ZoneGravityDir>(std::stoi(tokens[8]))
+			: ZoneGravityDir::Down;
 
 		// Boxモデルを読み込み
 		zone.modelWork = std::make_shared<KdModelWork>();

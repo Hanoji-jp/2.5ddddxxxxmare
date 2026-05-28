@@ -21,6 +21,8 @@ enum class PlanetShape
 enum class BoxFaceGravityMode
 {
 	Inward,   // 面の内向き（面に引き寄せる）
+	Outward,  // 面の外向き（面から弾き飛ばされる＝その床から落ちる）
+	Inherit,  // 現在の重力を継承（どちら側から来ても同じ方向に落ちる）
 	Down,     // 下方向（通常重力）
 	Up,       // 上方向
 	Left,     // 左方向
@@ -108,7 +110,9 @@ public:
 	const PlanetData* FindNearestPlanet(const Math::Vector3& _charPos) const;
 
 	// 全惑星の重力を合成して影響力を計算（電場方式）
-	GravityInfluenceResult ComputeGravityInfluence(const Math::Vector3& _charPos) const;
+	// currentGravDir: Inherit モード用に現在のキャラクター重力方向を渡す（デフォルトは下向き）
+	GravityInfluenceResult ComputeGravityInfluence(const Math::Vector3& _charPos,
+		const Math::Vector3& currentGravDir = { 0.0f, -1.0f, 0.0f }) const;
 
 	// インデックスから PlanetData を取得（範囲外なら nullptr）
 	const PlanetData* GetPlanet(int index) const

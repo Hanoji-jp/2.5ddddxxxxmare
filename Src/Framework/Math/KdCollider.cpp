@@ -543,21 +543,78 @@ bool KdBoxCollision::Intersects(const DirectX::BoundingOrientedBox& target, cons
 	// 即結果を返す(HITしたかどうかだけが知れる)
 	return isHit;
 }
-bool KdBoxCollision::Intersects(const KdCollider::RayInfo& target, const Math::Matrix& world, KdCollider::CollisionResult* /*pRes*/)
+bool KdBoxCollision::Intersects(const KdCollider::RayInfo& target, const Math::Matrix& world, KdCollider::CollisionResult* pRes)
 {
 	if (!m_enable) { return false; }
 
-	// AABB vs レイ
-	float AABBdist = FLT_MAX;
+	float hitDist = FLT_MAX;
 
-	// BOXvsBOX(OBB)の当たり判定
-	DirectX::BoundingBox			myAABBShape;
-	DirectX::BoundingOrientedBox	myOBBShape;
+	DirectX::BoundingBox         myAABBShape;
+	DirectX::BoundingOrientedBox myOBBShape;
 	m_Abox.Transform(myAABBShape, world);
 	m_Obox.Transform(myOBBShape, world);
-	bool isHit = (!m_IsOriented) ? myAABBShape.Intersects(target.m_pos, target.m_dir, AABBdist) : myOBBShape.Intersects(target.m_pos, target.m_dir, AABBdist);
 
-	// 即結果を返す(HITしたかどうかだけが知れる)
+	bool isHit = (!m_IsOriented)
+		? myAABBShape.Intersects(target.m_pos, target.m_dir, hitDist)
+		: myOBBShape .Intersects(target.m_pos, target.m_dir, hitDist);
+
+	// 判定限界距離を加味
+	isHit &= (target.m_range >= hitDist);
+
+	if (!pRes) { return isHit; }
+
+	if (isHit)
+	{
+		// ヒット座標
+		pRes->m_hitPos = target.m_pos + target.m_dir * hitDist;
+
+		// 残り距離（モデルコライダーと同じ方式）
+		pRes->m_overlapDistance = target.m_range - hitDist;
+
+		// ヒット面の法線を求める（ヒット点が Box のどの面に最も近いか）
+		const Math::Vector3& hp = pRes->m_hitPos;
+		Math::Vector3 center = (!m_IsOriented)
+			? Math::Vector3(myAABBShape.Center)
+			: Math::Vector3(myOBBShape.Center);
+		Math::Vector3 extents = (!m_IsOriented)
+			? Math::Vector3(myAABBShape.Extents)
+			: Math::Vector3(myOBBShape.Extents);
+
+		// OBB の場合はローカル空間に変換して面法線を求め、ワールドへ戻す
+		Math::Vector3 localHit = hp - center;
+		if (m_IsOriented)
+		{
+			// OBB の向きでローカルに変換
+			DirectX::XMVECTOR q = DirectX::XMLoadFloat4(&myOBBShape.Orientation);
+			DirectX::XMVECTOR invQ = DirectX::XMQuaternionInverse(q);
+			localHit = DirectX::XMVector3Rotate(localHit, invQ);
+		}
+
+		// 各軸について面からの距離を計算し、最も近い面の法線を採用
+		Math::Vector3 normal = { 0.0f, 1.0f, 0.0f };
+		float minDiff = FLT_MAX;
+		const float axes[3] = { localHit.x, localHit.y, localHit.z };
+		const float exts[3] = { extents.x,  extents.y,  extents.z  };
+		for (int i = 0; i < 3; ++i)
+		{
+			const float diffPos = std::abs(axes[i] - exts[i]);
+			const float diffNeg = std::abs(axes[i] + exts[i]);
+			if (diffPos < minDiff) { minDiff = diffPos; Math::Vector3 n = {}; (&n.x)[i] =  1.0f; normal = n; }
+			if (diffNeg < minDiff) { minDiff = diffNeg; Math::Vector3 n = {}; (&n.x)[i] = -1.0f; normal = n; }
+		}
+
+		// OBB の場合はワールド空間へ回転
+		if (m_IsOriented)
+		{
+			DirectX::XMVECTOR q = DirectX::XMLoadFloat4(&myOBBShape.Orientation);
+			normal = DirectX::XMVector3Rotate(normal, q);
+			normal.Normalize();
+		}
+
+		pRes->m_hitNDir = normal;
+		pRes->m_hitDir  = -target.m_dir;
+	}
+
 	return isHit;
 }
 

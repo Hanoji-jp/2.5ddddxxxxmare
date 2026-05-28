@@ -1,12 +1,19 @@
 # Copilot Instructions
 
 ## プロジェクト概要
-- 2.5Dゲーム（リトルナイトメアのような横スクロール）を作成する
+- 2.5Dゲーム（リトルナイトメアのようなカメラ挙動）3/10の割合
+- マリオギャラクシーの2.5D版のようなゲームを作る予定 7/10の割合で
 - マリオギャラクシーのような重力（惑星間の移動など）
 - カメラがめっちゃ重要
 
 ## コーディング規約
 
+### 当たり判定
+- AABBは絶対使わない(Axis-Aligned Bounding Box)
+- 判定はすべてレイキャストで行うこと
+- Box惑星・壁・床などあらゆる当たり判定でもAABBによる距離・範囲チェックは禁止
+- 範囲内かどうかの判定も `std::abs(lp.x) > half.x` のようなAABB式は使わず、レイキャスト結果（hitNDir・hitPos・overlapDistance）のみを使うこと
+- `KdBoxCollision` の当たり判定はレイキャスト（`Intersects(RayInfo)`）を使うこと
 ### メモリ管理
 - 生ポインタ（raw pointer）は使用禁止
 - スマートポインター（`std::unique_ptr`、`std::shared_ptr`、`std::weak_ptr`）を必ず使用すること

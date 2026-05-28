@@ -56,36 +56,13 @@ void Player::Update()
                 if (!m_isGround) { ConsumeAirGravitySwitch(); }
             }
         }
-        else if (canSwitch && (GetAsyncKeyState(VK_LEFT) & 0x8000))  // ←キー
-        {
-            if (GetManualGravity() != ManualGravityDir::Left)
-            {
-                SetManualGravity(ManualGravityDir::Left);
-                if (!m_isGround) { ConsumeAirGravitySwitch(); }
-            }
-        }
-        else if (canSwitch && (GetAsyncKeyState(VK_RIGHT) & 0x8000))  // →キー
-        {
-            if (GetManualGravity() != ManualGravityDir::Right)
-            {
-                SetManualGravity(ManualGravityDir::Right);
-                if (!m_isGround) { ConsumeAirGravitySwitch(); }
-            }
-        }
         // Rキーで自動モードに戻す（空中制限なし）
         else if (GetAsyncKeyState('R') & 0x8000)
         {
             SetManualGravity(ManualGravityDir::None);
         }
     }
-    else
-    {
-        // ゾーン外では手動重力を無効化
-        if (GetManualGravity() != ManualGravityDir::None)
-        {
-            SetManualGravity(ManualGravityDir::None);
-        }
-    }
+    // ゾーン外でも手動重力はそのまま維持（ミスってゾーンを出たらふわーっと飛んでいく）
 
     Move();
     Jump();
@@ -221,9 +198,12 @@ void Player::Move()
 
         const Math::Vector3 up = GetUpDir();   // XY平面内の法線（Z=0）
 
-        // up に直交する接線方向を求める（XY平面内、Z固定）
-        // up = (ux, uy, 0) なら tangent = (-uy, ux, 0)
-        const Math::Vector3 tangent = { -up.y, up.x, 0.0f };
+        // 画面左右は常に世界空間X軸基準で固定（重力反転しても操作感が変わらない）
+        // A=左(+X方向)、D=右(-X方向) を保つため tangent は常に {-1,0,0}
+        // ただし up が真横（±X）を向く場合は up から計算する
+        const Math::Vector3 tangent = (std::abs(up.x) < 0.9f)
+            ? Math::Vector3{ -1.0f, 0.0f, 0.0f }
+            : Math::Vector3{ 0.0f, (up.x > 0.0f ? -1.0f : 1.0f), 0.0f };
 
         // 入力の XY を接線・法線ベースに変換
         Math::Vector3 worldInput = tangent * input.x + up * input.y;
@@ -258,7 +238,8 @@ void Player::Move()
     }
 
     // velocity に反映（radial 成分は保持、接線成分だけ置き換え）
-    const Math::Vector3 up = GetUpDir();
+    // 物理用upDir（即切り替え）を使うことで重力切り替え直後も床方向への速度混入を防ぐ
+    const Math::Vector3 up = GetPhysicsUpDir();
     Math::Vector3 surfaceVel = m_moveVelocity;
     surfaceVel -= up * surfaceVel.Dot(up);
 

@@ -3,14 +3,38 @@
 #include "../../Framework/Direct3D/KdModel.h"
 
 //==========================================================
+// ZoneType
+// ゾーンの種別
+//==========================================================
+enum class ZoneType
+{
+	ManualGravity,  // 手動重力使用可能エリア
+	NormalGravity,  // 固定方向重力エリア
+};
+
+//==========================================================
+// ZoneGravityDir
+// NormalGravityゾーンの重力方向
+//==========================================================
+enum class ZoneGravityDir
+{
+	Down,   // -Y（通常）
+	Up,     // +Y
+	Left,   // -X
+	Right,  // +X
+};
+
+//==========================================================
 // ManualGravityZone
 // 手動重力を使用可能なエリア（矩形）
 //==========================================================
 struct ManualGravityZone
 {
-	Math::Vector3 Center = { 0.0f, 0.0f, 0.0f };  // エリア中心
-	Math::Vector3 HalfExtents = { 10.0f, 10.0f, 10.0f };  // 半分のサイズ
-	bool bEnabled = true;  // このゾーンが有効か
+	Math::Vector3 Center = { 0.0f, 0.0f, 0.0f };
+	Math::Vector3 HalfExtents = { 10.0f, 10.0f, 10.0f };
+	bool bEnabled = true;
+	ZoneType Type = ZoneType::ManualGravity;
+	ZoneGravityDir GravityDir = ZoneGravityDir::Down;  // NormalGravity時の重力方向
 
 	// 描画用
 	std::shared_ptr<KdModelWork> modelWork;
@@ -34,6 +58,9 @@ public:
 
 	// プレイヤーが手動重力を使用可能な位置にいるか
 	bool CanUseManualGravity(const Math::Vector3& _pos) const;
+
+	// プレイヤーがNormalGravityゾーン内にいるか（true時はgravDirOutに方向を返す）
+	bool IsInNormalGravityZone(const Math::Vector3& _pos, Math::Vector3& gravDirOut) const;
 
 	// エリア追加
 	void AddZone(const ManualGravityZone& _zone) { m_zones.push_back(_zone); }
