@@ -90,15 +90,63 @@ public:
     // マップオブジェクトをセット（コリジョン判定に使用）
     void SetMapObject(const std::weak_ptr<KdGameObject>& _wpMap) { m_wpMap = _wpMap; }
 
+    // コリジョンデバッグUI（ImGui）
+    void DrawCollisionDebugGui();
+
 protected:
+    // ---- デバッグ用コリジョンログ ----
+    struct CollisionFrameLog
+    {
+        Math::Vector3 pos           = {};
+        Math::Vector3 velocity      = {};
+        Math::Vector3 upDir         = {};
+        bool          isGround      = false;
+
+        // CheckWall
+        struct WallHit
+        {
+            float         height     = 0.0f;   // レイ高さ
+            Math::Vector3 rayDir     = {};
+            Math::Vector3 hitNDir    = {};
+            float         overlap    = 0.0f;
+            bool          isNormal   = false;
+            bool          filtered   = false;   // 底面/天面フィルタで除外されたか
+        };
+        std::vector<WallHit> wallHits;
+        Math::Vector3        wallTotalPush = {};
+
+        // CheckGround
+        struct GroundHit
+        {
+            Math::Vector3 hitPos    = {};
+            Math::Vector3 hitNDir   = {};
+            float         hitDist   = 0.0f;
+            bool          filtered  = false;
+        };
+        std::vector<GroundHit> groundHits;
+        bool               groundSnapped = false;
+    };
+
+    static constexpr int kDebugLogFrames = 120;
+    std::vector<CollisionFrameLog> m_collisionLog;
+    int                            m_collisionLogIdx = 0;
+    bool                           m_debugLogEnabled = false;
+    CollisionFrameLog              m_currentFrameLog = {};
     // 重力処理
     void ApplyGravity();
 
     // 移動量をワールド行列に反映
     void ApplyVelocity();
 
+    // 速度適用（分軸処理用）
+    void ApplyVelocityHorizontal();
+    void ApplyVelocityVertical();
+
     // 着地判定
     void CheckGround();
+
+    // 天井判定（Box底面へのすり抜け防止）
+    void CheckCeiling();
 
     // 壁判定
     void CheckWall();
@@ -109,10 +157,6 @@ protected:
     Math::Vector3 m_velocity = { 0.0f, 0.0f, 0.0f };
 
     bool  m_isGround    = false;
-
-    // 床スナップ用：目標Y座標（lerpで滑らかにスナップ）
-    float m_snapTargetY     = 0.0f;
-    bool  m_snapActive      = false;
 
     // 惑星重力用：現在の「上」方向（物理・判定用、即スナップ）
     Math::Vector3 m_upDir = { 0.0f, 1.0f, 0.0f };

@@ -295,6 +295,9 @@ void GameScene::DrawGui()
 	// HP UI は常時表示（エディターモード問わず）
 	if (m_spHpUI) { m_spHpUI->DrawGui(); }
 
+	// プレイヤーコリジョンデバッグ
+	if (m_spPlayer) { m_spPlayer->DrawCollisionDebugGui(); }
+
 	// エディターモード時のみエディターGUIを表示
 	m_roomEditor.DrawGui();
 	m_enemyEditor.DrawGui();

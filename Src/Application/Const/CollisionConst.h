@@ -15,16 +15,35 @@ namespace CollisionConst
     // MaxFallSpeed(1.0f) より大きくしないとトンネリングが起きる
     constexpr float GroundRayOffset     = 1.2f;
 
-    // 壁判定：水平レイの長さ（キャラクター半径）
-    // 壁から一定距離を保つことでbottom裏面へのめり込みを防ぐ
-    constexpr float WallRayLength       = 0.45f;
+    // -------------------------------------------------------
+    // 天井判定（Box底面への頭突き検出）
+    // -------------------------------------------------------
+    // 頭上からレイを飛ばす起点オフセット（キャラクター身長の頂点付近）
+    constexpr float CeilingRayOffset    = 1.0f;
+    // 天井とみなすスナップ許容距離
+    constexpr float CeilingSnapDist     = 0.3f;
 
-    // 壁判定：レイを飛ばす高さ（複数段）
-    constexpr float WallRayOffsetYNeg  = -0.15f; // 足元より少し下（ボックス底辺コーナー検出）
-    constexpr float WallRayOffsetY0     = 0.0f;   // 足元ぴったり
-    constexpr float WallRayOffsetY1     = 0.15f;  // 足元付近
-    constexpr float WallRayOffsetY2     = 0.5f;   // 腰付近
-    constexpr float WallRayOffsetY3     = 1.0f;   // 胸付近
+    // Normal Box 壁判定：ヒット面法線の上方向成分がこれ以上なら底面・天面と判断して壁判定から除外
+    constexpr float WallNormalUpThreshold   = 0.5f;
+
+    // -------------------------------------------------------
+    // 壁判定（NormalGravity Box 用）
+    // -------------------------------------------------------
+    constexpr float WallRayLength_Normal    = 0.45f;  // 水平レイの長さ
+    constexpr float WallRayOffsetYNeg_Normal= -0.12f; // 足元より少し下（コーナー埋まり防止）
+    constexpr float WallRayOffsetY0_Normal  = 0.0f;   // 足元ぴったり
+    constexpr float WallRayOffsetY1_Normal  = 0.4f;   // 腰付近
+    constexpr float WallRayOffsetY2_Normal  = 0.9f;   // 胸付近
+
+    // -------------------------------------------------------
+    // 壁判定（非 Normal Box 惑星 / 通常マップ 用）
+    // -------------------------------------------------------
+    constexpr float WallRayLength           = 0.75f;  // 水平レイの長さ
+    constexpr float WallRayOffsetYNeg       = -0.15f; // 足元より少し下
+    constexpr float WallRayOffsetY0         = 0.0f;   // 足元ぴったり
+    constexpr float WallRayOffsetY1         = 0.15f;  // 足元付近
+    constexpr float WallRayOffsetY2         = 0.5f;   // 腰付近
+    constexpr float WallRayOffsetY3         = 1.0f;   // 胸付近
 
     // 床着地判定：ヒット点の水平距離がこれ以上なら「壁の天面」と判断して無視
     constexpr float GroundHitHorizontalMax = 0.5f;
@@ -34,8 +53,9 @@ namespace CollisionConst
     // 着地時のスナップ許容距離
     constexpr float GroundSnapDist          = 0.5f;
 
-    // 床スナップのlerp速度（1.0f=瞬時、小さいほど滑らか）
-    constexpr float GroundSnapLerpSpeed     = 0.3f;
+    // Box床判定：hitDist がこれ未満（レイ起点のすぐ直下）はBox内部誤検出として除外
+    // GroundRayOffset - GroundSnapDist より小さければ内側からのヒット
+    constexpr float GroundHitDistMin        = 0.4f;
 
     // 着地時の m_upDir 補正速度（lerp係数）：1.0f=瞬時、小さいほど滑らか
     constexpr float GroundUpDirSlerpSpeed   = 0.3f;
