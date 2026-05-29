@@ -1,4 +1,5 @@
 ﻿#pragma once
+#include "Framework/Utility/ThreadPool/KdThreadPool.h"
 
 class BaseScene
 {

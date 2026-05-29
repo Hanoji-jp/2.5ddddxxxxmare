@@ -37,6 +37,19 @@ void BaseScene::Update()
 	{
 		obj->Update();
 	}
+
+	// 並列実行可能なジョブを KdThreadPool に投げてまとめて待つ
+	// ParallelUpdate() をオーバーライドしたオブジェクトのみ実行される
+	std::vector<std::future<void>> jobs;
+	jobs.reserve(m_objList.size());
+	for (auto& obj : m_objList)
+	{
+		jobs.push_back(KdThreadPool::Instance().Enqueue([&obj]
+		{
+			obj->ParallelUpdate();
+		}));
+	}
+	for (auto& f : jobs) { f.get(); }
 }
 
 void BaseScene::PostUpdate()

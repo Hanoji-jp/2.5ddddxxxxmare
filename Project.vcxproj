@@ -350,6 +350,7 @@
     <ClInclude Include="Src\Framework\Utility\KdDebug\KdDebugWireFrame.h" />
     <ClInclude Include="Src\Framework\Utility\KdFPSController.h" />
     <ClInclude Include="Src\Framework\Utility\KdRandom.h" />
+    <ClInclude Include="Src\Framework\Utility\ThreadPool\KdThreadPool.h" />
     <ClInclude Include="src\Pch.h" />
     <ClInclude Include="Src\Framework\Math\KdAnimation.h" />
     <ClInclude Include="Src\Framework\Math\KdCollision.h" />

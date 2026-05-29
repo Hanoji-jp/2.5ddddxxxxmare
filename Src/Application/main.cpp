@@ -1,6 +1,7 @@
 ﻿#include "main.h"
 
 #include "Scene/SceneManager.h"
+#include "Framework/Utility/ThreadPool/KdThreadPool.h"
 
 // ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// /////
 // エントリーポイント
@@ -216,6 +217,11 @@ bool Application::Init(int w, int h)
 	KdFontManager::Instance().Init(GetWindowHandle());
 	
 	//===================================================================
+	// スレッドプール初期化
+	//===================================================================
+	KdThreadPool::Instance().Init();
+
+	//===================================================================
 	// ゲーム固有の初期化
 	//===================================================================
 	// 例えばカーソルを消したい場合
@@ -341,6 +347,8 @@ void Application::Release()
 	KdAudioManager::Instance().Release();
 
 	KdDirect3D::Instance().Release();
+
+	KdThreadPool::Instance().Release();
 
 	// ウィンドウ削除
 	m_window.Release();

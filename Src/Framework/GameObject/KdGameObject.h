@@ -23,6 +23,9 @@ public:
 
 	virtual void PreUpdate() {}
 	virtual void Update() {}
+	// スレッドプールから並列実行される更新（他オブジェクトへのアクセス禁止）
+	// デフォルトは何もしない。並列化できる処理のみオーバーライドする
+	virtual void ParallelUpdate() {}
 	virtual void PostUpdate() {}
 
 	// それぞれの状況で描画する関数
