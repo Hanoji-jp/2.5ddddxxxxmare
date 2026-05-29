@@ -68,6 +68,39 @@ void WarpHoleEditor::DrawGui()
 			m_dirty    = true;
 		}
 
+		// ---- Waypoint リスト ----
+		ImGui::Separator();
+		ImGui::Text("Waypoints (%d)", static_cast<int>(h.Waypoints.size()));
+		if (ImGui::Button("Add Waypoint"))
+		{
+			// 最後のポイントの少し先に追加
+			Math::Vector3 last = h.Waypoints.empty() ? h.EntryPos : h.Waypoints.back();
+			h.Waypoints.push_back(last + Math::Vector3(2.0f, 2.0f, 0.0f));
+			m_dirty = true;
+		}
+		for (int wi = 0; wi < static_cast<int>(h.Waypoints.size()); ++wi)
+		{
+			ImGui::PushID(wi);
+			float wp[3] = { h.Waypoints[wi].x, h.Waypoints[wi].y, h.Waypoints[wi].z };
+			char label[32];
+			sprintf_s(label, "WP [%d]", wi);
+			if (ImGui::DragFloat3(label, wp, 0.1f))
+			{
+				h.Waypoints[wi] = { wp[0], wp[1], wp[2] };
+				m_dirty = true;
+			}
+			ImGui::SameLine();
+			if (ImGui::Button("Del"))
+			{
+				h.Waypoints.erase(h.Waypoints.begin() + wi);
+				m_dirty = true;
+				ImGui::PopID();
+				break;
+			}
+			ImGui::PopID();
+		}
+		ImGui::Separator();
+
 		ImGui::Spacing();
 		if (ImGui::Button("Delete"))
 		{
@@ -104,10 +137,23 @@ void WarpHoleEditor::DrawDebug() const
 			wire.AddDebugSphere(h.ExitPos, WarpHoleConst::SuckRadius, { 1.0f, 0.0f, 1.0f, 1.0f });
 			wire.Draw();
 		}
-		// 入口→出口を線で結ぶ（黄色）
+		// 経路ライン（入口→Waypoints→出口、黄色）
+		{
+			const auto path = h.GetFullPath();
+			KdDebugWireFrame wire;
+			for (int pi = 0; pi + 1 < static_cast<int>(path.size()); ++pi)
+			{
+				wire.AddDebugLine(path[pi], path[pi + 1], { 1.0f, 1.0f, 0.0f, 1.0f });
+			}
+			wire.Draw();
+		}
+		// Waypoint 球（オレンジ）
 		{
 			KdDebugWireFrame wire;
-			wire.AddDebugLine(h.EntryPos, h.ExitPos, { 1.0f, 1.0f, 0.0f, 1.0f });
+			for (const auto& wp : h.Waypoints)
+			{
+				wire.AddDebugSphere(wp, 0.4f, { 1.0f, 0.5f, 0.0f, 1.0f });
+			}
 			wire.Draw();
 		}
 		// 射出方向矢印（緑）
@@ -130,7 +176,13 @@ void WarpHoleEditor::Save() const
 		ofs << h.EntryPos.x << "," << h.EntryPos.y << "," << h.EntryPos.z << ","
 			<< h.ExitPos.x  << "," << h.ExitPos.y  << "," << h.ExitPos.z  << ","
 			<< h.ExitDir.x  << "," << h.ExitDir.y  << "," << h.ExitDir.z  << ","
-			<< (h.Enabled ? 1 : 0) << "\n";
+			<< (h.Enabled ? 1 : 0) << ","
+			<< static_cast<int>(h.Waypoints.size());
+		for (const auto& wp : h.Waypoints)
+		{
+			ofs << "," << wp.x << "," << wp.y << "," << wp.z;
+		}
+		ofs << "\n";
 	}
 }
 
@@ -152,13 +204,22 @@ void WarpHoleEditor::Load()
 			try { vals.push_back(std::stof(token)); }
 			catch (...) {}
 		}
-		if (vals.size() < 10) { continue; }
+		if (vals.size() < 11) { continue; }
 
 		WarpHoleData h;
 		h.EntryPos = { vals[0], vals[1], vals[2] };
 		h.ExitPos  = { vals[3], vals[4], vals[5] };
 		h.ExitDir  = { vals[6], vals[7], vals[8] };
 		h.Enabled  = (static_cast<int>(vals[9]) != 0);
+		const int wpCount = static_cast<int>(vals[10]);
+		for (int wi = 0; wi < wpCount; ++wi)
+		{
+			const int base = 11 + wi * 3;
+			if (base + 2 < static_cast<int>(vals.size()))
+			{
+				h.Waypoints.push_back({ vals[base], vals[base + 1], vals[base + 2] });
+			}
+		}
 		m_holes.push_back(h);
 	}
 }

@@ -39,10 +39,47 @@ public:
     bool IsDead()     const { return m_hp <= 0; }
 
     // 現在の「上」方向を取得（カメラ・モデル回転用、Slerp補間済み）
-    const Math::Vector3& GetUpDir() const { return m_upDirVisual; }
+    // ワープ中はワープ進行方向を返す
+    const Math::Vector3& GetUpDir() const
+    {
+        return m_warpUpOverrideActive ? m_warpUpOverride : m_upDirVisual;
+    }
+
+    // ワープ演出用スケール倍率（1.0 = 通常、0.0 = 消滅）
+    void  SetWarpScale(float s) { m_warpScale = s; }
+    float GetWarpScale()  const { return m_warpScale; }
+
+    // ワープ中の向き上書き（GameScene から毎フレーム呼ぶ）
+    // target に向かって Slerp で滑らかに回転する
+    void SetWarpUpOverride(const Math::Vector3& target, float slerpT)
+    {
+        if (!m_warpUpOverrideActive)
+        {
+            // 初回：現在の visual up から開始
+            m_warpUpOverride       = m_upDirVisual;
+            m_warpUpOverrideActive = true;
+        }
+        m_warpUpOverride = Math::Vector3::Lerp(m_warpUpOverride, target, slerpT);
+        if (m_warpUpOverride.LengthSquared() > 0.0001f)
+        {
+            m_warpUpOverride.Normalize();
+        }
+    }
+    void ClearWarpUpOverride()
+    {
+        m_warpUpOverrideActive = false;
+        m_warpStretchActive    = false;
+    }
+
+    // ワープストレッチON/OFF（Traveling フェーズ中のみ true にする）
+    void SetWarpStretch(bool active) { m_warpStretchActive = active; }
+    bool GetWarpStretch()      const { return m_warpStretchActive; }
 
     // 物理・速度計算用「上」方向（即切り替え、重力切り替え直後も正確）
     const Math::Vector3& GetPhysicsUpDir() const { return m_upDir; }
+
+    // モデル姿勢用「上」方向（ワープオーバーライドを含まない、常に通常のVisual up）
+    const Math::Vector3& GetVisualUpDir() const { return m_upDirVisual; }
 
     // 速度アクセサ（ワープなど外部から速度を書き換える場合に使用）
     const Math::Vector3& GetVelocity() const { return m_velocity; }
@@ -73,11 +110,23 @@ protected:
 
     bool  m_isGround    = false;
 
+    // 床スナップ用：目標Y座標（lerpで滑らかにスナップ）
+    float m_snapTargetY     = 0.0f;
+    bool  m_snapActive      = false;
+
     // 惑星重力用：現在の「上」方向（物理・判定用、即スナップ）
     Math::Vector3 m_upDir = { 0.0f, 1.0f, 0.0f };
 
     // 見た目用「上」方向（Slerpで補間、モデル回転に使用）
     Math::Vector3 m_upDirVisual = { 0.0f, 1.0f, 0.0f };
+
+    // ワープ演出用スケール倍率
+    float         m_warpScale           = 1.0f;
+
+    // ワープ中の向き上書き
+    Math::Vector3 m_warpUpOverride       = { 0.0f, 1.0f, 0.0f };
+    bool          m_warpUpOverrideActive = false;
+    bool          m_warpStretchActive    = false;  // Traveling フェーズ中のみ true
 
     // 現在影響を受けている惑星のインデックス（-1 なら通常重力）
     int m_currentPlanetIndex = -1;

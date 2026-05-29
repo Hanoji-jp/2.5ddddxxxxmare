@@ -17,10 +17,9 @@ public:
 	void DrawEffect()  override;   // 加算ブレンドで3Dリング描画
 	void DrawDebug()   override;   // エディタ用ワイヤーフレーム
 
-	// プレイヤーを吸い込み範囲に入ったか判定して射出
-	// pPos : 現在位置  pVel : 速度（上書きする）
-	// 戻り値 : 射出した場合 true
-	bool TryWarp(Math::Vector3& pPos, Math::Vector3& pVel) const;
+	// プレイヤーが吸い込み範囲に入ったか判定
+	// 戻り値 : ワープ開始すべき場合 true（位置や速度は GameScene 側で制御する）
+	bool CheckWarpTrigger(const Math::Vector3& pPos) const;
 
 	const WarpHoleData& GetData() const { return m_data; }
 	void SetData(const WarpHoleData& d) { m_data = d; }

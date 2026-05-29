@@ -96,19 +96,13 @@ void WarpHole::DrawDebug()
 }
 
 //----------------------------------------------------------
-bool WarpHole::TryWarp(Math::Vector3& pPos, Math::Vector3& pVel) const
+bool WarpHole::CheckWarpTrigger(const Math::Vector3& pPos) const
 {
 	if (!m_data.Enabled) { return false; }
 
 	const float distSq   = (pPos - m_data.EntryPos).LengthSquared();
 	const float radiusSq = WarpHoleConst::SuckRadius * WarpHoleConst::SuckRadius;
-	if (distSq > radiusSq) { return false; }
-
-	pPos = m_data.ExitPos;
-	Math::Vector3 dir = m_data.ExitDir;
-	dir.Normalize();
-	pVel = dir * WarpHoleConst::LaunchSpeed;
-	return true;
+	return distSq <= radiusSq;
 }
 
 //----------------------------------------------------------

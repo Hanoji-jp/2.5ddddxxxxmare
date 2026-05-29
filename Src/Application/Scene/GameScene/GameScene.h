@@ -55,6 +55,25 @@ private:
 
 	// ワープホールオブジェクトリスト
 	std::vector<std::shared_ptr<WarpHole>> m_warpHoles;
+
+	//---- Waypoint ワープ進行状態 ----
+	enum class WarpPhase
+	{
+		None,       // 通常
+		Sucking,    // 吸い込み中（入口に向かって収縮・SetPos制御）
+		Traveling,  // パス移動中
+	};
+	WarpPhase                              m_warpPhase         = WarpPhase::None;
+	std::vector<Math::Vector3>             m_warpPath;
+	int                                    m_warpSegment       = 0;
+	float                                  m_warpSegProgress   = 0.0f;
+	Math::Vector3                          m_warpExitDir;
+	Math::Vector3                          m_warpEntryPos;
+	Math::Vector3                          m_warpSuckStartPos; // 吸い込み開始時のプレイヤー位置
+	float                                  m_warpSuckProgress  = 0.0f; // 0→1
+	float                                  m_warpSuckStartAngle = 0.0f; // 螺旋開始角度
+	float                                  m_warpPlayerScale   = 1.0f;
+
 	bool                    m_editorMode  = false;
 	bool                    m_f2Prev      = false;
 	EditorCamera*           m_pEditorCam  = nullptr;

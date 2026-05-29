@@ -29,10 +29,9 @@ void Character::PostUpdate()
 
     if (!isEjecting)
     {
+        CheckWall();   // 水平押し出しを先に → 箱に潜り込む前に外へ出す
         CheckGround();
     }
-
-    CheckWall();
 }
 
 void Character::DrawDebug()
@@ -170,12 +169,25 @@ void Character::ApplyVelocity()
 {
     Math::Vector3 pos = GetPos();
     pos += m_velocity;
+
+    // 床スナップ：lerpで滑らかに着地（瞬間テレポート防止）
+    if (m_snapActive)
+    {
+        pos.y = std::lerp(pos.y, m_snapTargetY, CollisionConst::GroundSnapLerpSpeed);
+        if (std::abs(pos.y - m_snapTargetY) < 0.001f)
+        {
+            pos.y        = m_snapTargetY;
+            m_snapActive = false;
+        }
+    }
+
     SetPos(pos);
 }
 
 void Character::CheckGround()
 {
-    m_isGround = false;
+    m_isGround   = false;
+    m_snapActive = false;   // 毎フレームリセット（今フレームで着地しなければ非アクティブ）
 
     // ---- Box 惑星の着地判定：レイキャストで面を検出 ----
     {
@@ -206,11 +218,21 @@ void Character::CheckGround()
 
                 for (const auto& r : results)
                 {
-                    // ヒット面法線が m_upDir と同じ向き（床面）のみ対象
-                    if (r.m_hitNDir.Dot(m_upDir) < 0.7f) { continue; }
+                    // ヒット点がプレイヤー足元より十分上にある（壁の天面）は無視
+                    // レイ起点は pos + upDir * GroundRayOffset なので
+                    // ヒット点が pos + upDir * GroundRayOffset より upDir 方向に近い = 足元より上
+                    const Math::Vector3 toHit = r.m_hitPos - pos;
+                    const float upComp = toHit.Dot(m_upDir);
+                    // upComp > GroundRayOffset の場合、ヒット点が足元より上 → 壁天面なので無視
+                    if (upComp > CollisionConst::GroundRayOffset + 0.05f) { continue; }
+
+                    // ヒット点の水平距離がキャラ半径より大きければ壁の天面なので無視
+                    const Math::Vector3 horizontal = toHit - m_upDir * upComp;
+                    if (horizontal.LengthSquared() > CollisionConst::GroundHitHorizontalMax * CollisionConst::GroundHitHorizontalMax) { continue; }
 
                     // overlapDistance = rayLen - hitDist なので hitDist = rayLen - overlapDistance
                     const float hitDist = rayLen - r.m_overlapDistance;
+
                     if (hitDist < bestDist)
                     {
                         bestDist   = hitDist;
@@ -342,48 +364,56 @@ void Character::CheckGround()
     const auto spMap = m_wpMap.lock();
     if (!spMap) { return; }
 
+    // ジャンプ直後（上方向に速度あり）はスキップ
     if (m_velocity.y > 0.001f) { return; }
 
     Math::Vector3 pos = GetPos();
 
     const Math::Vector3 rayStart = pos + Math::Vector3(0.0f, CollisionConst::GroundRayOffset, 0.0f);
     const Math::Vector3 rayDir   = Math::Vector3(0.0f, -1.0f, 0.0f);
-
     const KdCollider::RayInfo ray(KdCollider::TypeGround, rayStart, rayDir, CollisionConst::GroundRayLength);
 
     std::list<KdCollider::CollisionResult> results;
-    if (spMap->Intersects(ray, &results))
+    if (!spMap->Intersects(ray, &results)) { return; }
+
+    const KdCollider::CollisionResult* pBest = nullptr;
+    for (auto& r : results)
     {
-        // 最も近い床を選ぶ
-        const KdCollider::CollisionResult* pBest = nullptr;
-        for (auto& r : results)
-        {
-            if (!pBest || r.m_overlapDistance > pBest->m_overlapDistance)
-            {
-                pBest = &r;
-            }
-        }
+        // ヒット面がプレイヤー足元より上にある（壁の天面）は無視
+        if (r.m_hitPos.y > pos.y + 0.01f) { continue; }
+        // ヒット点がプレイヤーの真下でない（横のボックス天面に当たっている）は無視
+        const float dx = r.m_hitPos.x - pos.x;
+        const float dz = r.m_hitPos.z - pos.z;
+        if (dx * dx + dz * dz > CollisionConst::GroundHitHorizontalMax * CollisionConst::GroundHitHorizontalMax) { continue; }
+        if (!pBest || r.m_overlapDistance > pBest->m_overlapDistance)
+            pBest = &r;
+    }
 
-        if (pBest)
+    if (pBest)
+    {
+        const float floorY      = pBest->m_hitPos.y;
+        const float penetration = floorY - pos.y;
+        if (penetration > -CollisionConst::GroundSnapDist)
         {
-            const float floorY      = pBest->m_hitPos.y;
-            const float penetration = floorY - pos.y;   // 正 = めり込み、負 = 床より上
-
-            // 着地許容範囲内（めり込み〜SnapDist 浮いている）
-            if (penetration > -CollisionConst::GroundSnapDist)
+            if (penetration > 0.0f)
             {
-                // 常に床にスナップ（浮いたまま着地フラグだけ立つのを防ぐ）
+                // 既にめり込んでいる場合は即座に押し出す
                 pos.y = floorY;
                 SetPos(pos);
-                // 落下速度を減衰させる
-                if (m_velocity.y < 0.0f)
-                {
-                    m_velocity.y *= GameConst::LandingDamping;
-                    if (std::abs(m_velocity.y) < 0.001f) { m_velocity.y = 0.0f; }
-                }
-                m_isGround = true;
-                m_airGravitySwitchCount = 0;  // 着地で空中切り替え回数リセット
             }
+            else
+            {
+                // 近接している場合はlerpスナップ
+                m_snapTargetY = floorY;
+                m_snapActive  = true;
+            }
+            if (m_velocity.y < 0.0f)
+            {
+                m_velocity.y *= GameConst::LandingDamping;
+                if (std::abs(m_velocity.y) < 0.001f) { m_velocity.y = 0.0f; }
+            }
+            m_isGround = true;
+            m_airGravitySwitchCount = 0;
         }
     }
 }
@@ -392,154 +422,84 @@ void Character::CheckWall()
 {
     Math::Vector3 pos = GetPos();
 
-    const Math::Vector3 worldFwd = (std::abs(m_upDir.z) < 0.9f)
-        ? Math::Vector3{ 0.0f, 0.0f, 1.0f }
-        : Math::Vector3{ 1.0f, 0.0f, 0.0f };
-    Math::Vector3 rightAxis;
-    m_upDir.Cross(worldFwd, rightAxis);
-    rightAxis.Normalize();
-    Math::Vector3 fwdAxis;
-    rightAxis.Cross(m_upDir, fwdAxis);
-    fwdAxis.Normalize();
+    const float r = CollisionConst::WallSphereRadius;
 
-    static const Math::Vector2 dirs[4] = {
-        { 1.0f,  0.0f}, {-1.0f,  0.0f},
-        { 0.0f,  1.0f}, { 0.0f, -1.0f},
-    };
-    static const float heights[3] = {
-        CollisionConst::WallRayOffsetY0,
-        CollisionConst::WallRayOffsetY1,
-        CollisionConst::WallRayOffsetY2,
-    };
-
-    // ---- レイキャスト押し出し共通処理 ----
-    // Box惑星用：KdCollider + Matrix
-    auto doPlanetRayPush = [&](const KdCollider& collider, const Math::Matrix& mat)
+    // 1球あたりの押し出し処理（pos 更新のたびに球位置を再計算）
+    auto doSpherePush = [&](auto intersectFn)
     {
-        float pushRightMax = 0.0f, pushRightMin = 0.0f;
-        float pushFwdMax   = 0.0f, pushFwdMin   = 0.0f;
-
-        for (float h : heights)
+        for (int si = 0; si < 2; ++si)
         {
-            const Math::Vector3 rayOrigin = pos + m_upDir * h;
-            for (const Math::Vector2& d : dirs)
+            // pos が更新されるたびに球の位置を再計算する
+            const Math::Vector3 center = pos + m_upDir * (si == 0
+                ? CollisionConst::WallSphereOffsetY
+                : CollisionConst::WallSphereOffsetY + r * 1.5f);
+
+            const KdCollider::SphereInfo sphere(KdCollider::TypeBump,
+                DirectX::BoundingSphere{ center, r });
+
+            std::list<KdCollider::CollisionResult> results;
+            if (!intersectFn(sphere, &results)) { continue; }
+
+            for (const auto& res : results)
             {
-                const Math::Vector3 rayDir = rightAxis * d.x + fwdAxis * d.y;
-                const KdCollider::RayInfo ray(KdCollider::TypeBump, rayOrigin, rayDir, CollisionConst::WallRayLength);
+                if (res.m_overlapDistance <= 0.0f) { continue; }
 
-                std::list<KdCollider::CollisionResult> results;
-                if (!collider.Intersects(ray, mat, &results)) { continue; }
+                Math::Vector3 pushDir = res.m_hitDir;
+                if (pushDir.LengthSquared() < 0.0001f) { continue; }
+                pushDir.Normalize();
 
-                float maxOverlap = 0.0f;
-                for (const auto& r : results)
-                {
-                    if (r.m_hitNDir.Dot(rayDir) > 0.0f) { continue; }
-                    if (std::isfinite(r.m_overlapDistance) && r.m_overlapDistance > maxOverlap)
-                        maxOverlap = r.m_overlapDistance;
-                }
-                if (maxOverlap <= 0.0f) { continue; }
+                // 上方向成分を除去して水平成分だけにする
+                const float upComp = pushDir.Dot(m_upDir);
+                const Math::Vector3 horizontalDir = pushDir - m_upDir * upComp;
+                const float horizontalLen = horizontalDir.Length();
 
-                const Math::Vector3 push = -rayDir * maxOverlap;
-                const float dr = push.Dot(rightAxis);
-                const float df = push.Dot(fwdAxis);
-                if (dr > 0.0f) pushRightMax = std::max(pushRightMax, dr);
-                else           pushRightMin = std::min(pushRightMin, dr);
-                if (df > 0.0f) pushFwdMax   = std::max(pushFwdMax,   df);
-                else           pushFwdMin   = std::min(pushFwdMin,   df);
-            }
-        }
+                // 水平方向成分がほぼない（真上・真下）→ 床判定に任せる
+                if (horizontalLen < 0.01f) { continue; }
 
-        const Math::Vector3 totalPush =
-            rightAxis * (pushRightMax + pushRightMin) +
-            fwdAxis   * (pushFwdMax   + pushFwdMin);
+                const Math::Vector3 finalPushDir = horizontalDir / horizontalLen;
+                // 水平方向の実際の押し出し量
+                const float finalPushDist = res.m_overlapDistance * horizontalLen;
 
-        if (totalPush.LengthSquared() > 0.0f)
-        {
-            pos += totalPush;
-            const float pushLen = totalPush.Length();
-            if (pushLen > 0.0001f)
-            {
-                const Math::Vector3 pushNorm = totalPush / pushLen;
-                const float velIntoWall = m_velocity.Dot(-pushNorm);
-                if (velIntoWall > 0.0f)
-                    m_velocity += pushNorm * velIntoWall;
+                pos += finalPushDir * finalPushDist;
+
+                // 壁方向への速度成分を消す
+                const float velInto = m_velocity.Dot(-finalPushDir);
+                if (velInto > 0.0f)
+                    m_velocity += finalPushDir * velInto;
             }
         }
     };
 
-    // マップ用：KdGameObject（Matrixなし）
-    auto doMapRayPush = [&](const std::shared_ptr<KdGameObject>& mapObj)
+    // 2イテレーションで深いめり込みも1フレームで解消
+    constexpr int kIterations = 2;
+    for (int iter = 0; iter < kIterations; ++iter)
     {
-        float pushRightMax = 0.0f, pushRightMin = 0.0f;
-        float pushFwdMax   = 0.0f, pushFwdMin   = 0.0f;
-
-        for (float h : heights)
+        // ---- Box 惑星
+        const auto& planets = PlanetGravityManager::Instance().GetPlanets();
+        for (const auto& p : planets)
         {
-            const Math::Vector3 rayOrigin = pos + m_upDir * h;
-            for (const Math::Vector2& d : dirs)
+            if (p.Shape != PlanetShape::Box || !p.pCollider) { continue; }
+            doSpherePush([&](const KdCollider::SphereInfo& s, std::list<KdCollider::CollisionResult>* out)
             {
-                const Math::Vector3 rayDir = rightAxis * d.x + fwdAxis * d.y;
-                const KdCollider::RayInfo ray(KdCollider::TypeBump, rayOrigin, rayDir, CollisionConst::WallRayLength);
-
-                std::list<KdCollider::CollisionResult> results;
-                if (!mapObj->Intersects(ray, &results)) { continue; }
-
-                float maxOverlap = 0.0f;
-                for (const auto& r : results)
-                {
-                    if (r.m_hitNDir.Dot(rayDir) > 0.0f) { continue; }
-                    if (std::isfinite(r.m_overlapDistance) && r.m_overlapDistance > maxOverlap)
-                        maxOverlap = r.m_overlapDistance;
-                }
-                if (maxOverlap <= 0.0f) { continue; }
-
-                const Math::Vector3 push = -rayDir * maxOverlap;
-                const float dr = push.Dot(rightAxis);
-                const float df = push.Dot(fwdAxis);
-                if (dr > 0.0f) pushRightMax = std::max(pushRightMax, dr);
-                else           pushRightMin = std::min(pushRightMin, dr);
-                if (df > 0.0f) pushFwdMax   = std::max(pushFwdMax,   df);
-                else           pushFwdMin   = std::min(pushFwdMin,   df);
-            }
+                return p.pCollider->Intersects(s, p.mWorld, out);
+            });
         }
 
-        const Math::Vector3 totalPush =
-            rightAxis * (pushRightMax + pushRightMin) +
-            fwdAxis   * (pushFwdMax   + pushFwdMin);
-
-        if (totalPush.LengthSquared() > 0.0f)
+        // ---- 通常マップ
+        const auto spMap = m_wpMap.lock();
+        if (spMap)
         {
-            pos += totalPush;
-            const float pushLen = totalPush.Length();
-            if (pushLen > 0.0001f)
+            doSpherePush([&](const KdCollider::SphereInfo& s, std::list<KdCollider::CollisionResult>* out)
             {
-                const Math::Vector3 pushNorm = totalPush / pushLen;
-                const float velIntoWall = m_velocity.Dot(-pushNorm);
-                if (velIntoWall > 0.0f)
-                    m_velocity += pushNorm * velIntoWall;
-            }
+                return spMap->Intersects(s, out);
+            });
         }
-    };
-
-    // ---- Box 惑星（KdBoxCollision が pRes を正しく返すようになったのでレイキャスト可能）----
-    const auto& planets = PlanetGravityManager::Instance().GetPlanets();
-    for (const auto& p : planets)
-    {
-        if (p.Shape != PlanetShape::Box || !p.pCollider) { continue; }
-        doPlanetRayPush(*p.pCollider, p.mWorld);
-    }
-
-    // ---- 通常マップ ----
-    const auto spMap = m_wpMap.lock();
-    if (spMap)
-    {
-        doMapRayPush(spMap);
     }
 
     SetPos(pos);
 }
 
-    void Character::TakeDamage(int _damage)
+void Character::TakeDamage(int _damage)
 {
     m_hp -= _damage;
     if (m_hp <= 0)

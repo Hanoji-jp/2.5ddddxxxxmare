@@ -561,6 +561,23 @@ bool KdBoxCollision::Intersects(const KdCollider::RayInfo& target, const Math::M
 	// 判定限界距離を加味
 	isHit &= (target.m_range >= hitDist);
 
+	// レイ始点がボックス内部にある場合（DirectX の Intersects が false を返す）
+	// → 各面への最短距離で押し出し情報を生成する
+	bool insideHit = false;
+	if (!isHit)
+	{
+		const bool inside = (!m_IsOriented)
+			? myAABBShape.Contains(target.m_pos) == DirectX::CONTAINS
+			: myOBBShape .Contains(target.m_pos) == DirectX::CONTAINS;
+
+		if (inside)
+		{
+			insideHit = true;
+			isHit     = true;
+			hitDist   = 0.0f;
+		}
+	}
+
 	if (!pRes) { return isHit; }
 
 	if (isHit)
@@ -569,10 +586,12 @@ bool KdBoxCollision::Intersects(const KdCollider::RayInfo& target, const Math::M
 		pRes->m_hitPos = target.m_pos + target.m_dir * hitDist;
 
 		// 残り距離（モデルコライダーと同じ方式）
-		pRes->m_overlapDistance = target.m_range - hitDist;
+		// 内部始点の場合はレンジ全体を overlapDistance とする
+		pRes->m_overlapDistance = insideHit ? target.m_range : (target.m_range - hitDist);
 
 		// ヒット面の法線を求める（ヒット点が Box のどの面に最も近いか）
-		const Math::Vector3& hp = pRes->m_hitPos;
+		// 内部始点の場合はレイ始点から最近接面を選ぶ
+		const Math::Vector3 queryPt = insideHit ? target.m_pos : pRes->m_hitPos;
 		Math::Vector3 center = (!m_IsOriented)
 			? Math::Vector3(myAABBShape.Center)
 			: Math::Vector3(myOBBShape.Center);
@@ -581,7 +600,7 @@ bool KdBoxCollision::Intersects(const KdCollider::RayInfo& target, const Math::M
 			: Math::Vector3(myOBBShape.Extents);
 
 		// OBB の場合はローカル空間に変換して面法線を求め、ワールドへ戻す
-		Math::Vector3 localHit = hp - center;
+		Math::Vector3 localHit = queryPt - center;
 		if (m_IsOriented)
 		{
 			// OBB の向きでローカルに変換
@@ -612,7 +631,14 @@ bool KdBoxCollision::Intersects(const KdCollider::RayInfo& target, const Math::M
 		}
 
 		pRes->m_hitNDir = normal;
-		pRes->m_hitDir  = -target.m_dir;
+		pRes->m_hitDir  = insideHit ? normal : -target.m_dir;
+
+		// 内部始点の場合：始点から最近接面までの距離を overlapDistance とする
+		if (insideHit)
+		{
+			pRes->m_overlapDistance = minDiff;
+			pRes->m_hitPos = target.m_pos + normal * minDiff;
+		}
 	}
 
 	return isHit;

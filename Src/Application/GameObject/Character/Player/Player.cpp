@@ -2,6 +2,7 @@
 #include "Player.h"
 #include "../../../Manager/ModelManager.h"
 #include "../../../Manager/ManualGravityZoneManager.h"
+#include "../../../Const/WarpHoleConst.h"
 
 void Player::Init()
 {
@@ -113,58 +114,80 @@ void Player::PostUpdate()
 
     // 位置確定後にワールド行列を再構築
     {
-        const Math::Vector3 pos   = GetPos();
-        const float         scale = PlayerConst::ModelScale;
-        const Math::Vector3 up    = GetUpDir();   // 惑星表面の法線（XY平面、Zは0）
+        const Math::Vector3 pos        = GetPos();
+        const float         scale      = PlayerConst::ModelScale;
+        // ワープ中はワープ方向（Slerp済み）でモデルを向かせる
+        const Math::Vector3 up         = GetUpDir();
 
-        // ----- 正規直交基底を構築（行列式 = +1 を保証） -----
-        // Move()と同じ切り替えロジックでtangentを計算（操作とモデル向きを一致させる）
-        const bool onSphere = (m_pCurrentPlanet && m_pCurrentPlanet->Shape == PlanetShape::Sphere);
-        Math::Vector3 tangentBase;
-        if (onSphere)
-        {
-            tangentBase = { -up.y, up.x, 0.0f };
-            if (tangentBase.LengthSquared() < 0.0001f) { tangentBase = { 0.0f, 0.0f, 1.0f }; }
-            tangentBase.Normalize();
-        }
-        else
-        {
-            tangentBase = (std::abs(up.x) < 0.9f)
-                ? Math::Vector3{ -1.0f, 0.0f, 0.0f }
-                : Math::Vector3{ 0.0f, (up.x > 0.0f ? -1.0f : 1.0f), 0.0f };
-        }
-        const float fSign = m_facingSign;
+        // ----- 正規直交基底を構築 -----
+        Math::Vector3 modelRight, modelFwd;
 
-        // fwd候補（tangent*fSign）からup成分を除去して再直交化 → 歪み防止
-        Math::Vector3 modelFwd = tangentBase * fSign;
-        modelFwd -= up * modelFwd.Dot(up);
-        if (modelFwd.LengthSquared() > 0.0001f)
+        if (m_warpUpOverrideActive)
+        {
+            // ワープ中：up が任意方向になるので「up と最も平行でないワールド軸」で安定構築
+            const Math::Vector3 worldX{ 1.0f, 0.0f, 0.0f };
+            const Math::Vector3 worldY{ 0.0f, 1.0f, 0.0f };
+            const Math::Vector3 worldZ{ 0.0f, 0.0f, 1.0f };
+            const float absDotX = std::abs(up.Dot(worldX));
+            const float absDotY = std::abs(up.Dot(worldY));
+            const float absDotZ = std::abs(up.Dot(worldZ));
+            const Math::Vector3 ref = (absDotX <= absDotY && absDotX <= absDotZ) ? worldX
+                                    : (absDotY <= absDotZ)                        ? worldY
+                                    : worldZ;
+            up.Cross(ref, modelFwd);
             modelFwd.Normalize();
+            up.Cross(modelFwd, modelRight);
+            modelRight.Normalize();
+        }
         else
-            modelFwd = tangentBase * fSign; // 縮退ケース：そのまま使う
+        {
+            const bool onSphere = (m_pCurrentPlanet && m_pCurrentPlanet->Shape == PlanetShape::Sphere);
+            Math::Vector3 tangentBase;
+            if (onSphere)
+            {
+                tangentBase = { -up.y, up.x, 0.0f };
+                if (tangentBase.LengthSquared() < 0.0001f) { tangentBase = { 0.0f, 0.0f, 1.0f }; }
+                tangentBase.Normalize();
+            }
+            else
+            {
+                tangentBase = (std::abs(up.x) < 0.9f)
+                    ? Math::Vector3{ -1.0f, 0.0f, 0.0f }
+                    : Math::Vector3{ 0.0f, (up.x > 0.0f ? -1.0f : 1.0f), 0.0f };
+            }
 
-        const Math::Vector3 modelUp = up;
+            modelFwd = tangentBase * m_facingSign;
+            modelFwd -= up * modelFwd.Dot(up);
+            if (modelFwd.LengthSquared() > 0.0001f)
+                modelFwd.Normalize();
+            else
+                modelFwd = tangentBase * m_facingSign;
 
-        // right = cross(up, fwd)：元と同じ順序でハンドネスを保持
-        Math::Vector3 modelRight;
-        modelUp.Cross(modelFwd, modelRight);
-        modelRight.Normalize();
+            up.Cross(modelFwd, modelRight);
+            modelRight.Normalize();
+        }
 
-        // DirectX 行メジャー行列（行ベクトル用）:
-        //   行0 = Right, 行1 = Up, 行2 = Forward
         const Math::Matrix rot(
             modelRight.x, modelRight.y, modelRight.z, 0.0f,
-            modelUp.x,    modelUp.y,    modelUp.z,    0.0f,
+            up.x,         up.y,         up.z,         0.0f,
             modelFwd.x,   modelFwd.y,   modelFwd.z,   0.0f,
             0.0f,         0.0f,         0.0f,          1.0f);
 
-        const Math::Matrix scaleMat = DirectX::XMMatrixScaling(scale, scale, scale);
+        // 等方スケール行列（Traveling 中のみ縦伸び）
+        const float stretchY = GetWarpStretch() ? WarpHoleConst::WarpStretchScale : 1.0f;
+        const Math::Matrix scaleMat(
+            scale,             0.0f,  0.0f, 0.0f,
+            0.0f,  scale * stretchY,  0.0f, 0.0f,
+            0.0f,             0.0f, scale, 0.0f,
+            0.0f,             0.0f,  0.0f, 1.0f);
+
         const Math::Matrix transMat = DirectX::XMMatrixTranslation(pos.x, pos.y, pos.z);
         const Math::Matrix transDrawMat = DirectX::XMMatrixTranslation(
             pos.x + up.x * PlayerConst::ModelOffsetY,
             pos.y + up.y * PlayerConst::ModelOffsetY,
             pos.z + up.z * PlayerConst::ModelOffsetY);
 
+        // scaleMat（ローカル） → rot（姿勢） → trans（位置）
         m_mWorld    = scaleMat * rot * transMat;
         m_drawWorld = scaleMat * rot * transDrawMat;
     }

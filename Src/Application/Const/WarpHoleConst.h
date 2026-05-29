@@ -8,8 +8,44 @@ namespace WarpHoleConst
 	// 吸い込み判定半径
 	constexpr float SuckRadius          = 2.0f;
 
-	// 射出速度
-	constexpr float LaunchSpeed         = 12.0f;
+	// ワープ完了後の射出速度
+	constexpr float LaunchSpeed         = 8.0f;
+
+	//--------------------------------------------------
+	// Waypoint 移動
+	//--------------------------------------------------
+	// Waypointを移動する速度（単位：ワールド/秒）
+	constexpr float WarpMoveSpeed       = 25.0f;
+
+	// Waypoint到達判定距離
+	constexpr float WaypointReachDist   = 0.3f;
+
+	// ワープ中の向き Slerp 速度（Traveling フェーズ）
+	constexpr float WarpRotSlerpSpeed        = 0.12f;
+
+	// 吸い込みフェーズの向き Slerp 速度（位置と一緒に動くよう速め）
+	constexpr float WarpRotSlerpSpeedSucking = 0.35f;
+
+	//--------------------------------------------------
+	// 吸い込み演出
+	//--------------------------------------------------
+	// 吸い込み検知半径（この距離以内に入ったら演出開始）
+	constexpr float SuckPullRadius      = 4.0f;
+
+	// 吸い込み演出にかかる時間（秒）
+	constexpr float SuckDuration        = 1.8f;
+
+	// 吸い込み中の回転数（1.5 = 1.5周しながら入口へ）
+	constexpr float SuckSpinRevolutions = 1.2f;
+
+	// 螺旋の固定初期半径（プレイヤーの接近角度に関係なく常にこの半径で旋回する）
+	constexpr float SuckSpiralRadius    = 2.0f;
+
+	// 吸い込みフェーズ中のスケール縮小速度（1秒あたり）
+	constexpr float SuckShrinkSpeed     = 0.15f;
+
+	// ワープ移動中の縦方向ストレッチ倍率（進行方向に伸びる）
+	constexpr float WarpStretchScale    = 1.6f;
 
 	//--------------------------------------------------
 	// ビジュアル：ワイヤーフレームトンネル

@@ -2,6 +2,7 @@
 #include"../SceneManager.h"
 #include"../../Const/LightConst.h"
 #include"../../../Framework/Utility/KdDebug/KdDebugGUI.h"
+#include"../../../Framework/Math/KdEasing.h"
 #include <fstream>
 #include <sstream>
 
@@ -55,35 +56,6 @@ void GameScene::Event()
 	if (m_editorMode)
 	{
 		if (m_pEditorCam) { m_pEditorCam->Update(); }
-
-		// エディターのDirtyチェック → オブジェクト再構築
-
-		{
-			RebuildEnemies();
-			m_enemyEditor.ClearDirty();
-		}
-		if (m_checkpointEditor.IsDirty())
-		{
-			RebuildCheckpoints();
-			m_checkpointEditor.ClearDirty();
-		}
-		if (m_warpHoleEditor.IsDirty())
-		{
-			const auto& holes = m_warpHoleEditor.GetHoles();
-			// 数が変わった場合は全再構築、変わっていなければ SetData で座標だけ更新
-			if (holes.size() != m_warpHoles.size())
-			{
-				RebuildWarpHoles();
-			}
-			else
-			{
-				for (int i = 0; i < static_cast<int>(holes.size()); ++i)
-				{
-					m_warpHoles[i]->SetData(holes[i]);
-				}
-			}
-			m_warpHoleEditor.ClearDirty();
-		}
 	}
 	else
 	{
@@ -91,19 +63,176 @@ void GameScene::Event()
 		{
 			m_pCamera->Update(m_spPlayer->GetPos(), m_spPlayer->GetUpDir());
 		}
+	}
 
+	// ── エディタ Dirty チェック（モードに関わらず毎フレーム反映）──────
+	{
+		RebuildEnemies();
+		m_enemyEditor.ClearDirty();
+	}
+	if (m_checkpointEditor.IsDirty())
+	{
+		RebuildCheckpoints();
+		m_checkpointEditor.ClearDirty();
+	}
+	if (m_warpHoleEditor.IsDirty())
+	{
+		const auto& holes = m_warpHoleEditor.GetHoles();
+		if (holes.size() != m_warpHoles.size())
+		{
+			RebuildWarpHoles();
+		}
+		else
+		{
+			for (int i = 0; i < static_cast<int>(holes.size()); ++i)
+			{
+				m_warpHoles[i]->SetData(holes[i]);
+			}
+		}
+		m_warpHoleEditor.ClearDirty();
+	}
+
+	// ── ゲームモード時のみ実行 ──────────────────────────
+	if (!m_editorMode)
+	{
 		// ── ワープホール判定 ─────────────────────────────
 		if (m_spPlayer && !m_spPlayer->IsExpired())
 		{
-			Math::Vector3 playerPos = m_spPlayer->GetPos();
-			Math::Vector3 playerVel = m_spPlayer->GetVelocity();
-			for (auto& wh : m_warpHoles)
+			const float dt = 1.0f / 60.0f;
+
+			if (m_warpPhase == WarpPhase::Sucking)
 			{
-				if (wh->TryWarp(playerPos, playerVel))
+				// ── フェーズ1：入口を中心に螺旋しながら吸い込まれる ──
+				m_warpSuckProgress += dt / WarpHoleConst::SuckDuration;
+				m_warpSuckProgress  = std::min(m_warpSuckProgress, 1.0f);
+
+				KdEase ease;
+				const float easedT = ease.InOutSine(m_warpSuckProgress);
+
+				// 入口への軸を構築
+				Math::Vector3 axisY = m_warpEntryPos - m_warpSuckStartPos;
+				if (axisY.LengthSquared() < 0.0001f) { axisY = Math::Vector3::Up; }
+				axisY.Normalize();
+
+				Math::Vector3 axisX = (std::abs(axisY.y) < 0.9f)
+					? Math::Vector3(0.f, 1.f, 0.f)
+					: Math::Vector3(1.f, 0.f, 0.f);
+				axisX -= axisY * axisX.Dot(axisY);
+				axisX.Normalize();
+				Math::Vector3 axisZ;
+				axisX.Cross(axisY, axisZ);
+				axisZ.Normalize();
+
+				const float r     = WarpHoleConst::SuckSpiralRadius * (1.0f - easedT);
+				const float angle = m_warpSuckStartAngle + easedT * WarpHoleConst::SuckSpinRevolutions * DirectX::XM_2PI;
+
+				const float alongAxis = (m_warpSuckStartPos - m_warpEntryPos).Dot(axisY);
+				const float along     = alongAxis * (1.0f - easedT);
+
+				const Math::Vector3 pos = m_warpEntryPos
+					+ axisY * along
+					+ axisX * (r * cosf(angle))
+					+ axisZ * (r * sinf(angle));
+
+				m_spPlayer->SetPos(pos);
+				m_spPlayer->SetVelocity(Math::Vector3::Zero);
+
+				// 螺旋の接線方向（微小進行方向）を向きとして使う → 位置と向きがシームレスに同期
+				const float nextAngle = angle + 0.15f;
+				const float nextAlong = alongAxis * (1.0f - std::min(easedT + 0.01f, 1.0f));
+				const float nextR     = WarpHoleConst::SuckSpiralRadius * (1.0f - std::min(easedT + 0.01f, 1.0f));
+				const Math::Vector3 nextPos = m_warpEntryPos
+					+ axisY * nextAlong
+					+ axisX * (nextR * cosf(nextAngle))
+					+ axisZ * (nextR * sinf(nextAngle));
+				Math::Vector3 tangent = nextPos - pos;
+				if (tangent.LengthSquared() > 0.0001f) { tangent.Normalize(); }
+				else { tangent = axisY; }
+
+				m_spPlayer->SetWarpUpOverride(tangent, WarpHoleConst::WarpRotSlerpSpeedSucking);
+
+				// 吸い込み完了 → パス移動へ
+				if (m_warpSuckProgress >= 1.0f)
 				{
-					m_spPlayer->SetPos(playerPos);
-					m_spPlayer->SetVelocity(playerVel);
-					break;
+					m_warpPhase       = WarpPhase::Traveling;
+					m_warpSegment     = 0;
+					m_warpSegProgress = 0.0f;
+					m_spPlayer->SetWarpStretch(true);   // Traveling 中だけストレッチON
+				}
+			}
+			else if (m_warpPhase == WarpPhase::Traveling)
+			{
+				// ── フェーズ2：パス移動（SetPos 制御）──
+				const Math::Vector3& segStart = m_warpPath[m_warpSegment];
+				const Math::Vector3& segEnd   = m_warpPath[m_warpSegment + 1];
+
+				const float segLen = (segEnd - segStart).Length();
+				const float advance = (segLen > 0.001f)
+					? (WarpHoleConst::WarpMoveSpeed * dt / segLen)
+					: 1.0f;
+
+				m_warpSegProgress += advance;
+
+				if (m_warpSegProgress >= 1.0f)
+				{
+					m_warpSegProgress -= 1.0f;
+					m_warpSegment++;
+
+					if (m_warpSegment >= static_cast<int>(m_warpPath.size()) - 1)
+					{
+						// ── ワープ完了 ──
+						m_warpPhase = WarpPhase::None;
+						m_spPlayer->ClearWarpUpOverride();
+						m_spPlayer->SetPos(m_warpPath.back());
+						Math::Vector3 dir = m_warpExitDir;
+						dir.Normalize();
+						m_spPlayer->SetVelocity(dir * WarpHoleConst::LaunchSpeed);
+					}
+					else
+					{
+						m_warpSegProgress = std::clamp(m_warpSegProgress, 0.0f, 1.0f);
+					}
+				}
+
+				if (m_warpPhase == WarpPhase::Traveling)
+				{
+					KdEase ease;
+					const float easedT = ease.InOutExpo(m_warpSegProgress);
+					const Math::Vector3& s = m_warpPath[m_warpSegment];
+					const Math::Vector3& e = m_warpPath[m_warpSegment + 1];
+					m_spPlayer->SetPos(Math::Vector3::Lerp(s, e, easedT));
+					m_spPlayer->SetVelocity(Math::Vector3::Zero);
+
+					// 進行方向に Slerp で頭を向ける
+					Math::Vector3 travelDir = e - s;
+					if (travelDir.LengthSquared() > 0.0001f)
+					{
+						travelDir.Normalize();
+						m_spPlayer->SetWarpUpOverride(travelDir, WarpHoleConst::WarpRotSlerpSpeed);
+					}
+				}
+			}
+			else
+			{
+				// ── 通常：吸い込み範囲チェック ──
+				const Math::Vector3 playerPos = m_spPlayer->GetPos();
+				for (auto& wh : m_warpHoles)
+				{
+					if (!wh->GetData().Enabled) { continue; }
+					const Math::Vector3 toEntry = wh->GetData().EntryPos - playerPos;
+					if (toEntry.LengthSquared() <= WarpHoleConst::SuckPullRadius * WarpHoleConst::SuckPullRadius)
+					{
+						m_warpPhase          = WarpPhase::Sucking;
+							m_warpPath           = wh->GetData().GetFullPath();
+							m_warpExitDir        = wh->GetData().ExitDir;
+							m_warpEntryPos       = wh->GetData().EntryPos;
+							m_warpSuckStartPos   = playerPos;
+							m_warpSuckProgress   = 0.0f;
+							m_warpSuckStartAngle = atan2f(
+								playerPos.z - wh->GetData().EntryPos.z,
+								playerPos.x - wh->GetData().EntryPos.x);
+						break;
+					}
 				}
 			}
 		}

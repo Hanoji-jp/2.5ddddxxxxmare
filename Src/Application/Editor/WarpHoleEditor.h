@@ -1,16 +1,29 @@
 ﻿#pragma once
 #include "../Const/WarpHoleConst.h"
+#include <vector>
 
 //==========================================================
 // WarpHoleData
-// 入口・出口ペアのデータ
+// 入口・出口ペアのデータ＋中継Waypoint列
 //==========================================================
 struct WarpHoleData
 {
-	Math::Vector3 EntryPos  = { 0.0f, 0.0f, 0.0f };  // 入口
-	Math::Vector3 ExitPos   = { 10.0f, 0.0f, 0.0f }; // 出口
-	Math::Vector3 ExitDir   = { 1.0f, 0.0f, 0.0f };  // 射出方向（正規化）
-	bool          Enabled   = true;
+	Math::Vector3              EntryPos  = { 0.0f, 0.0f, 0.0f };
+	Math::Vector3              ExitPos   = { 10.0f, 0.0f, 0.0f };
+	Math::Vector3              ExitDir   = { 1.0f, 0.0f, 0.0f };
+	bool                       Enabled   = true;
+	// 入口→出口を繋ぐ中継点（順番に通過）
+	std::vector<Math::Vector3> Waypoints;
+
+	// 入口→Waypoints→出口 の全ポイント列を返す
+	std::vector<Math::Vector3> GetFullPath() const
+	{
+		std::vector<Math::Vector3> path;
+		path.push_back(EntryPos);
+		for (const auto& wp : Waypoints) { path.push_back(wp); }
+		path.push_back(ExitPos);
+		return path;
+	}
 };
 
 //==========================================================
