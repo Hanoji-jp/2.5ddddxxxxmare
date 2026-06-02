@@ -6,6 +6,36 @@
 #include <fstream>
 #include <sstream>
 
+//----------------------------------------------------------
+// サンプリング済み曲線上を、始点からの距離 dist で位置を取得する。
+// 弧長ベースなので等速移動になる。
+//----------------------------------------------------------
+static Math::Vector3 SampleCurveByDistance(const std::vector<Math::Vector3>& curve,
+										   float dist, Math::Vector3& outDir)
+{
+	const int n = static_cast<int>(curve.size());
+	if (n == 0) { outDir = Math::Vector3::Up; return Math::Vector3::Zero; }
+	if (n == 1) { outDir = Math::Vector3::Up; return curve[0]; }
+
+	float accum = 0.0f;
+	for (int i = 0; i < n - 1; ++i)
+	{
+		Math::Vector3 seg = curve[i + 1] - curve[i];
+		const float segLen = seg.Length();
+		if (dist <= accum + segLen || i == n - 2)
+		{
+			const float local = (segLen > 1e-6f) ? (dist - accum) / segLen : 0.0f;
+			const float t = std::clamp(local, 0.0f, 1.0f);
+			if (segLen > 1e-6f) { seg.Normalize(); }
+			outDir = seg;
+			return Math::Vector3::Lerp(curve[i], curve[i + 1], t);
+		}
+		accum += segLen;
+	}
+	outDir = Math::Vector3::Up;
+	return curve.back();
+}
+
 void GameScene::Event()
 {
 	// 惑星のワールド行列を毎フレーム更新（エディターで位置変更した場合にも追従）
@@ -157,57 +187,66 @@ void GameScene::Event()
 					m_warpPhase       = WarpPhase::Traveling;
 					m_warpSegment     = 0;
 					m_warpSegProgress = 0.0f;
+
+					// 移動曲線はトンネルのビジュアル中心線（既にスプラインで
+					// 滑らかに曲げ済み）をそのまま使う。こうすると見えている
+					// トンネルとプレイヤーの飛行軌道が完全に一致する。
+					m_warpCurve = m_warpPath;
+					m_warpCurveTotalLen = 0.0f;
+					for (int i = 0; i + 1 < static_cast<int>(m_warpCurve.size()); ++i)
+					{
+						m_warpCurveTotalLen += (m_warpCurve[i + 1] - m_warpCurve[i]).Length();
+					}
+					m_warpDist = 0.0f;
+
 					m_spPlayer->SetWarpStretch(true);   // Traveling 中だけストレッチON
 				}
 			}
 			else if (m_warpPhase == WarpPhase::Traveling)
 			{
-				// ── フェーズ2：パス移動（SetPos 制御）──
-				const Math::Vector3& segStart = m_warpPath[m_warpSegment];
-				const Math::Vector3& segEnd   = m_warpPath[m_warpSegment + 1];
-
-				const float segLen = (segEnd - segStart).Length();
-				const float advance = (segLen > 0.001f)
-					? (WarpHoleConst::WarpMoveSpeed * dt / segLen)
+				// ── フェーズ2：パス移動（弧長ベースの可変速移動）──
+				// マリオギャラクシーのランチスター風：
+				//   発射直後にドンッと最高速 → 緩やかに巡航速度へ落ち着く。
+				//   速度は「曲線全長に対する進行割合」で決まるため、
+				//   ウェイポイント境界で不連続にならず止まって見えない。
+				const float progress = (m_warpCurveTotalLen > 1e-4f)
+					? (m_warpDist / m_warpCurveTotalLen)
 					: 1.0f;
 
-				m_warpSegProgress += advance;
-
-				if (m_warpSegProgress >= 1.0f)
+				// 発射直後(0)で 1.0 → BlendDist で 0.0 になる減衰係数（OutExpo 的）
+				float launchT = 1.0f;
+				if (WarpHoleConst::WarpLaunchBlendDist > 1e-4f)
 				{
-					m_warpSegProgress -= 1.0f;
-					m_warpSegment++;
-
-					if (m_warpSegment >= static_cast<int>(m_warpPath.size()) - 1)
-					{
-						// ── ワープ完了 ──
-						m_warpPhase = WarpPhase::None;
-						m_spPlayer->ClearWarpUpOverride();
-						m_spPlayer->SetPos(m_warpPath.back());
-						Math::Vector3 dir = m_warpExitDir;
-						dir.Normalize();
-						m_spPlayer->SetVelocity(dir * WarpHoleConst::LaunchSpeed);
-					}
-					else
-					{
-						m_warpSegProgress = std::clamp(m_warpSegProgress, 0.0f, 1.0f);
-					}
+					launchT = 1.0f - std::clamp(progress / WarpHoleConst::WarpLaunchBlendDist, 0.0f, 1.0f);
 				}
+				// OutExpo：序盤の落ち方を急に、終盤を緩やかに
+				const float launchEase = launchT * launchT;
 
-				if (m_warpPhase == WarpPhase::Traveling)
+				const float speedMul = WarpHoleConst::WarpCruiseSpeedMul
+					+ (WarpHoleConst::WarpLaunchSpeedMul - WarpHoleConst::WarpCruiseSpeedMul) * launchEase;
+
+				m_warpDist += WarpHoleConst::WarpMoveSpeed * speedMul * dt;
+
+				if (m_warpDist >= m_warpCurveTotalLen)
 				{
-					KdEase ease;
-					const float easedT = ease.InOutExpo(m_warpSegProgress);
-					const Math::Vector3& s = m_warpPath[m_warpSegment];
-					const Math::Vector3& e = m_warpPath[m_warpSegment + 1];
-					m_spPlayer->SetPos(Math::Vector3::Lerp(s, e, easedT));
+					// ── ワープ完了 ──
+					m_warpPhase = WarpPhase::None;
+					m_spPlayer->ClearWarpUpOverride();
+					m_spPlayer->SetPos(m_warpCurve.empty() ? m_warpPath.back() : m_warpCurve.back());
+					Math::Vector3 dir = m_warpExitDir;
+					dir.Normalize();
+					m_spPlayer->SetVelocity(dir * WarpHoleConst::LaunchSpeed);
+				}
+				else
+				{
+					Math::Vector3 travelDir;
+					const Math::Vector3 pos = SampleCurveByDistance(m_warpCurve, m_warpDist, travelDir);
+					m_spPlayer->SetPos(pos);
 					m_spPlayer->SetVelocity(Math::Vector3::Zero);
 
-					// 進行方向に Slerp で頭を向ける
-					Math::Vector3 travelDir = e - s;
+					// 進行方向（曲線の接線）に Slerp で頭を向ける
 					if (travelDir.LengthSquared() > 0.0001f)
 					{
-						travelDir.Normalize();
 						m_spPlayer->SetWarpUpOverride(travelDir, WarpHoleConst::WarpRotSlerpSpeed);
 					}
 				}
@@ -223,7 +262,9 @@ void GameScene::Event()
 					if (toEntry.LengthSquared() <= WarpHoleConst::SuckPullRadius * WarpHoleConst::SuckPullRadius)
 					{
 						m_warpPhase          = WarpPhase::Sucking;
-							m_warpPath           = wh->GetData().GetFullPath();
+							// プレイヤーをトンネルのビジュアル中心線に沿って動かす。
+							// こうすると「見えているトンネルの中」を必ず通る。
+							m_warpPath           = wh->BuildTunnelCenterPath();
 							m_warpExitDir        = wh->GetData().ExitDir;
 							m_warpEntryPos       = wh->GetData().EntryPos;
 							m_warpSuckStartPos   = playerPos;
@@ -487,6 +528,10 @@ void GameScene::Init()
 	auto spBG = std::make_shared<BackGround>();
 	AddObject(spBG);
 
+	// 星空（スカイボックス内にランダム配置・ブルームで発光）
+	auto spStarField = std::make_shared<StarField>();
+	AddObject(spStarField);
+
 	// デフォルトのポイントライトを1個配置
 	{
 		auto spLight = std::make_shared<PointLightObject>();
@@ -544,6 +589,9 @@ void GameScene::Init()
 	auto& ambient = KdShaderManager::Instance().WorkAmbientController();
 	ambient.SetAmbientLight(LightConst::AmbientColor);
 	ambient.SetDirLight(LightConst::DirLightDir, LightConst::DirLightColor);
+
+	// 影（シャドウマップ）の描画範囲を広げる
+	ambient.SetDirLightShadowArea(LightConst::ShadowAreaSize, LightConst::ShadowAreaHeight);
 
 	// HP UI を常時表示するためゲーム開始時からコールバックをセット
 	KdDebugGUI::Instance().SetGuiCallback([this] { DrawGui(); });

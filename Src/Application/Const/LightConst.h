@@ -15,4 +15,10 @@ namespace LightConst
     // ポイントライトのデフォルト値
     constexpr Math::Vector3 PointLightDefaultColor  = { 1.0f, 0.9f, 0.7f };
     constexpr float         PointLightDefaultRadius = 15.0f;
+
+    // 平行光の影（シャドウマップ）の描画範囲
+    // ShadowAreaSize : 影を生成する正方領域の一辺の長さ（大きいほど遠くまで影が落ちる）
+    // ShadowAreaHeight : ライト方向の深度範囲（高さ）。範囲外のオブジェクトは影を落とさない
+    constexpr Math::Vector2 ShadowAreaSize   = { 80.0f, 80.0f };
+    constexpr float         ShadowAreaHeight = 100.0f;
 }

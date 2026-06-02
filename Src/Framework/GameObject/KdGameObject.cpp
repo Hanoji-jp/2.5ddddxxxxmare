@@ -1,5 +1,15 @@
 ﻿#include "KdGameObject.h"
 
+void KdGameObject::GenerateDepthMapFromLight()
+{
+	if ((m_drawType & eDrawTypeLit) == 0)
+	{
+		return;
+	}
+
+	DrawLit();
+}
+
 void KdGameObject::DrawDebug()
 {
 	// 早期リターン

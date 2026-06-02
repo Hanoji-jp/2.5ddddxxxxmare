@@ -21,6 +21,31 @@ SamplerComparisonState g_ssCmp : register(s1); // 比較サンプラ（シャド
 //=============================================================
 static const float PI = 3.14159265358979f;
 
+//-------------------------------------------------------------
+// 宇宙空間の見た目強化パラメータ
+//-------------------------------------------------------------
+// リムライト（縁光）：シルエットを光で縁取り、宇宙の浮遊感を出す
+static const float k_RimPower    = 3.0f;   // 縁の鋭さ（大きいほど縁だけ光る）
+static const float k_RimStrength = 0.7f;   // 縁光の強さ
+// 擬似環境反射（スペキュラIBL近似）：滑らかな面に宇宙が映り込む
+static const float k_EnvReflectUpMul   = 1.5f;  // 上方向（星空側）の反射の明るさ倍率
+static const float k_EnvReflectDownMul = 0.2f;  // 下方向（暗い宇宙）の反射の明るさ倍率
+
+//=============================================================
+// トーンマッピング / 色変換
+//=============================================================
+
+// ACES フィルミックトーンマッピング近似（HDR → LDR、FORZA等の映える階調）
+float3 ACESFilm(float3 x)
+{
+	const float a = 2.51f;
+	const float b = 0.03f;
+	const float c = 2.43f;
+	const float d = 0.59f;
+	const float e = 0.14f;
+	return saturate((x * (a * x + b)) / (x * (c * x + d) + e));
+}
+
 //=============================================================
 // Poisson Disk サンプル点（16点）
 //=============================================================
@@ -104,8 +129,20 @@ float3 CookTorrance(float3 lightDir, float3 viewDir, float3 N,
 }
 
 //=============================================================
-// PCSS ソフトシャドウ（Poisson 16点）
+// PCSS ソフトシャドウ
+//  1) ブロッカー検索で平均遮蔽深度を求める
+//  2) 遮蔽物との距離から半影(ペナンブラ)サイズを推定
+//  3) 推定半径で PCF フィルタ（接地は鋭く・遠方は柔らかく）
 //=============================================================
+
+// 光源の見かけサイズ（大きいほど影の縁がボケる）
+static const float k_LightSize     = 5.0f;
+// ブロッカー検索半径（テクセル単位）
+static const float k_BlockerSearch = 4.0f;
+// 半影の最小/最大半径（テクセル単位）
+static const float k_MinPenumbra   = 1.0f;
+static const float k_MaxPenumbra   = 12.0f;
+
 float CalcShadow(float3 wPos, float3 wN)
 {
 	// 法線オフセットバイアス（シャドウアクネ対策）
@@ -124,15 +161,49 @@ float CalcShadow(float3 wPos, float3 wN)
 	g_dirShadowMap.GetDimensions(w, h);
 	float2 texelSize = float2(1.0f / w, 1.0f / h);
 
-	// ソフトネス半径（テクセル単位）
-	static const float k_SoftRadius = 2.5f;
+	// 深度バイアス（自己遮蔽防止）
+	static const float k_DepthBias = 0.0015f;
+	float zBiased = z - k_DepthBias;
 
-	float shadow = 0.0f;
+	//------------------------------------------
+	// 1) ブロッカー検索：自分より手前にある遮蔽物の平均深度
+	//------------------------------------------
+	float blockerSum   = 0.0f;
+	float blockerCount = 0.0f;
 	[unroll]
 	for (int i = 0; i < 16; ++i)
 	{
-		float2 offset = g_PoissonDisk[i] * texelSize * k_SoftRadius;
-		shadow += g_dirShadowMap.SampleCmpLevelZero(g_ssCmp, uv + offset, z);
+		float2 offset = g_PoissonDisk[i] * texelSize * k_BlockerSearch;
+		float  sampleDepth = g_dirShadowMap.Sample(g_ss, uv + offset).r;
+		if (sampleDepth < zBiased)
+		{
+			blockerSum   += sampleDepth;
+			blockerCount += 1.0f;
+		}
+	}
+
+	// 遮蔽物がなければ完全に明るい
+	if (blockerCount < 0.5f)
+		return 1.0f;
+
+	float avgBlocker = blockerSum / blockerCount;
+
+	//------------------------------------------
+	// 2) 半影サイズの推定（接地ほど小さく、離れるほど大きく）
+	//------------------------------------------
+	float penumbra = (z - avgBlocker) / max(avgBlocker, 1e-4f) * k_LightSize;
+	float radius   = clamp(penumbra * (w / 2048.0f) + k_MinPenumbra,
+						   k_MinPenumbra, k_MaxPenumbra);
+
+	//------------------------------------------
+	// 3) 推定半径で PCF（比較サンプラ）
+	//------------------------------------------
+	float shadow = 0.0f;
+	[unroll]
+	for (int j = 0; j < 16; ++j)
+	{
+		float2 offset = g_PoissonDisk[j] * texelSize * radius;
+		shadow += g_dirShadowMap.SampleCmpLevelZero(g_ssCmp, uv + offset, zBiased);
 	}
 	return shadow / 16.0f;
 }
@@ -193,6 +264,18 @@ float4 main(VSOutput In) : SV_Target0
 	wN = normalize(wN);
 
 	//------------------------------------------
+	// 球法線：ローポリ球のシェーディング段差を消す
+	//   面の法線ではなく「球中心 → ピクセル」方向を法線として使う。
+	//   ポリゴン数に関係なく完全に滑らかな陰影になる。
+	//------------------------------------------
+	if (g_SphereNormal)
+	{
+		// ワールド行列の平行移動成分が球中心
+		float3 sphereCenter = float3(g_mWorld._41, g_mWorld._42, g_mWorld._43);
+		wN = normalize(In.wPos - sphereCenter);
+	}
+
+	//------------------------------------------
 	// PBR マテリアルパラメータ
 	//------------------------------------------
 	float4 mr       = g_metalRoughTex.Sample(g_ss, In.UV);
@@ -209,6 +292,8 @@ float4 main(VSOutput In) : SV_Target0
 	// シャドウ（法線オフセット PCSS）
 	//------------------------------------------
 	float shadow = CalcShadow(In.wPos, wN);
+	// 影の最小明度（0で真っ黒、上げるほど影が薄くなる）。環境光で持ち上がる
+	shadow = lerp(0.15f, 1.0f, shadow);
 
 	//------------------------------------------
 	// ライティング計算
@@ -256,6 +341,35 @@ float4 main(VSOutput In) : SV_Target0
 		outColor += ambient * baseColor.rgb * baseColor.a;
 	}
 
+	// ---- 擬似環境反射（スペキュラ IBL 近似）----
+	//   反射ベクトルの上下成分で「星空（上）／暗い宇宙（下）」を擬似的に映し込む。
+	//   ラフネスが低い（つるつる）ほど強く、金属ほど色付きで反射する。
+	{
+		float3 R       = reflect(-vCam, wN);
+		float  upFac   = R.y * 0.5f + 0.5f; // 上向き=1, 下向き=0
+		// 環境色を上下でブレンド（上は星空寄りに明るく、下は暗く）
+		float3 envColor = g_AmbientLight.rgb *
+						  lerp(k_EnvReflectDownMul, k_EnvReflectUpMul, upFac);
+
+		// フレネル：浅い角度ほど反射が強い
+		float  NdotV    = saturate(dot(wN, vCam));
+		float3 fresnel  = F0 + (max(1.0f - roughness, F0) - F0) *
+						  pow(saturate(1.0f - NdotV), 5.0f);
+
+		// 粗い面は反射をぼかす＝弱める
+		float  glossy   = 1.0f - roughness;
+		outColor += envColor * fresnel * glossy;
+	}
+
+	// ---- リムライト（縁光）：宇宙空間の浮遊感・立体感を強調 ----
+	{
+		float  NdotV = saturate(dot(wN, vCam));
+		float  rim   = pow(1.0f - NdotV, k_RimPower);
+		// 平行光の当たっている側ほど縁が強く光る（逆光リムの自然さ）
+		float  backLit = saturate(dot(wN, normalize(-g_DL_Dir))) * 0.5f + 0.5f;
+		outColor += rim * k_RimStrength * backLit * g_DL_Color;
+	}
+
 	// ---- エミッシブ ----
 	float3 emissive = g_emissiveTex.Sample(g_ss, In.UV).rgb * g_Emissive * In.Color.rgb;
 	if (g_OnlyEmissie)
@@ -297,6 +411,12 @@ float4 main(VSOutput In) : SV_Target0
 	//------------------------------------------
 	totalBrightness = saturate(totalBrightness);
 	outColor *= totalBrightness;
+
+	//------------------------------------------
+	// トーンマッピング（HDR→LDR、ハイライトの飛びを抑え階調を残す）
+	//------------------------------------------
+	static const float k_Exposure = 1.1f;
+	outColor = ACESFilm(outColor * k_Exposure);
 
 	return float4(outColor, baseColor.a);
 }

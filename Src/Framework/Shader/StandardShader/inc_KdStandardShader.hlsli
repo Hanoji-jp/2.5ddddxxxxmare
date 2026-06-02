@@ -14,7 +14,8 @@ cbuffer cbObject : register(b0)
 
 	int   g_UseTriplanar;		// トリプレーナーUV 有効フラグ
 	float g_TriplanarScale;		// トリプレーナーUV スケール（ワールド座標に掛ける値）
-	float2 g__tripad;			// パディング
+	int   g_SphereNormal;		// 球法線を中心方向で解析計算するフラグ
+	float g__tripad;			// パディング
 };
 
 // 定数バッファ(メッシュ単位)

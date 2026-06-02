@@ -285,6 +285,7 @@
     <ClInclude Include="Src\Application\Const\PlanetConst.h" />
     <ClInclude Include="Src\Application\Const\PlayerConst.h" />
     <ClInclude Include="Src\Application\Const\SpawnConst.h" />
+    <ClInclude Include="Src\Application\Const\StarFieldConst.h" />
     <ClInclude Include="Src\Application\Const\UIConst.h" />
     <ClInclude Include="Src\Application\Const\WarpHoleConst.h" />
     <ClInclude Include="Src\Application\Editor\CheckpointEditor.h" />
@@ -293,6 +294,7 @@
     <ClInclude Include="Src\Application\Editor\RoomBoundsEditor.h" />
     <ClInclude Include="Src\Application\Editor\WarpHoleEditor.h" />
     <ClInclude Include="Src\Application\GameObject\BackGround\BackGround.h" />
+    <ClInclude Include="Src\Application\GameObject\BackGround\StarField.h" />
     <ClInclude Include="Src\Application\GameObject\Camera\CameraRoom.h" />
     <ClInclude Include="Src\Application\GameObject\Camera\EditorCamera.h" />
     <ClInclude Include="Src\Application\GameObject\Camera\RoomBounds.h" />
@@ -375,6 +377,7 @@
     <ClCompile Include="Src\Application\Editor\RoomBoundsEditor.cpp" />
     <ClCompile Include="Src\Application\Editor\WarpHoleEditor.cpp" />
     <ClCompile Include="Src\Application\GameObject\BackGround\BackGround.cpp" />
+    <ClCompile Include="Src\Application\GameObject\BackGround\StarField.cpp" />
     <ClCompile Include="Src\Application\GameObject\Camera\EditorCamera.cpp" />
     <ClCompile Include="Src\Application\GameObject\Camera\SideScrollCamera.cpp" />
     <ClCompile Include="Src\Application\GameObject\Character\AnimBlender.cpp" />

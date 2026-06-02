@@ -63,6 +63,10 @@ void PlanetGravityManager::DrawGui()
 		return;
 	}
 
+	// エディタGUIを開いている間は編集追従のため毎フレーム行列を更新する
+	// （通常プレイ時はGUIを閉じているので負荷はかからない）
+	MarkWorldDirty();
+
 	if (ImGui::Button("Add Planet"))
 	{
 		PlanetData newPlanet{};
@@ -608,14 +612,22 @@ void PlanetGravityManager::Load()
 		p.InitModel();
 		m_planets.push_back(std::move(p));
 	}
+
+	// 読み込んだ惑星のワールド行列を次の PostUpdate で再計算させる
+	m_worldDirty = true;
 }
 
 void PlanetGravityManager::PostUpdate()
 {
+	// 惑星は普段動かないので、変更があった時だけワールド行列を再計算する。
+	// CalcNodeMatrices() は重いので毎フレーム実行しない。
+	if (!m_worldDirty) { return; }
+
 	for (auto& p : m_planets)
 	{
 		p.UpdateWorld();
 	}
+	m_worldDirty = false;
 }
 
 void PlanetGravityManager::DrawLit() const
@@ -631,12 +643,21 @@ void PlanetGravityManager::DrawLit() const
 		{
 			shader.SetTriplanarUV(true, PlanetConst::TriplanarScale);
 		}
+		else
+		{
+			// 球惑星：法線を中心方向で解析計算してローポリの段差を消す
+			shader.SetSphereNormal(true);
+		}
 
 		shader.DrawModel(*p.modelWork, p.mWorld);
 
 		if (useTriplanar)
 		{
 			shader.SetTriplanarUV(false);
+		}
+		else
+		{
+			shader.SetSphereNormal(false);
 		}
 	}
 }

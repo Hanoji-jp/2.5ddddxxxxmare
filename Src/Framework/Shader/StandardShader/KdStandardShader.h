@@ -35,7 +35,8 @@ public:
 		// トリプレーナーUV
 		int				UseTriplanar   = 0;		// 有効フラグ
 		float			TriplanarScale = 0.1f;	// ワールド座標スケール
-		Math::Vector2	_tripad        = {};	// パディング
+		int				SphereNormal   = 0;		// 球法線を中心方向で解析計算するフラグ
+		float			_tripad        = 0.0f;	// パディング
 	};
 
 	// 定数バッファ(メッシュ単位更新)
@@ -71,6 +72,13 @@ public:
 		auto& cb = m_cb0_Obj.Work();
 		cb.UseTriplanar   = enable ? 1 : 0;
 		cb.TriplanarScale = scale;
+		m_dirtyCBObj = true;
+	}
+
+	// 球法線解析計算 設定（ローポリ球のシェーディング段差を消す）
+	void SetSphereNormal(bool enable)
+	{
+		m_cb0_Obj.Work().SphereNormal = enable ? 1 : 0;
 		m_dirtyCBObj = true;
 	}
 

@@ -17,6 +17,19 @@ namespace WarpHoleConst
 	// Waypointを移動する速度（単位：ワールド/秒）
 	constexpr float WarpMoveSpeed       = 25.0f;
 
+	//--------------------------------------------------
+	// 発射速度プロファイル（マリオギャラクシー ランチスター風）
+	//   発射直後にドンッと最高速 → 緩やかに巡航速度へ落ち着く
+	//--------------------------------------------------
+	// 発射直後の最高速倍率（WarpMoveSpeed に対する倍率）
+	constexpr float WarpLaunchSpeedMul  = 2.6f;
+
+	// 巡航時の速度倍率（終盤に落ち着く速さ。WarpMoveSpeed に対する倍率）
+	constexpr float WarpCruiseSpeedMul  = 1.0f;
+
+	// 最高速→巡航速へ減衰しきるまでの距離割合（0〜1、曲線全長に対する割合）
+	constexpr float WarpLaunchBlendDist = 0.35f;
+
 	// Waypoint到達判定距離
 	constexpr float WaypointReachDist   = 0.3f;
 
@@ -71,6 +84,18 @@ namespace WarpHoleConst
 
 	// アニメ用：1秒に何リング分流れるか
 	constexpr float TunnelScrollSpeed   = 1.5f;
+
+	// プレイヤー移動用の中心線リサンプリング間隔（ワールド単位）
+	//   トンネル部と中継点部の点密度を均一化し、繋ぎ目のガクつきを防ぐ
+	constexpr float CenterPathSpacing   = 1.0f;
+
+	// 中心線スプライン（Catmull-Rom）の1区間あたり分割数
+	//   大きいほど中継点間が滑らかな曲線になる（トンネル・移動軌道共通）
+	constexpr int   CenterSplineSubdiv  = 12;
+
+	// 口元の向き固定の影響範囲（端からこの弧長距離までは口元方向に寄せる）
+	//   この距離を超えると本来の軌道接線へ滑らかにブレンドする
+	constexpr float MouthAlignDist      = 4.0f;
 
 	//--------------------------------------------------
 	// ビジュアル：色・ブレンド

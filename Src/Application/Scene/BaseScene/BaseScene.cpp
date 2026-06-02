@@ -84,6 +84,7 @@ void BaseScene::Draw()
 		{
 			obj->GenerateDepthMapFromLight();
 		}
+		DrawLitExtra();
 	}
 	KdShaderManager::Instance().m_StandardShader.EndGenerateDepthMapFromLight();
 

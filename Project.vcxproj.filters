@@ -295,6 +295,8 @@
     <ClInclude Include="Src\Application\Editor\WarpHoleEditor.h" />
     <ClInclude Include="Src\Application\GameObject\Gimmick\WarpHole.h" />
     <ClInclude Include="Src\Framework\Utility\ThreadPool\KdThreadPool.h" />
+    <ClInclude Include="Src\Application\Const\StarFieldConst.h" />
+    <ClInclude Include="Src\Application\GameObject\BackGround\StarField.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Pch.cpp">
@@ -466,6 +468,7 @@
     <ClCompile Include="Src\Application\Manager\ManualGravityZoneManager.cpp" />
     <ClCompile Include="Src\Application\Editor\WarpHoleEditor.cpp" />
     <ClCompile Include="Src\Application\GameObject\Gimmick\WarpHole.cpp" />
+    <ClCompile Include="Src\Application\GameObject\BackGround\StarField.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Src\Framework\Shader\inc_KdCommon.hlsli">

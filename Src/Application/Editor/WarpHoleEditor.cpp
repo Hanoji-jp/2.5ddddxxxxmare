@@ -61,6 +61,38 @@ void WarpHoleEditor::DrawGui()
 			m_dirty = true;
 		}
 
+		// ---- 口元（開口部）の向き ----
+		//   (0,0,0) なら自動（入口⇔出口の直線方向）。中継点の向きに影響されない。
+		ImGui::Separator();
+		ImGui::TextDisabled("Mouth Dir (0,0,0 = Auto)");
+
+		float entryMouth[3] = { h.EntryMouthDir.x, h.EntryMouthDir.y, h.EntryMouthDir.z };
+		if (ImGui::DragFloat3("Entry Mouth Dir", entryMouth, 0.01f, -1.0f, 1.0f))
+		{
+			h.EntryMouthDir = { entryMouth[0], entryMouth[1], entryMouth[2] };
+			m_dirty = true;
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("Reset##EntryMouth"))
+		{
+			h.EntryMouthDir = { 0.0f, 0.0f, 0.0f };
+			m_dirty = true;
+		}
+
+		float exitMouth[3] = { h.ExitMouthDir.x, h.ExitMouthDir.y, h.ExitMouthDir.z };
+		if (ImGui::DragFloat3("Exit Mouth Dir", exitMouth, 0.01f, -1.0f, 1.0f))
+		{
+			h.ExitMouthDir = { exitMouth[0], exitMouth[1], exitMouth[2] };
+			m_dirty = true;
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("Reset##ExitMouth"))
+		{
+			h.ExitMouthDir = { 0.0f, 0.0f, 0.0f };
+			m_dirty = true;
+		}
+		ImGui::Separator();
+
 		bool enabled = h.Enabled;
 		if (ImGui::Checkbox("Enabled", &enabled))
 		{
@@ -182,6 +214,9 @@ void WarpHoleEditor::Save() const
 		{
 			ofs << "," << wp.x << "," << wp.y << "," << wp.z;
 		}
+		// 口元方向（後方互換のため末尾に追記）
+		ofs << "," << h.EntryMouthDir.x << "," << h.EntryMouthDir.y << "," << h.EntryMouthDir.z
+			<< "," << h.ExitMouthDir.x  << "," << h.ExitMouthDir.y  << "," << h.ExitMouthDir.z;
 		ofs << "\n";
 	}
 }
@@ -219,6 +254,13 @@ void WarpHoleEditor::Load()
 			{
 				h.Waypoints.push_back({ vals[base], vals[base + 1], vals[base + 2] });
 			}
+		}
+		// 口元方向（後方互換：存在すれば読み込む。無ければ自動=(0,0,0)）
+		const int mouthBase = 11 + wpCount * 3;
+		if (mouthBase + 5 < static_cast<int>(vals.size()))
+		{
+			h.EntryMouthDir = { vals[mouthBase],     vals[mouthBase + 1], vals[mouthBase + 2] };
+			h.ExitMouthDir  = { vals[mouthBase + 3], vals[mouthBase + 4], vals[mouthBase + 5] };
 		}
 		m_holes.push_back(h);
 	}

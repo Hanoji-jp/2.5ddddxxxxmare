@@ -98,7 +98,10 @@ public:
 	void DrawGui();
 	void DrawDebugShapes() const;
 	void DrawLit() const;   // 惑星モデルを描画
-	void PostUpdate();       // 位置変更に追従してワールド行列を更新
+	void PostUpdate();       // 位置変更に追従してワールド行列を更新（Dirty時のみ）
+
+	// 惑星の位置・形状が変わったことを通知（次の PostUpdate で行列を再計算）
+	void MarkWorldDirty() { m_worldDirty = true; }
 
 	void Save() const;
 	void Load();
@@ -131,4 +134,5 @@ private:
 
 	std::vector<PlanetData> m_planets;
 	int                     m_selectedIndex = -1;
+	bool                    m_worldDirty    = true;  // true の間だけ全惑星のワールド行列を再計算
 };

@@ -504,15 +504,18 @@ bool KdStandardShader::Init()
 	m_cb2_Material.Create();
 	m_cb3_Bone.Create();
 
+	// シャドウマップ解像度（大きいほど影がシャープ。2048で1024比4倍の精細さ）
+	constexpr UINT kShadowMapSize = 2048;
+
 	std::shared_ptr<KdTexture> ds = std::make_shared<KdTexture>();
-	ds->CreateDepthStencil(1024, 1024);
+	ds->CreateDepthStencil(kShadowMapSize, kShadowMapSize);
 	D3D11_VIEWPORT vp = {
 		0.0f, 0.0f,
 		static_cast<float>(ds->GetWidth()),
 		static_cast<float>(ds->GetHeight()),
 		0.0f, 1.0f };
 
-	m_depthMapFromLightRTPack.CreateRenderTarget(1024, 1024, true, DXGI_FORMAT_R32_FLOAT);
+	m_depthMapFromLightRTPack.CreateRenderTarget(kShadowMapSize, kShadowMapSize, true, DXGI_FORMAT_R32_FLOAT);
 	m_depthMapFromLightRTPack.ClearTexture(kRedColor);
 
 	SetDissolveTexture(*KdAssets::Instance().m_textures.GetData("Asset/Textures/System/WhiteNoise.png"));

@@ -6,6 +6,7 @@
 #include"../../GameObject/Character/Enemy/EnemyMelee.h"
 #include"../../GameObject/Character/Enemy/EnemyRanged.h"
 #include"../../GameObject/BackGround/BackGround.h"
+#include"../../GameObject/BackGround/StarField.h"
 #include"../../GameObject/Camera/SideScrollCamera.h"
 #include"../../GameObject/Camera/RoomBounds.h"
 #include"../../Editor/RoomBoundsEditor.h"
@@ -69,6 +70,11 @@ private:
 	float                                  m_warpSegProgress   = 0.0f;
 	Math::Vector3                          m_warpExitDir;
 	Math::Vector3                          m_warpEntryPos;
+
+	// 弧長ベースの等速移動用：ウェイポイントを Catmull-Rom で密にサンプリングした曲線
+	std::vector<Math::Vector3>             m_warpCurve;        // サンプリング済み曲線点
+	float                                  m_warpCurveTotalLen = 0.0f; // 曲線の総延長
+	float                                  m_warpDist          = 0.0f;  // 始点からの進行距離
 	Math::Vector3                          m_warpSuckStartPos; // 吸い込み開始時のプレイヤー位置
 	float                                  m_warpSuckProgress  = 0.0f; // 0→1
 	float                                  m_warpSuckStartAngle = 0.0f; // 螺旋開始角度

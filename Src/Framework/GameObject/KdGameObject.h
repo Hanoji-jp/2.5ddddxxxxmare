@@ -29,7 +29,7 @@ public:
 	virtual void PostUpdate() {}
 
 	// それぞれの状況で描画する関数
-	virtual void GenerateDepthMapFromLight() {}
+	virtual void GenerateDepthMapFromLight();
 	virtual void PreDraw() {}
 	virtual void DrawLit() {}
 	virtual void DrawUnLit() {}
