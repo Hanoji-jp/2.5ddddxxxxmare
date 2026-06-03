@@ -8,6 +8,16 @@ void Coin::Init()
 	// モデル読み込み
 	m_modelWork.SetModelData(ItemConst::CoinModelPath);
 
+	// gltf の roughness=0 (完全鏡面) は IBL 近似で眩しすぎるため補正
+	if (const auto& spData = m_modelWork.GetData())
+	{
+		for (auto& mat : spData->WorkMaterials())
+		{
+			mat.m_metallicRate  = ItemConst::CoinMetallic;
+			mat.m_roughnessRate = ItemConst::CoinRoughness;
+		}
+	}
+
 	// 取得判定コライダー登録（TypeEvent: 攻撃でも地形でもなくイベント用）
 	m_pCollider = std::make_unique<KdCollider>();
 	m_pCollider->RegisterCollisionShape("CoinHit",
@@ -32,8 +42,9 @@ void Coin::DrawLit()
 {
 	if (!m_modelWork.IsEnable()) { return; }
 
-	const Math::Vector3 pos  = GetPos();
-	const Math::Matrix  rot  = Math::Matrix::CreateRotationY(m_rotAngle);
+	const Math::Vector3 pos   = GetPos();
+	const Math::Matrix  rot   = Math::Matrix::CreateRotationY(m_rotAngle);
 	const Math::Matrix  trans = Math::Matrix::CreateTranslation(pos);
+
 	KdShaderManager::Instance().m_StandardShader.DrawModel(m_modelWork, rot * trans);
 }

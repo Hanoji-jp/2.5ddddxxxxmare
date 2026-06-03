@@ -23,6 +23,7 @@ public:
 	void SetSpawnPos(const Math::Vector3& _pos) { m_spawnPos = _pos; SetPos(_pos); }
 	const Math::Vector3& GetSpawnPos() const    { return m_spawnPos; }
 
+	void Expire() { m_isExpired = true; }
 	bool IsExpired() const override { return m_isExpired; }
 
 private:

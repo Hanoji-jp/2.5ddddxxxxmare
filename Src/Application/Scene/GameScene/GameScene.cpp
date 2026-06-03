@@ -705,8 +705,8 @@ void GameScene::DrawGui()
 	PlanetGravityManager::Instance().DrawGui();
 	ManualGravityZoneManager::Instance().DrawGui();
 
-	// アイテムエディター（エディターモード時のみ）
-	if (m_editorMode) { m_itemManager.DrawGui(); }
+	// アイテムエディター（常時表示）
+	m_itemManager.DrawGui();
 	if (ImGui::Begin("Sun Light"))
 	{
 		// 平行光の方向
@@ -866,6 +866,7 @@ void GameScene::RebuildWarpHoles()
 	for (const auto& data : m_warpHoleEditor.GetHoles())
 	{
 		auto sp = std::make_shared<WarpHole>(data);
+		sp->Init();
 		m_warpHoles.push_back(sp);
 		AddObject(sp);
 	}

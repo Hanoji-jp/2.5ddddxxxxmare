@@ -54,6 +54,7 @@ public:
 
 	// マテリアル配列取得
 	const std::vector<KdMaterial>& GetMaterials() const { return m_materials; }
+	std::vector<KdMaterial>& WorkMaterials() { return m_materials; }
 
 	// ノード配列取得
 	const std::vector<Node>& GetOriginalNodes() const { return m_originalNodes; }

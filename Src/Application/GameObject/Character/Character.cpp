@@ -96,14 +96,14 @@ void Character::ApplyGravity()
         default: break;
         }
 
-        if (m_isGround) { return; }
-
         m_upDir = targetUp;
         const Math::Quaternion fromQ  = Math::Quaternion::FromToRotation({ 0.0f, 1.0f, 0.0f }, m_upDirVisual);
         const Math::Quaternion toQ    = Math::Quaternion::FromToRotation({ 0.0f, 1.0f, 0.0f }, targetUp);
         m_upDirVisual = Math::Vector3::Transform({ 0.0f, 1.0f, 0.0f },
             Math::Matrix::CreateFromQuaternion(Math::Quaternion::Slerp(fromQ, toQ, PlanetConst::UpDirSlerpSpeed)));
         m_upDirVisual.Normalize();
+
+        if (m_isGround) { return; }  // velocity 加算のみスキップ、Slerp は上で完了済み
 
         const float radialVel = m_velocity.Dot(gravDir);
         const float newRadial = std::min(radialVel + PlanetConst::GravityAccel, PlanetConst::MaxFallSpeed);
@@ -126,6 +126,7 @@ void Character::ApplyGravity()
         if (onNormalBoxGround)
         {
             // NormalBox着地中：upDir を Y+ に固定、velocity は加算しない
+            // Slerp は着地中も継続（途中着地で傾いたまま止まるのを防ぐ）
             constexpr Math::Vector3 kBoxUp = { 0.0f, 1.0f, 0.0f };
             m_upDir = kBoxUp;
             const Math::Quaternion fromQv = Math::Quaternion::FromToRotation({ 0.0f, 1.0f, 0.0f }, m_upDirVisual);
@@ -151,7 +152,7 @@ void Character::ApplyGravity()
 
         if (m_isGround)
         {
-            // Sphere上着地中：今立っている惑星の引力のみ upDir 追従・velocity 加算を許可
+            // 着地中も visual upDir の Slerp は継続（途中で止めると傾いたまま固定される）
             const bool onDominantPlanet = (gravResult.dominantPlanetIdx == m_currentPlanetIndex);
             if (!onDominantPlanet) { return; }
         }
@@ -177,7 +178,7 @@ void Character::ApplyGravity()
             m_upDirVisual.Normalize();
         }
 
-        if (m_isGround) { return; }
+        if (m_isGround) { return; }  // velocity 加算のみスキップ、Slerp は上で完了済み
         const float radialVel = m_velocity.Dot(zoneGravDir);
         const float newRadial = std::min(radialVel + PlanetConst::GravityAccel, PlanetConst::MaxFallSpeed);
         if (newRadial > radialVel) { m_velocity += zoneGravDir * (newRadial - radialVel); }
@@ -195,7 +196,7 @@ void Character::ApplyGravity()
         m_upDirVisual = Math::Vector3::Transform({ 0.0f, 1.0f, 0.0f },
             Math::Matrix::CreateFromQuaternion(Math::Quaternion::Slerp(fromQ, toQ, PlanetConst::UpDirSlerpSpeed)));
         m_upDirVisual.Normalize();
-        if (m_isGround) { return; }
+        if (m_isGround) { return; }  // velocity 加算のみスキップ、Slerp は上で完了済み
         const float radialVel = m_velocity.Dot(kDefaultGravDir);
         const float newRadial = std::min(radialVel + PlanetConst::GravityAccel, PlanetConst::MaxFallSpeed);
         if (newRadial > radialVel) { m_velocity += kDefaultGravDir * (newRadial - radialVel); }

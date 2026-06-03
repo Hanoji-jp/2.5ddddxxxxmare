@@ -342,7 +342,7 @@ void KdStandardShader::DrawPolygon(const KdPolygon& rPolygon, const Math::Matrix
 }
 
 void KdStandardShader::DrawVertices(const std::vector<KdPolygon::Vertex>& vertices, const Math::Matrix& mWorld,
-	const Math::Color& colRate)
+	const Math::Color& colRate, KdDepthStencilState depthState, D3D_PRIMITIVE_TOPOLOGY topology)
 {
 	// 頂点数が2より少なければポリゴンが形成できないので描画不能
 	if (vertices.size() < 2) { return; }
@@ -361,9 +361,8 @@ void KdStandardShader::DrawVertices(const std::vector<KdPolygon::Vertex>& vertic
 	WriteMaterial(KdMaterial(), colRate, Math::Vector3::Zero);
 
 	KdShaderManager::Instance().ChangeRasterizerState(KdRasterizerState::CullNone);
-	KdShaderManager::Instance().ChangeDepthStencilState(KdDepthStencilState::ZDisable);
+	KdShaderManager::Instance().ChangeDepthStencilState(depthState);
 
-	// サンプラーステートの変更:ポリゴンの描画なので、テクスチャの末端が繰り返されると不自然な描画になるため変更が必要
 	if (KdShaderManager::Instance().IsPixelArtStyle())
 	{
 		KdShaderManager::Instance().ChangeSamplerState(KdSamplerState::Point_Clamp);
@@ -373,21 +372,17 @@ void KdStandardShader::DrawVertices(const std::vector<KdPolygon::Vertex>& vertic
 		KdShaderManager::Instance().ChangeSamplerState(KdSamplerState::Anisotropic_Clamp);
 	}
 
-	// 描画パイプラインのチェック
 	ID3D11VertexShader* pNowVS = nullptr;
 	KdDirect3D::Instance().WorkDevContext()->VSGetShader(&pNowVS, nullptr, nullptr);
-
 	KdSafeRelease(pNowVS);
 
-	// 頂点配列を描画
-	KdDirect3D::Instance().DrawVertices(D3D_PRIMITIVE_TOPOLOGY_LINELIST, (signed)vertices.size(), &vertices[0], sizeof(KdPolygon::Vertex));
+	// 頂点配列を描画（トポロジーを引数から使用）
+	KdDirect3D::Instance().DrawVertices(topology, (signed)vertices.size(), &vertices[0], sizeof(KdPolygon::Vertex));
 
 	KdShaderManager::Instance().UndoSamplerState();
-
 	KdShaderManager::Instance().UndoDepthStencilState();
-
 	KdShaderManager::Instance().UndoRasterizerState();
-	// 定数に変更があった場合は自動的に初期状態に戻す
+
 	if (m_dirtyCBObj)
 	{
 		ResetCBObject();

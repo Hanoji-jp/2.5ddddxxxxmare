@@ -65,6 +65,42 @@ namespace WarpHoleConst
 	constexpr float WarpStretchScale    = 1.6f;
 
 	//--------------------------------------------------
+	// ビジュアル：ローポリファネル（正面向きロート）
+	//--------------------------------------------------
+	// ファネルのセグメント数（少ないほどローポリ感が強い）
+	constexpr int   FunnelSegments      = 14;
+
+	// ファネルのリング枚数（奥行き方向のスライス数）
+	constexpr int   FunnelRings         = 9;
+
+	// 口元のリング半径
+	constexpr float FunnelOuterRadius   = 3.0f;
+
+	// 奥（中心）の最小半径
+	constexpr float FunnelInnerRadius   = 0.3f;
+
+	// ランダム頂点オフセットの最大割合（0.0〜1.0、半径に対する比率）
+	constexpr float FunnelJitter        = 0.18f;
+
+	// ポリゴン面の不透明度
+	constexpr float FunnelFaceAlpha     = 0.75f;
+
+	// ワイヤーの不透明度
+	constexpr float FunnelWireAlpha     = 1.4f;
+
+	// ファネルの奥行き（EntryMouthDirに沿った長さ）
+	constexpr float FunnelLength        = 4.0f;
+
+	// 頂点アニメ：波の振幅（半径に対する比率）
+	constexpr float FunnelWaveAmp       = 0.12f;
+
+	// 頂点アニメ：奥に向かう波の周波数（リング方向の波の数）
+	constexpr float FunnelWaveFreqRing  = 3.0f;
+
+	// 頂点アニメ：周方向の波の周波数（seg方向の波の数）
+	constexpr float FunnelWaveFreqSeg   = 2.0f;
+
+	//--------------------------------------------------
 	// ビジュアル：ワイヤーフレームトンネル
 	//--------------------------------------------------
 	// 同心円リングの分割数（1リングの頂点数）
@@ -104,23 +140,86 @@ namespace WarpHoleConst
 	//--------------------------------------------------
 	// ビジュアル：色・ブレンド
 	//--------------------------------------------------
-	// 入口リング色（RGBA） ─ 青紫系
-	constexpr float EntryColorR         = 0.3f;
-	constexpr float EntryColorG         = 0.0f;
+	// 入口リング色（RGBA） ─ シアン（加算ブレンド・適度な明るさで色差が出る範囲）
+	constexpr float EntryColorR         = 0.0f;
+	constexpr float EntryColorG         = 0.9f;
 	constexpr float EntryColorB         = 1.0f;
-	constexpr float EntryColorA         = 0.85f;
+	constexpr float EntryColorA         = 1.0f;
 
-	// 出口リング色（RGBA） ─ マゼンタ系
-	constexpr float ExitColorR          = 1.0f;
-	constexpr float ExitColorG          = 0.0f;
-	constexpr float ExitColorB          = 0.8f;
-	constexpr float ExitColorA          = 0.85f;
+	// 出口リング色（RGBA） ─ やや青寄りシアン
+	constexpr float ExitColorR          = 0.1f;
+	constexpr float ExitColorG          = 0.6f;
+	constexpr float ExitColorB          = 1.0f;
+	constexpr float ExitColorA          = 1.0f;
 
 	//--------------------------------------------------
 	// ビジュアル：アニメーション
 	//--------------------------------------------------
 	// トンネルスクロール速度（DrawEffect内で使用）
 	constexpr float AnimSpeed           = 0.4f;
+
+	//--------------------------------------------------
+	// パーティクル（吸い込みBOX）
+	//--------------------------------------------------
+	// Box.gltfのパス
+	constexpr const char* BoxModelPath          = "Asset/Data/Box.gltf";
+
+	// 同時存在するパーティクル数
+	constexpr int         ParticleCount         = 12;
+
+	// スポーン半径（EntryPos中心のランダム球面上に生成）
+	constexpr float       ParticleSpawnRadius   = 4.5f;
+
+	// BOXのスケール（一辺の長さ）
+	constexpr float       ParticleScale         = 0.07f;
+
+	// 引力加速度（EntryPosへの加速。距離が近いほど強くなる）
+	constexpr float       ParticleSuckAccel     = 8.0f;
+
+	// 到達判定距離（EntryPosにこの距離以内でリスポーン）
+	constexpr float       ParticleReachDist     = 0.4f;
+
+	// 回転速度（ランダム軸、ラジアン/秒）
+	constexpr float       ParticleRotSpeed      = 4.0f;
+
+	// Bloom発光強度
+	constexpr float       ParticleEmissive      = 4.0f;
+
+	//--------------------------------------------------
+	// パーティクル（EXIT 吐き出しBOX）
+	//--------------------------------------------------
+	// 同時存在するEXITパーティクル数
+	constexpr int         ExitParticleCount     = 10;
+
+	// EXITから吐き出される初速（外向き）
+	constexpr float       ExitParticleInitSpeed = 3.5f;
+
+	// EXITパーティクルの寿命（秒）
+	constexpr float       ExitParticleLifeTime  = 1.8f;
+
+	// EXITパーティクルの生成間隔（秒）
+	constexpr float       ExitParticleSpawnInterval = 0.15f;
+
+	// EXITパーティクルの横方向ランダム速度
+	constexpr float       ExitParticleSpread    = 1.5f;
+
+	// EXITパーティクルのスケール
+	constexpr float       ExitParticleScale     = 0.09f;
+
+	//--------------------------------------------------
+	// トンネル wave アニメ
+	//--------------------------------------------------
+	// パス方向のリング分割数（大きいほど細かい面になる）
+	constexpr int         TunnelRings           = 20;
+
+	// トンネル半径に乗せる wave 振幅（半径比率）
+	constexpr float       TunnelWaveAmp         = 0.15f;
+
+	// トンネル wave の弧長方向周波数（1単位あたり波の数）
+	constexpr float       TunnelWaveFreqAlong   = 0.5f;
+
+	// トンネル wave の周方向周波数（1周あたり波の数）
+	constexpr float       TunnelWaveFreqSeg     = 2.0f;
 
 	//--------------------------------------------------
 	// 保存

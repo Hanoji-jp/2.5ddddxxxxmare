@@ -13,58 +13,115 @@ public:
 	explicit WarpHole(const WarpHoleData& data);
 	~WarpHole() override = default;
 
+	void Init()        override;
 	void Update()      override;
+	void DrawLit()     override;   // BloomBOXパーティクル描画
 	void DrawEffect()  override;   // 加算ブレンドで3Dリング描画
+	void DrawBright()  override;   // Bloomパス：ファネルをにじませる
 	void DrawDebug()   override;   // エディタ用ワイヤーフレーム
 
 	// プレイヤーが吸い込み範囲に入ったか判定
-	// 戻り値 : ワープ開始すべき場合 true（位置や速度は GameScene 側で制御する）
 	bool CheckWarpTrigger(const Math::Vector3& pPos) const;
 
 	const WarpHoleData& GetData() const { return m_data; }
 	void SetData(const WarpHoleData& d) { m_data = d; m_centerPathDirty = true; }
 
-	// トンネルのビジュアル中心線を点列で返す。
-	// プレイヤーをこの線に沿って動かせば、見た目と移動が完全一致する。
-	// 並び順：入口の口元 → 入口の奥 → 出口の奥 → 出口の口元
 	std::vector<Math::Vector3> BuildTunnelCenterPath() const;
-
-	// テレポート型用：Entry 口元→奥 の密なパスを返す（吸い込みアニメ用）
 	std::vector<Math::Vector3> BuildTeleportEntryPath() const;
-	// テレポート型用：Exit 奥→口元 の密なパスを返す（吐き出しアニメ用）
 	std::vector<Math::Vector3> BuildTeleportExitPath() const;
-	// 逆走用：Exit 口元→奥（逆走時の吸い込みパス）
 	std::vector<Math::Vector3> BuildTeleportExitPathReverse() const;
-	// 逆走用：Entry 奥→口元（逆走時の吐き出しパス）
 	std::vector<Math::Vector3> BuildTeleportEntryPathReverse() const;
 
 private:
-	// 中心線（点列）に沿ってワイヤーフレームトンネルを一本描画する。
-	//   両端を口元として太く、中間を細くするトランペット半径プロファイル。
+	//--------------------------------------------------
+	// 吸い込みBOXパーティクル
+	//--------------------------------------------------
+	struct BoxParticle
+	{
+		Math::Vector3 Pos         = {};
+		Math::Vector3 Velocity    = {};
+		Math::Vector3 RotAxis     = { 0.0f, 1.0f, 0.0f };
+		float         RotAngle    = 0.0f;   // 累積回転角（ラジアン）
+	};
+
+	// EXIT吐き出しパーティクル
+	struct ExitParticle
+	{
+		Math::Vector3 Pos         = {};
+		Math::Vector3 Velocity    = {};
+		Math::Vector3 RotAxis     = { 0.0f, 1.0f, 0.0f };
+		float         RotAngle    = 0.0f;
+		float         Life        = 0.0f;   // 残り寸命（秒）
+		bool          Active      = false;
+	};
+
+	void InitParticles();
+	void SpawnParticle(BoxParticle& p) const;
+	void UpdateParticles();
+
+	// EXIT吐き出しパーティクル
+	void InitExitParticles();
+	void SpawnExitParticle(ExitParticle& p) const;
+	void UpdateExitParticles();
+
+	// ファネル奥端とトンネル端点リングを三角形でブリッジ接続する
+	void DrawFunnelTunnelBridge(
+		const Math::Vector3& funnelCenter,
+		const Math::Vector3& funnelMouthDir,
+		const Math::Vector3& tunnelEndPos,
+		const Math::Vector3& tunnelTangent,
+		const Math::Vector3& tunnelBitangent,
+		const Math::Color&   col) const;
+
+	// ローポリファネル（正面向きロート形状）描画
+	void DrawFunnelFace(const Math::Vector3& center,
+						const Math::Vector3& mouthDir,
+						const Math::Color&   col,
+						const std::vector<float>& jitterOffsets,
+						float animTime) const;
+
+	// パス上を面＋ワイヤーで繋ぐチューブ描画（ファネルと同じ面スタイル）
+	void DrawTunnelFace(const std::vector<Math::Vector3>& path,
+						const Math::Color& entryCol,
+						const Math::Color& exitCol,
+						const std::vector<float>& jitterOffsets,
+						float animTime) const;
+
+	// Init時に固定シードで生成するランダム頂点オフセット
+	// サイズ = FunnelRings * FunnelSegments
+	std::vector<float>   m_entryJitter;
+	std::vector<float>   m_exitJitter;
+	std::vector<float>   m_tunnelJitter; // トンネル用（TunnelRings * FunnelSegments）
+
+	std::vector<BoxParticle>  m_particles;
+	std::vector<ExitParticle> m_exitParticles;
+	float                     m_exitSpawnTimer = 0.0f;
+	KdModelWork               m_boxModel;
+
 	void DrawTunnelAlongPath(const std::vector<Math::Vector3>& path,
 							 const Math::Color& entryCol,
 							 const Math::Color& exitCol,
 							 float animOffset,
-							 bool entryMouthOnly = false) const;
+							 bool entryMouthOnly = false,
+							 float animTime = 0.0f) const;
 
-	// 軸ベクトル計算ヘルパー
 	static void MakeBasis(const Math::Vector3& normal,
 						  Math::Vector3& outTangent,
 						  Math::Vector3& outBitangent);
 
-	// ポリラインを一定間隔で等間隔リサンプリングする（密度の急変を防ぐ）
 	static std::vector<Math::Vector3> ResamplePath(
 		const std::vector<Math::Vector3>& src, float spacing);
 
-	// 制御点列を Catmull-Rom スプラインで密な滑らか曲線に変換する。
-	//   各制御点を必ず通過しつつ、中継点の間を曲線で繋ぐ。
 	static std::vector<Math::Vector3> BuildSpline(
 		const std::vector<Math::Vector3>& points, int subdivPerSegment);
 
-	WarpHoleData m_data;
-	float        m_animOffset = 0.0f;  // トンネルスクロール位相（0..1）
+	// パスの両端から trimDist 分の点を弧長ベースで削除する
+	static std::vector<Math::Vector3> TrimTunnelPath(
+		const std::vector<Math::Vector3>& path, float trimDist);
 
-	// 中心線キャッシュ（入口/出口/中継点が変わらない限り再計算しない）
+	WarpHoleData m_data;
+	float        m_animOffset = 0.0f;
+
 	mutable std::vector<Math::Vector3> m_centerPathCache;
 	mutable bool                       m_centerPathDirty = true;
 };

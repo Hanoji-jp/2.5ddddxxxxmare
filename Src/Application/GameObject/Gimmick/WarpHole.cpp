@@ -30,12 +30,252 @@ WarpHole::WarpHole(const WarpHoleData& data)
 }
 
 //----------------------------------------------------------
+void WarpHole::Init()
+{
+	m_boxModel.SetModelData(WarpHoleConst::BoxModelPath);
+	InitParticles();
+	InitExitParticles();
+
+	// ローポリファネル用ランダム頂点オフセット（固定シード）
+	const int jitterCount = WarpHoleConst::FunnelRings * WarpHoleConst::FunnelSegments;
+	m_entryJitter.resize(jitterCount);
+	m_exitJitter.resize(jitterCount);
+	for (int i = 0; i < jitterCount; ++i)
+	{
+		m_entryJitter[i] = KdRandom::GetFloat(-WarpHoleConst::FunnelJitter, WarpHoleConst::FunnelJitter);
+		m_exitJitter[i]  = KdRandom::GetFloat(-WarpHoleConst::FunnelJitter, WarpHoleConst::FunnelJitter);
+	}
+
+	// トンネル用 jitter（TunnelRings × FunnelSegments）
+	const int tunnelJitterCount = WarpHoleConst::TunnelRings * WarpHoleConst::FunnelSegments;
+	m_tunnelJitter.resize(tunnelJitterCount);
+	for (int i = 0; i < tunnelJitterCount; ++i)
+	{
+		m_tunnelJitter[i] = KdRandom::GetFloat(-WarpHoleConst::FunnelJitter, WarpHoleConst::FunnelJitter);
+	}
+}
+
+//----------------------------------------------------------
+void WarpHole::InitParticles()
+{
+	m_particles.resize(WarpHoleConst::ParticleCount);
+	for (auto& p : m_particles)
+	{
+		SpawnParticle(p);
+		// 初期位相をバラけさせる（全部同時スポーンを避ける）
+		const float phase = KdRandom::GetFloat(0.0f, WarpHoleConst::ParticleSpawnRadius);
+		const Math::Vector3 toEntry = m_data.EntryPos - p.Pos;
+		if (toEntry.LengthSquared() > 1e-6f)
+		{
+			p.Pos += toEntry * (phase / WarpHoleConst::ParticleSpawnRadius);
+		}
+	}
+}
+
+//----------------------------------------------------------
+void WarpHole::SpawnParticle(BoxParticle& p) const
+{
+	// 口元の「外向き」方向（ラッパの先から外側）
+	// GetEntryMouthDir() は EntryPos→ExitPos 方向なので、
+	// 外側（プレイヤーが来る側）は その逆方向
+	const Math::Vector3 mouthFwd = -m_data.GetEntryMouthDir(); // 外向き
+
+	// mouthFwd を基準にした接線・従法線を作る
+	Math::Vector3 tangent, bitangent;
+	MakeBasis(mouthFwd, tangent, bitangent);
+
+	// 前方半球上のランダム方向を生成
+	// cosTheta を [0,1] にすることで前方半球に限定
+	const float cosTheta = KdRandom::GetFloat(0.0f, 1.0f);
+	const float sinTheta = std::sqrtf(std::max(0.0f, 1.0f - cosTheta * cosTheta));
+	const float phi      = KdRandom::GetFloat(0.0f, kTwoPi);
+
+	const Math::Vector3 dir =
+		mouthFwd  * cosTheta +
+		tangent   * (sinTheta * std::cosf(phi)) +
+		bitangent * (sinTheta * std::sinf(phi));
+
+	const float r = WarpHoleConst::ParticleSpawnRadius;
+	p.Pos      = m_data.EntryPos + dir * r;
+	p.Velocity = Math::Vector3::Zero;
+
+	// ランダムな回転軸（正規化）
+	Math::Vector3 axis = {
+		KdRandom::GetFloat(-1.0f, 1.0f),
+		KdRandom::GetFloat(-1.0f, 1.0f),
+		KdRandom::GetFloat(-1.0f, 1.0f) };
+	if (axis.LengthSquared() < 1e-6f) { axis = Math::Vector3::Up; }
+	axis.Normalize();
+	p.RotAxis  = axis;
+	p.RotAngle = KdRandom::GetFloat(0.0f, kTwoPi);
+}
+
+//----------------------------------------------------------
+void WarpHole::InitExitParticles()
+{
+	m_exitParticles.resize(WarpHoleConst::ExitParticleCount);
+	for (auto& p : m_exitParticles)
+	{
+		p.Active = false;
+	}
+}
+
+//----------------------------------------------------------
+void WarpHole::SpawnExitParticle(ExitParticle& p) const
+{
+	const Math::Vector3 mouthDir = -m_data.GetExitMouthDir(); // Exit→Entry を反転して外向きに
+	Math::Vector3 tangent, bitangent;
+	MakeBasis(mouthDir, tangent, bitangent);
+
+	// 口元付近からランダムにオフセット
+	const float ox = KdRandom::GetFloat(-WarpHoleConst::FunnelInnerRadius,
+										 WarpHoleConst::FunnelInnerRadius);
+	const float oy = KdRandom::GetFloat(-WarpHoleConst::FunnelInnerRadius,
+										 WarpHoleConst::FunnelInnerRadius);
+	p.Pos = m_data.ExitPos + tangent * ox + bitangent * oy;
+
+	// 外向きに初速 + 横方向ランダム広がり
+	const float sx = KdRandom::GetFloat(-WarpHoleConst::ExitParticleSpread,
+										 WarpHoleConst::ExitParticleSpread);
+	const float sy = KdRandom::GetFloat(-WarpHoleConst::ExitParticleSpread,
+										 WarpHoleConst::ExitParticleSpread);
+	p.Velocity = mouthDir * WarpHoleConst::ExitParticleInitSpeed
+			   + tangent   * sx
+			   + bitangent * sy;
+
+	Math::Vector3 axis = {
+		KdRandom::GetFloat(-1.0f, 1.0f),
+		KdRandom::GetFloat(-1.0f, 1.0f),
+		KdRandom::GetFloat(-1.0f, 1.0f) };
+	if (axis.LengthSquared() < 1e-6f) { axis = Math::Vector3::Up; }
+	axis.Normalize();
+	p.RotAxis  = axis;
+	p.RotAngle = KdRandom::GetFloat(0.0f, kTwoPi);
+	p.Life     = WarpHoleConst::ExitParticleLifeTime;
+	p.Active   = true;
+}
+
+//----------------------------------------------------------
+void WarpHole::UpdateExitParticles()
+{
+
+
+	// タイマーで新規スポーン
+	m_exitSpawnTimer -= kFixedDeltaTime;
+	if (m_exitSpawnTimer <= 0.0f)
+	{
+		m_exitSpawnTimer = WarpHoleConst::ExitParticleSpawnInterval;
+		// 非アクティブなスロットに生成
+		for (auto& p : m_exitParticles)
+		{
+			if (!p.Active)
+			{
+				SpawnExitParticle(p);
+				break;
+			}
+		}
+	}
+
+	// 更新
+	for (auto& p : m_exitParticles)
+	{
+		if (!p.Active) { continue; }
+
+		p.Life -= kFixedDeltaTime;
+		if (p.Life <= 0.0f)
+		{
+			p.Active = false;
+			continue;
+		}
+
+		// 速度減衰（空気抵抗風）
+		constexpr float kDamping = 0.97f;
+		p.Velocity *= kDamping;
+		p.Pos      += p.Velocity * kFixedDeltaTime;
+		p.RotAngle += WarpHoleConst::ParticleRotSpeed * kFixedDeltaTime;
+	}
+}
+
+//----------------------------------------------------------
+void WarpHole::UpdateParticles()
+{
+	for (auto& p : m_particles)
+	{
+		const Math::Vector3 toEntry = m_data.EntryPos - p.Pos;
+		const float distSq = toEntry.LengthSquared();
+
+		// EntryPosに到達したらリスポーン
+		if (distSq < WarpHoleConst::ParticleReachDist * WarpHoleConst::ParticleReachDist)
+		{
+			SpawnParticle(p);
+			continue;
+		}
+
+		// 距離が近いほど引力が強くなる（inverse-square 風）
+		const float dist   = std::sqrtf(distSq);
+		const float accel  = WarpHoleConst::ParticleSuckAccel / std::max(dist, 0.5f);
+		const Math::Vector3 dir = toEntry / dist;
+		p.Velocity += dir * accel * kFixedDeltaTime;
+		p.Pos      += p.Velocity * kFixedDeltaTime;
+
+		// 回転アニメ
+		p.RotAngle += WarpHoleConst::ParticleRotSpeed * kFixedDeltaTime;
+	}
+}
+
+//----------------------------------------------------------
+void WarpHole::DrawLit()
+{
+	if (!m_data.Enabled) { return; }
+
+	// パーティクルをシアン色で描画（tintでベースカラーをシアンに染める）
+	const Math::Color particleTint = {
+		WarpHoleConst::EntryColorR,
+		WarpHoleConst::EntryColorG,
+		WarpHoleConst::EntryColorB,
+		1.0f };
+	const Math::Vector3 zeroEmissive = { 0.0f, 0.0f, 0.0f };
+
+	const float s = WarpHoleConst::ParticleScale;
+	for (const auto& p : m_particles)
+	{
+		const Math::Matrix rot   = Math::Matrix::CreateFromAxisAngle(p.RotAxis, p.RotAngle);
+		const Math::Matrix scale = Math::Matrix::CreateScale(s, s, s);
+		const Math::Matrix trans = Math::Matrix::CreateTranslation(p.Pos);
+		const Math::Matrix world = scale * rot * trans;
+		KdShaderManager::Instance().m_StandardShader.DrawModel(m_boxModel, world, particleTint, zeroEmissive);
+	}
+
+	// EXIT 吐き出しパーティクル（出口色：青紫系）
+	const Math::Color exitTint = {
+		WarpHoleConst::ExitColorR,
+		WarpHoleConst::ExitColorG,
+		WarpHoleConst::ExitColorB,
+		1.0f };
+	const float es = WarpHoleConst::ExitParticleScale;
+	for (const auto& p : m_exitParticles)
+	{
+		if (!p.Active) { continue; }
+		const float alpha = p.Life / WarpHoleConst::ExitParticleLifeTime;
+		const Math::Color fadeTint = { exitTint.R(), exitTint.G(), exitTint.B(), alpha };
+		const Math::Matrix rot   = Math::Matrix::CreateFromAxisAngle(p.RotAxis, p.RotAngle);
+		const Math::Matrix scale = Math::Matrix::CreateScale(es, es, es);
+		const Math::Matrix trans = Math::Matrix::CreateTranslation(p.Pos);
+		const Math::Matrix world = scale * rot * trans;
+		KdShaderManager::Instance().m_StandardShader.DrawModel(m_boxModel, world, fadeTint, zeroEmissive);
+	}
+}
+
+//----------------------------------------------------------
 void WarpHole::Update()
 {
 	if (!m_data.Enabled) { return; }
 
 	m_animOffset += WarpHoleConst::AnimSpeed * kFixedDeltaTime;
 	if (m_animOffset > 1.0f) { m_animOffset -= 1.0f; }
+
+	UpdateParticles();
+	UpdateExitParticles();
 }
 
 //----------------------------------------------------------
@@ -45,6 +285,7 @@ void WarpHole::DrawEffect()
 
 	auto& shaderMgr = KdShaderManager::Instance();
 	shaderMgr.ChangeBlendState(KdBlendState::Add);
+	shaderMgr.ChangeDepthStencilState(KdDepthStencilState::ZWriteDisable);
 
 	const Math::Color entryCol = { WarpHoleConst::EntryColorR,
 								   WarpHoleConst::EntryColorG,
@@ -55,54 +296,164 @@ void WarpHole::DrawEffect()
 								   WarpHoleConst::ExitColorB,
 								   WarpHoleConst::ExitColorA };
 
-	if (m_data.Teleport)
-	{
-		// テレポート型：入口と出口を繋がず、それぞれ独立した口元リングのみ描画
-		// 2点の疎なパスを ResamplePath で密にしてからトンネル描画する
-		// entryMouthOnly=true で path[0] 側だけ口元、奥は細管になる
-		const Math::Vector3 entryDir = m_data.GetEntryMouthDir();
-		const std::vector<Math::Vector3> entryRaw =
-		{
-			m_data.EntryPos,
-			m_data.EntryPos + entryDir * WarpHoleConst::FunnelDepth * 2.0f
-		};
-		const auto entryPath = ResamplePath(entryRaw, WarpHoleConst::CenterPathSpacing);
-		DrawTunnelAlongPath(entryPath, entryCol, entryCol, m_animOffset, true);
+	// ローポリファネル（正面向きロート）を Entry/Exit に描画
+	// OneWay はゲームプレイ的一方通行フラグであり、視覚描画には影響しない
+	DrawFunnelFace(m_data.EntryPos, m_data.GetEntryMouthDir(),  entryCol, m_entryJitter, m_animOffset);
+	DrawFunnelFace(m_data.ExitPos,  m_data.GetExitMouthDir(),   exitCol,  m_exitJitter,  m_animOffset);
 
-		const Math::Vector3 exitDir = m_data.GetExitMouthDir();
-		if (!m_data.OneWay)
-		{
-			// 双方向：Exit も吸い込む方向（animOffset 反転）
-			const std::vector<Math::Vector3> exitRaw =
-			{
-				m_data.ExitPos,
-				m_data.ExitPos + exitDir * WarpHoleConst::FunnelDepth * 2.0f
-			};
-			const auto exitPath = ResamplePath(exitRaw, WarpHoleConst::CenterPathSpacing);
-			DrawTunnelAlongPath(exitPath, exitCol, exitCol, 1.0f - m_animOffset, true);
-		}
-		else
-		{
-			// 一方通行：Exit は「吐き出す穴」→ アニメを逆向きにする
-			const std::vector<Math::Vector3> exitRaw =
-			{
-				m_data.ExitPos,
-				m_data.ExitPos + exitDir * WarpHoleConst::FunnelDepth * 2.0f
-			};
-			const auto exitPath = ResamplePath(exitRaw, WarpHoleConst::CenterPathSpacing);
-			DrawTunnelAlongPath(exitPath, exitCol, exitCol, 1.0f - m_animOffset, true);
-		}
-	}
-	else
+	// トンネル（ファネル奥端同士をつなぐ面＋ワイヤーチューブ）
+	// パス両端をファネル奥中心に固定してギャップをなくす
 	{
-		// 通常型：OneWay/双方向どちらも Waypoint を通る一本のトンネルで描画
-		// グロウリングの流れ方向（Entry→Exit）で一方通行を表現する
-		BuildTunnelCenterPath();
-		DrawTunnelAlongPath(m_centerPathCache, entryCol, exitCol, m_animOffset,
-							/*entryMouthOnly=*/false);
+		std::vector<Math::Vector3> path = BuildTunnelCenterPath();
+		if (path.size() >= 2)
+		{
+			const float fl = WarpHoleConst::FunnelLength;
+			path = TrimTunnelPath(path, fl);
+			if (path.size() >= 2)
+			{
+				path.front() = m_data.EntryPos + m_data.GetEntryMouthDir() * fl;
+				path.back()  = m_data.ExitPos  + m_data.GetExitMouthDir()  * fl;
+			}
+		}
+		DrawTunnelFace(path, entryCol, exitCol, m_tunnelJitter, m_animOffset);
+
+		// ブリッジ：ファネル奥端リングとトンネル端点リングを三角形で接続
+		if (path.size() >= 2)
+		{
+			// Entry 側：トンネル先頭の接線
+			{
+				Math::Vector3 fwd = path[1] - path[0];
+				if (fwd.LengthSquared() < 1e-8f) fwd = m_data.GetEntryMouthDir();
+				else fwd.Normalize();
+				Math::Vector3 tTang, tBitan;
+				MakeBasis(fwd, tTang, tBitan);
+				DrawFunnelTunnelBridge(
+					m_data.EntryPos, m_data.GetEntryMouthDir(),
+					path.front(), tTang, tBitan, entryCol);
+			}
+			// Exit 側：トンネル末端の接線
+			{
+				const int n = static_cast<int>(path.size());
+				Math::Vector3 fwd = path[n - 1] - path[n - 2];
+				if (fwd.LengthSquared() < 1e-8f) fwd = m_data.GetExitMouthDir();
+				else fwd.Normalize();
+				Math::Vector3 tTang, tBitan;
+				MakeBasis(fwd, tTang, tBitan);
+				DrawFunnelTunnelBridge(
+					m_data.ExitPos, m_data.GetExitMouthDir(),
+					path.back(), tTang, tBitan, exitCol);
+			}
+		}
 	}
 
 	shaderMgr.UndoBlendState();
+	shaderMgr.UndoDepthStencilState();
+}
+
+//----------------------------------------------------------
+// Bloomパス：ファネルのワイヤーを薄く再描画してにじみを出す
+//----------------------------------------------------------
+void WarpHole::DrawBright()
+{
+	if (!m_data.Enabled) { return; }
+
+	auto& shaderMgr = KdShaderManager::Instance();
+	shaderMgr.ChangeBlendState(KdBlendState::Add);
+	shaderMgr.ChangeDepthStencilState(KdDepthStencilState::ZWriteDisable);
+
+	// Bloomパス用：ワイヤーを少し太めのアルファ・明るい色で再描画
+	// BeginBright/EndBright 内なのでポストプロセスでぼかされてにじむ
+	const Math::Color entryBloom = { WarpHoleConst::EntryColorR * 1.5f,
+									 WarpHoleConst::EntryColorG * 1.5f,
+									 WarpHoleConst::EntryColorB * 1.5f,
+									 0.8f };
+	const Math::Color exitBloom  = { WarpHoleConst::ExitColorR * 1.5f,
+									 WarpHoleConst::ExitColorG * 1.5f,
+									 WarpHoleConst::ExitColorB * 1.5f,
+									 0.8f };
+
+	DrawFunnelFace(m_data.EntryPos, m_data.GetEntryMouthDir(), entryBloom, m_entryJitter, m_animOffset);
+	DrawFunnelFace(m_data.ExitPos,  m_data.GetExitMouthDir(),  exitBloom,  m_exitJitter,  m_animOffset);
+
+	// パーティクルも Bloom パスで描画してにじませる
+	const Math::Color particleBloom = {
+		WarpHoleConst::EntryColorR * WarpHoleConst::ParticleEmissive,
+		WarpHoleConst::EntryColorG * WarpHoleConst::ParticleEmissive,
+		WarpHoleConst::EntryColorB * WarpHoleConst::ParticleEmissive,
+		1.0f };
+	const Math::Vector3 zeroEmi = { 0.0f, 0.0f, 0.0f };
+	const float s = WarpHoleConst::ParticleScale;
+	for (const auto& p : m_particles)
+	{
+		const Math::Matrix rot   = Math::Matrix::CreateFromAxisAngle(p.RotAxis, p.RotAngle);
+		const Math::Matrix scale = Math::Matrix::CreateScale(s, s, s);
+		const Math::Matrix trans = Math::Matrix::CreateTranslation(p.Pos);
+		const Math::Matrix world = scale * rot * trans;
+		shaderMgr.m_StandardShader.DrawModel(m_boxModel, world, particleBloom, zeroEmi);
+	}
+
+	// EXIT パーティクルも bloom パスへ
+	const Math::Color exitBloomP = {
+		WarpHoleConst::ExitColorR * WarpHoleConst::ParticleEmissive,
+		WarpHoleConst::ExitColorG * WarpHoleConst::ParticleEmissive,
+		WarpHoleConst::ExitColorB * WarpHoleConst::ParticleEmissive,
+		1.0f };
+	const float es = WarpHoleConst::ExitParticleScale;
+	for (const auto& p : m_exitParticles)
+	{
+		if (!p.Active) { continue; }
+		const float alpha = p.Life / WarpHoleConst::ExitParticleLifeTime;
+		const Math::Color fadeBloom = { exitBloomP.R(), exitBloomP.G(), exitBloomP.B(), alpha };
+		const Math::Matrix rot   = Math::Matrix::CreateFromAxisAngle(p.RotAxis, p.RotAngle);
+		const Math::Matrix scale = Math::Matrix::CreateScale(es, es, es);
+		const Math::Matrix trans = Math::Matrix::CreateTranslation(p.Pos);
+		const Math::Matrix world = scale * rot * trans;
+		shaderMgr.m_StandardShader.DrawModel(m_boxModel, world, fadeBloom, zeroEmi);
+	}
+
+	// トンネルも bloom パスへ
+	{
+		std::vector<Math::Vector3> path = BuildTunnelCenterPath();
+		if (path.size() >= 2)
+		{
+			const float fl = WarpHoleConst::FunnelLength;
+			path = TrimTunnelPath(path, fl);
+			if (path.size() >= 2)
+			{
+				path.front() = m_data.EntryPos + m_data.GetEntryMouthDir() * fl;
+				path.back()  = m_data.ExitPos  + m_data.GetExitMouthDir()  * fl;
+			}
+		}
+		DrawTunnelFace(path, entryBloom, exitBloom, m_tunnelJitter, m_animOffset);
+
+		if (path.size() >= 2)
+		{
+			{
+				Math::Vector3 fwd = path[1] - path[0];
+				if (fwd.LengthSquared() < 1e-8f) fwd = m_data.GetEntryMouthDir();
+				else fwd.Normalize();
+				Math::Vector3 tTang, tBitan;
+				MakeBasis(fwd, tTang, tBitan);
+				DrawFunnelTunnelBridge(
+					m_data.EntryPos, m_data.GetEntryMouthDir(),
+					path.front(), tTang, tBitan, entryBloom);
+			}
+			{
+				const int n = static_cast<int>(path.size());
+				Math::Vector3 fwd = path[n - 1] - path[n - 2];
+				if (fwd.LengthSquared() < 1e-8f) fwd = m_data.GetExitMouthDir();
+				else fwd.Normalize();
+				Math::Vector3 tTang, tBitan;
+				MakeBasis(fwd, tTang, tBitan);
+				DrawFunnelTunnelBridge(
+					m_data.ExitPos, m_data.GetExitMouthDir(),
+					path.back(), tTang, tBitan, exitBloom);
+			}
+		}
+	}
+
+	shaderMgr.UndoBlendState();
+	shaderMgr.UndoDepthStencilState();
 }
 
 //----------------------------------------------------------
@@ -110,16 +461,6 @@ void WarpHole::DrawDebug()
 {
 	if (!m_data.Enabled) { return; }
 
-	{
-		KdDebugWireFrame wire;
-		wire.AddDebugSphere(m_data.EntryPos, WarpHoleConst::SuckRadius, { 0.0f, 1.0f, 1.0f, 1.0f });
-		wire.Draw();
-	}
-	{
-		KdDebugWireFrame wire;
-		wire.AddDebugSphere(m_data.ExitPos, WarpHoleConst::SuckRadius, { 1.0f, 0.0f, 1.0f, 1.0f });
-		wire.Draw();
-	}
 	{
 		KdDebugWireFrame wire;
 		wire.AddDebugLine(m_data.EntryPos, m_data.ExitPos, { 1.0f, 1.0f, 0.0f, 1.0f });
@@ -130,6 +471,448 @@ void WarpHole::DrawDebug()
 		KdDebugWireFrame wire;
 		wire.AddDebugLine(m_data.ExitPos, arrowEnd, { 0.0f, 1.0f, 0.0f, 1.0f });
 		wire.Draw();
+	}
+}
+
+//----------------------------------------------------------
+// ローポリファネル（正面向きロート）描画
+//   center    : 口元の中心位置
+//   mouthDir  : 口元が向く方向（奥に向かう向き）
+//   col       : 基本色
+//   jitterOffsets : FunnelRings×FunnelSegments の頂点半径オフセット比率
+//----------------------------------------------------------
+void WarpHole::DrawFunnelFace(const Math::Vector3& center,
+							  const Math::Vector3& mouthDir,
+							  const Math::Color&   col,
+							  const std::vector<float>& jitterOffsets,
+							  float animTime) const
+{
+	const int   rings     = WarpHoleConst::FunnelRings;
+	const int   segs      = WarpHoleConst::FunnelSegments;
+	const float outerR    = WarpHoleConst::FunnelOuterRadius;
+	const float innerR    = WarpHoleConst::FunnelInnerRadius;
+	const float length    = WarpHoleConst::FunnelLength;
+	const float faceAlpha = WarpHoleConst::FunnelFaceAlpha;
+	const float wireAlpha = WarpHoleConst::FunnelWireAlpha;
+	const float waveAmp   = WarpHoleConst::FunnelWaveAmp;
+	const float waveFreqR = WarpHoleConst::FunnelWaveFreqRing;
+	const float waveFreqS = WarpHoleConst::FunnelWaveFreqSeg;
+
+	// mouthDirを基準に接線・従法線を作る
+	Math::Vector3 tangent, bitangent;
+	MakeBasis(mouthDir, tangent, bitangent);
+
+	// 各リングの頂点位置を計算（波アニメあり）
+	// ring=0 が口元（外側）、ring=rings-1 が奥（内側・暗い）
+	auto GetVertex = [&](int ring, int seg) -> Math::Vector3
+	{
+		const float t      = static_cast<float>(ring) / static_cast<float>(rings - 1);
+		const float radius = outerR + (innerR - outerR) * t;
+		const float depth  = length * t;
+		const float angle  = kTwoPi * static_cast<float>(seg) / static_cast<float>(segs);
+
+		// 奥端リング（ring==rings-1）はトンネル端点と接続するため jitter/wave=0
+		const bool isInnerRing = (ring == rings - 1);
+
+		float jitter = 0.0f;
+		float wave   = 0.0f;
+		if (!isInnerRing)
+		{
+			const int idx = ring * segs + seg;
+			jitter = (idx < static_cast<int>(jitterOffsets.size()))
+					 ? jitterOffsets[idx] : 0.0f;
+
+			const float wavePhase = kTwoPi * (waveFreqR * t - animTime)
+								 + kTwoPi * waveFreqS * static_cast<float>(seg) / static_cast<float>(segs);
+			wave = std::sinf(wavePhase) * waveAmp;
+		}
+
+		const float r = radius * (1.0f + jitter + wave);
+
+		return center
+			+ mouthDir  * depth
+			+ tangent   * (r * std::cosf(angle))
+			+ bitangent * (r * std::sinf(angle));
+	};
+
+	// 奥になるほど暗く・薄くする係数
+	auto RingAlpha = [&](int ring) -> float
+	{
+		const float t = static_cast<float>(ring) / static_cast<float>(rings - 1);
+		return faceAlpha * (1.0f - t * 0.6f);
+	};
+	auto RingBright = [&](int ring) -> float
+	{
+		const float t = static_cast<float>(ring) / static_cast<float>(rings - 1);
+		return 1.0f - t * 0.65f;
+	};
+
+	// 面ごとにフラットな単色を割り当てる（6頂点全部同じ色）
+	// seg・ring の組み合わせで大きく色が変わるように sin/cos でサイクル
+	auto FaceColor = [&](int seg, int ring, float alpha) -> unsigned int
+	{
+		const float bright = RingBright(ring);
+		// seg と ring を組み合わせてハッシュ的に色をばらす
+		const float phase = kTwoPi * static_cast<float>(seg) / static_cast<float>(segs)
+						  + static_cast<float>(ring) * 0.8f;
+		// R: 0〜0.6 の範囲でサイクル（青〜シアン〜白のグラデーション）
+		const float rVal = (std::sinf(phase) * 0.5f + 0.5f) * 0.6f;
+		// G: ベース維持しつつ少しゆらす
+		const float gVal = col.G() * (0.7f + std::cosf(phase * 0.7f) * 0.3f);
+		// B: 常に高め
+		const float bVal = col.B();
+		const Math::Color c = {
+			std::min(rVal * bright, 1.0f),
+			std::min(gVal * bright, 1.0f),
+			std::min(bVal * bright, 1.0f),
+			alpha };
+		return ColorToUint(c);
+	};
+
+	// ─── 三角ポリゴン面 ───
+	std::vector<KdPolygon::Vertex> tris;
+	tris.reserve(static_cast<size_t>(rings - 1) * segs * 6);
+
+	for (int ring = 0; ring < rings - 1; ++ring)
+	{
+		for (int seg = 0; seg < segs; ++seg)
+		{
+			const int   next = (seg + 1) % segs;
+			const Math::Vector3 p00 = GetVertex(ring,     seg);
+			const Math::Vector3 p01 = GetVertex(ring,     next);
+			const Math::Vector3 p10 = GetVertex(ring + 1, seg);
+			const Math::Vector3 p11 = GetVertex(ring + 1, next);
+
+			// 1面（quad=2tri）は6頂点全部同じ色でフラットに見せる
+			const float faceAlphaVal = (RingAlpha(ring) + RingAlpha(ring + 1)) * 0.5f;
+			const unsigned int fc = FaceColor(seg, ring, faceAlphaVal);
+
+			KdPolygon::Vertex v0{}, v1{}, v2{}, v3{}, v4{}, v5{};
+			v0.pos = p00; v0.color = fc;
+			v1.pos = p01; v1.color = fc;
+			v2.pos = p10; v2.color = fc;
+			tris.push_back(v0); tris.push_back(v1); tris.push_back(v2);
+
+			v3.pos = p01; v3.color = fc;
+			v4.pos = p11; v4.color = fc;
+			v5.pos = p10; v5.color = fc;
+			tris.push_back(v3); tris.push_back(v4); tris.push_back(v5);
+		}
+	}
+
+	if (!tris.empty())
+	{
+		KdShaderManager::Instance().m_StandardShader.DrawVertices(
+			tris, Math::Matrix::Identity,
+			Math::Color(1, 1, 1, 1), KdDepthStencilState::ZWriteDisable,
+			D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	}
+
+	// ─── ワイヤー：面エッジに沿ったリング輪郭＋スポーク（どちらもGetVertex=ジッターあり）───
+	std::vector<KdPolygon::Vertex> wires;
+	wires.reserve(static_cast<size_t>(rings) * segs * 2
+				+ static_cast<size_t>(segs) * (rings - 1) * 2);
+
+	auto WireCol = [&](int ring) -> unsigned int
+	{
+		const float b = RingBright(ring);
+		return ColorToUint({
+			std::min(col.R() * b + 0.5f * b, 1.0f),
+			std::min(col.G() * b + 0.25f * b, 1.0f),
+			std::min(col.B() * b + 0.1f * b, 1.0f),
+			wireAlpha });
+	};
+
+	// リング輪郭（面のseg頂点＝ジッターあり・面エッジそのまま）
+	for (int ring = 0; ring < rings; ++ring)
+	{
+		const unsigned int wc = WireCol(ring);
+		for (int seg = 0; seg < segs; ++seg)
+		{
+			const int next = (seg + 1) % segs;
+			KdPolygon::Vertex v0{}, v1{};
+			v0.pos = GetVertex(ring, seg);  v0.color = wc;
+			v1.pos = GetVertex(ring, next); v1.color = wc;
+			wires.push_back(v0); wires.push_back(v1);
+		}
+	}
+
+	// スポーク（面のseg位置の縦エッジ・ジッターあり頂点をそのまま使う）
+	for (int seg = 0; seg < segs; ++seg)
+	{
+		for (int ring = 0; ring < rings - 1; ++ring)
+		{
+			KdPolygon::Vertex v0{}, v1{};
+			v0.pos = GetVertex(ring,     seg); v0.color = WireCol(ring);
+			v1.pos = GetVertex(ring + 1, seg); v1.color = WireCol(ring + 1);
+			wires.push_back(v0); wires.push_back(v1);
+		}
+	}
+
+	if (!wires.empty())
+	{
+		KdShaderManager::Instance().m_StandardShader.DrawVertices(
+			wires, Math::Matrix::Identity,
+			Math::Color(1, 1, 1, 1), KdDepthStencilState::ZWriteDisable);
+	}
+}
+
+//----------------------------------------------------------
+// ファネル奥端リングとトンネル端点リングを三角形でブリッジ接続する
+// 両リングは jitter/wave = 0 の純粋な円なので頂点座標を再計算して繋ぐ
+//----------------------------------------------------------
+void WarpHole::DrawFunnelTunnelBridge(
+	const Math::Vector3& funnelCenter,
+	const Math::Vector3& funnelMouthDir,
+	const Math::Vector3& tunnelEndPos,
+	const Math::Vector3& tunnelTangent,
+	const Math::Vector3& tunnelBitangent,
+	const Math::Color&   col) const
+{
+	const int   segs    = WarpHoleConst::FunnelSegments;
+	const float innerR  = WarpHoleConst::FunnelInnerRadius;
+	const float fl      = WarpHoleConst::FunnelLength;
+	const float alpha   = WarpHoleConst::FunnelFaceAlpha * 0.6f;
+
+	// ファネル奥端の基底
+	Math::Vector3 fTang, fBitan;
+	MakeBasis(funnelMouthDir, fTang, fBitan);
+	const Math::Vector3 funnelInnerCenter = funnelCenter + funnelMouthDir * fl;
+
+	// ファネル奥端リング頂点（jitter/wave=0）
+	auto FunnelVert = [&](int seg) -> Math::Vector3
+	{
+		const float angle = kTwoPi * static_cast<float>(seg) / static_cast<float>(segs);
+		return funnelInnerCenter
+			+ fTang   * (innerR * std::cosf(angle))
+			+ fBitan  * (innerR * std::sinf(angle));
+	};
+
+	// トンネル端点リング頂点（jitter/wave=0）
+	auto TunnelVert = [&](int seg) -> Math::Vector3
+	{
+		const float angle = kTwoPi * static_cast<float>(seg) / static_cast<float>(segs);
+		return tunnelEndPos
+			+ tunnelTangent   * (innerR * std::cosf(angle))
+			+ tunnelBitangent * (innerR * std::sinf(angle));
+	};
+
+	const unsigned int fc = ColorToUint({ col.R() * 0.8f, col.G() * 0.8f, col.B() * 0.8f, alpha });
+
+	std::vector<KdPolygon::Vertex> tris;
+	tris.reserve(static_cast<size_t>(segs) * 6);
+	for (int seg = 0; seg < segs; ++seg)
+	{
+		const int next = (seg + 1) % segs;
+		const Math::Vector3 f0 = FunnelVert(seg);
+		const Math::Vector3 f1 = FunnelVert(next);
+		const Math::Vector3 t0 = TunnelVert(seg);
+		const Math::Vector3 t1 = TunnelVert(next);
+
+		KdPolygon::Vertex v0{}, v1{}, v2{}, v3{}, v4{}, v5{};
+		v0.pos = f0; v0.color = fc;
+		v1.pos = f1; v1.color = fc;
+		v2.pos = t0; v2.color = fc;
+		tris.push_back(v0); tris.push_back(v1); tris.push_back(v2);
+		v3.pos = f1; v3.color = fc;
+		v4.pos = t1; v4.color = fc;
+		v5.pos = t0; v5.color = fc;
+		tris.push_back(v3); tris.push_back(v4); tris.push_back(v5);
+	}
+
+	if (!tris.empty())
+	{
+		KdShaderManager::Instance().m_StandardShader.DrawVertices(
+			tris, Math::Matrix::Identity,
+			Math::Color(1, 1, 1, 1), KdDepthStencilState::ZWriteDisable,
+			D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	}
+}
+
+//----------------------------------------------------------
+// パス上を面＋ワイヤーで繋ぐチューブ描画
+//   DrawFunnelFace と同じ面スタイル（フラットシェーディング・波アニメ）で
+//   トンネル全体をぐにょぐにょ動く面チューブとして描画する
+//----------------------------------------------------------
+void WarpHole::DrawTunnelFace(const std::vector<Math::Vector3>& path,
+							  const Math::Color& entryCol,
+							  const Math::Color& exitCol,
+							  const std::vector<float>& jitterOffsets,
+							  float animTime) const
+{
+	const int pathCount = static_cast<int>(path.size());
+	if (pathCount < 2) { return; }
+
+	const int   segs      = WarpHoleConst::FunnelSegments;
+	const float tubeR     = WarpHoleConst::FunnelInnerRadius; // ファネル奥端と同一半径
+	const float faceAlpha = WarpHoleConst::FunnelFaceAlpha;
+	const float wireAlpha = WarpHoleConst::FunnelWireAlpha;
+	const float waveAmp   = WarpHoleConst::TunnelWaveAmp;
+	const float waveFreqA = WarpHoleConst::TunnelWaveFreqAlong;
+	const float waveFreqS = WarpHoleConst::TunnelWaveFreqSeg;
+
+	// パスの総弧長
+	std::vector<float> arc(pathCount, 0.0f);
+	for (int i = 1; i < pathCount; ++i)
+	{
+		arc[i] = arc[i - 1] + (path[i] - path[i - 1]).Length();
+	}
+	const float totalLen = arc[pathCount - 1];
+	if (totalLen < 1e-4f) { return; }
+
+	// 各パス点の接線・法線基底
+	std::vector<Math::Vector3> tang(pathCount), bitan(pathCount);
+	for (int i = 0; i < pathCount; ++i)
+	{
+		const int   prev = std::max(i - 1, 0);
+		const int   next = std::min(i + 1, pathCount - 1);
+		Math::Vector3 fwd = path[next] - path[prev];
+		if (fwd.LengthSquared() < 1e-8f) { fwd = Math::Vector3::Up; }
+		fwd.Normalize();
+		MakeBasis(fwd, tang[i], bitan[i]);
+	}
+
+	// パス位置 i、円周方向 seg の頂点
+	// 両端（i==0, i==pathCount-1）は jitter/wave=0 の純粋な円にして
+	// ファネル奥端リングと頂点が完全一致するようにする
+	auto GetVert = [&](int i, int seg) -> Math::Vector3
+	{
+		const float angle = kTwoPi * static_cast<float>(seg) / static_cast<float>(segs);
+
+		// 両端リングはきれいな円（ギャップ防止）
+		const bool isEndRing = (i == 0 || i == pathCount - 1);
+
+		float jitter = 0.0f;
+		float wave   = 0.0f;
+		if (!isEndRing)
+		{
+			const int   idx = i * segs + seg;
+			jitter = (idx < static_cast<int>(jitterOffsets.size()))
+					 ? jitterOffsets[idx] : 0.0f;
+
+			const float wavePhase = kTwoPi * (waveFreqA * arc[i] - animTime * 5.0f)
+								  + kTwoPi * waveFreqS * static_cast<float>(seg) / static_cast<float>(segs);
+			wave = std::sinf(wavePhase) * waveAmp;
+		}
+
+		const float r = tubeR * (1.0f + jitter + wave);
+		return path[i]
+			+ tang[i]  * (r * std::cosf(angle))
+			+ bitan[i] * (r * std::sinf(angle));
+	};
+
+	// Entry→Exit で色補間
+	auto LerpColor = [&](float u) -> Math::Color
+	{
+		return {
+			entryCol.R() * (1.0f - u) + exitCol.R() * u,
+			entryCol.G() * (1.0f - u) + exitCol.G() * u,
+			entryCol.B() * (1.0f - u) + exitCol.B() * u,
+			faceAlpha };
+	};
+
+	// ファネルと同じフラット面色（seg/ring で位相をずらす）
+	auto FaceCol = [&](int seg, int i, float alpha) -> unsigned int
+	{
+		const float u      = arc[i] / totalLen;
+		const Math::Color base = LerpColor(u);
+		const float bright = 1.0f - u * 0.4f;
+		const float phase  = kTwoPi * static_cast<float>(seg) / static_cast<float>(segs)
+						   + static_cast<float>(i) * 0.5f;
+		const float rVal = (std::sinf(phase) * 0.5f + 0.5f) * 0.6f;
+		const float gVal = base.G() * (0.7f + std::cosf(phase * 0.7f) * 0.3f);
+		const float bVal = base.B();
+		const Math::Color c = {
+			std::min(rVal * bright, 1.0f),
+			std::min(gVal * bright, 1.0f),
+			std::min(bVal * bright, 1.0f),
+			alpha };
+		return ColorToUint(c);
+	};
+
+	// ─── 三角面 ───
+	std::vector<KdPolygon::Vertex> tris;
+	tris.reserve(static_cast<size_t>(pathCount - 1) * segs * 6);
+
+	for (int i = 0; i < pathCount - 1; ++i)
+	{
+		const float u   = (arc[i] + arc[i + 1]) * 0.5f / totalLen;
+		const float alp = faceAlpha * (1.0f - u * 0.4f);
+
+		for (int seg = 0; seg < segs; ++seg)
+		{
+			const int next = (seg + 1) % segs;
+			const Math::Vector3 p00 = GetVert(i,     seg);
+			const Math::Vector3 p01 = GetVert(i,     next);
+			const Math::Vector3 p10 = GetVert(i + 1, seg);
+			const Math::Vector3 p11 = GetVert(i + 1, next);
+
+			const unsigned int fc = FaceCol(seg, i, alp);
+			KdPolygon::Vertex v0{}, v1{}, v2{}, v3{}, v4{}, v5{};
+			v0.pos = p00; v0.color = fc;
+			v1.pos = p01; v1.color = fc;
+			v2.pos = p10; v2.color = fc;
+			tris.push_back(v0); tris.push_back(v1); tris.push_back(v2);
+			v3.pos = p01; v3.color = fc;
+			v4.pos = p11; v4.color = fc;
+			v5.pos = p10; v5.color = fc;
+			tris.push_back(v3); tris.push_back(v4); tris.push_back(v5);
+		}
+	}
+
+	if (!tris.empty())
+	{
+		KdShaderManager::Instance().m_StandardShader.DrawVertices(
+			tris, Math::Matrix::Identity,
+			Math::Color(1, 1, 1, 1), KdDepthStencilState::ZWriteDisable,
+			D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	}
+
+	// ─── ワイヤー（面エッジ）───
+	std::vector<KdPolygon::Vertex> wires;
+	wires.reserve(static_cast<size_t>(pathCount) * segs * 2
+				+ static_cast<size_t>(segs) * (pathCount - 1) * 2);
+
+	auto WireC = [&](int i) -> unsigned int
+	{
+		const float u = arc[i] / totalLen;
+		const Math::Color base = LerpColor(u);
+		const float b = 1.0f - u * 0.4f;
+		return ColorToUint({
+			std::min(base.R() * b + 0.4f * b, 1.0f),
+			std::min(base.G() * b + 0.2f * b, 1.0f),
+			std::min(base.B() * b + 0.1f * b, 1.0f),
+			wireAlpha });
+	};
+
+	for (int i = 0; i < pathCount; ++i)
+	{
+		const unsigned int wc = WireC(i);
+		for (int seg = 0; seg < segs; ++seg)
+		{
+			const int next = (seg + 1) % segs;
+			KdPolygon::Vertex v0{}, v1{};
+			v0.pos = GetVert(i, seg);  v0.color = wc;
+			v1.pos = GetVert(i, next); v1.color = wc;
+			wires.push_back(v0); wires.push_back(v1);
+		}
+	}
+	for (int seg = 0; seg < segs; ++seg)
+	{
+		for (int i = 0; i < pathCount - 1; ++i)
+		{
+			KdPolygon::Vertex v0{}, v1{};
+			v0.pos = GetVert(i,     seg); v0.color = WireC(i);
+			v1.pos = GetVert(i + 1, seg); v1.color = WireC(i + 1);
+			wires.push_back(v0); wires.push_back(v1);
+		}
+	}
+
+	if (!wires.empty())
+	{
+		KdShaderManager::Instance().m_StandardShader.DrawVertices(
+			wires, Math::Matrix::Identity,
+			Math::Color(1, 1, 1, 1), KdDepthStencilState::ZWriteDisable);
 	}
 }
 
@@ -154,7 +937,8 @@ void WarpHole::DrawTunnelAlongPath(const std::vector<Math::Vector3>& path,
 								   const Math::Color& entryCol,
 								   const Math::Color& exitCol,
 								   float animOffset,
-								   bool entryMouthOnly) const
+								   bool entryMouthOnly,
+								   float animTime) const
 {
 	const int pointCount = static_cast<int>(path.size());
 	if (pointCount < 2) { return; }
@@ -237,6 +1021,14 @@ void WarpHole::DrawTunnelAlongPath(const std::vector<Math::Vector3>& path,
 		{
 			radius[i] = RadiusAt(std::min(distFromEntry, distFromExit));
 		}
+
+		// トンネル wave：弧長方向と時間で半径をうねらせる
+		{
+			const float wavePhase = kTwoPi * (WarpHoleConst::TunnelWaveFreqAlong * arc[i] - animTime * WarpHoleConst::AnimSpeed * 5.0f);
+			const float wave = std::sinf(wavePhase) * WarpHoleConst::TunnelWaveAmp;
+			radius[i] *= (1.0f + wave);
+		}
+
 		along[i]  = arc[i] / totalLen;
 	}
 
@@ -248,7 +1040,7 @@ void WarpHole::DrawTunnelAlongPath(const std::vector<Math::Vector3>& path,
 			entryCol.R() * (1.0f - u) + exitCol.R() * u,
 			entryCol.G() * (1.0f - u) + exitCol.G() * u,
 			entryCol.B() * (1.0f - u) + exitCol.B() * u,
-			(entryCol.A() * (1.0f - u) + exitCol.A() * u) * 0.35f
+			(entryCol.A() * (1.0f - u) + exitCol.A() * u) * 0.85f
 		};
 		return c;
 	};
@@ -306,7 +1098,8 @@ void WarpHole::DrawTunnelAlongPath(const std::vector<Math::Vector3>& path,
 
 	if (lines.size() >= 2)
 	{
-		KdShaderManager::Instance().m_StandardShader.DrawVertices(lines, Math::Matrix::Identity);
+		KdShaderManager::Instance().m_StandardShader.DrawVertices(lines, Math::Matrix::Identity,
+			Math::Color(1, 1, 1, 1), KdDepthStencilState::ZWriteDisable);
 	}
 
 	// ─────────────────────────────────────────────
@@ -360,7 +1153,8 @@ void WarpHole::DrawTunnelAlongPath(const std::vector<Math::Vector3>& path,
 	}
 	if (glowLines.size() >= 2)
 	{
-		KdShaderManager::Instance().m_StandardShader.DrawVertices(glowLines, Math::Matrix::Identity);
+		KdShaderManager::Instance().m_StandardShader.DrawVertices(glowLines, Math::Matrix::Identity,
+			Math::Color(1, 1, 1, 1), KdDepthStencilState::ZWriteDisable);
 	}
 }
 
@@ -500,6 +1294,55 @@ std::vector<Math::Vector3> WarpHole::BuildSpline(
 		}
 	}
 	return curve;
+}
+
+//----------------------------------------------------------
+// パスの両端から trimDist 分の点を弧長ベースで削除し、端点を補間して正確な位置に置く
+//----------------------------------------------------------
+std::vector<Math::Vector3> WarpHole::TrimTunnelPath(
+	const std::vector<Math::Vector3>& path, float trimDist)
+{
+	const int n = static_cast<int>(path.size());
+	if (n < 2) { return path; }
+
+	// 累積弧長
+	std::vector<float> arc(n, 0.0f);
+	for (int i = 1; i < n; ++i)
+	{
+		arc[i] = arc[i - 1] + (path[i] - path[i - 1]).Length();
+	}
+	const float total = arc[n - 1];
+	const float tStart = trimDist;
+	const float tEnd   = total - trimDist;
+
+	if (tEnd <= tStart) { return {}; } // パスが短すぎる
+
+	// tStart / tEnd に対応する補間点を求めてから、その間の点だけ抽出
+	auto Interpolate = [&](float t) -> Math::Vector3
+	{
+		for (int i = 0; i + 1 < n; ++i)
+		{
+			if (arc[i + 1] >= t)
+			{
+				const float segLen = arc[i + 1] - arc[i];
+				const float frac   = (segLen > 1e-6f) ? (t - arc[i]) / segLen : 0.0f;
+				return Math::Vector3::Lerp(path[i], path[i + 1], frac);
+			}
+		}
+		return path[n - 1];
+	};
+
+	std::vector<Math::Vector3> result;
+	result.push_back(Interpolate(tStart));
+	for (int i = 0; i < n; ++i)
+	{
+		if (arc[i] > tStart && arc[i] < tEnd)
+		{
+			result.push_back(path[i]);
+		}
+	}
+	result.push_back(Interpolate(tEnd));
+	return result;
 }
 
 //----------------------------------------------------------

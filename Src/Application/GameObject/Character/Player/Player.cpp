@@ -167,8 +167,8 @@ void Player::PostUpdate()
                                     : worldZ;
             up.Cross(ref, modelFwd);
             modelFwd.Normalize();
-            up.Cross(modelFwd, modelRight);
-            modelRight.Normalize();
+            // 2.5D なので奥行き軸(Z)は重力方向に関係なく常に固定
+            modelRight = Math::Vector3{ 0.0f, 0.0f, 1.0f };
         }
         else
         {
@@ -182,9 +182,10 @@ void Player::PostUpdate()
             }
             else
             {
-                tangentBase = (std::abs(up.x) < 0.9f)
-                    ? Math::Vector3{ -1.0f, 0.0f, 0.0f }
-                    : Math::Vector3{ 0.0f, (up.x > 0.0f ? -1.0f : 1.0f), 0.0f };
+                // 移動計算の tangent と同じ式で統一（TOP/BOTTOM/LEFT/RIGHT すべて一致）
+                tangentBase = { -up.y, up.x, 0.0f };
+                if (tangentBase.LengthSquared() < 0.0001f) { tangentBase = { 1.0f, 0.0f, 0.0f }; }
+                tangentBase.Normalize();
             }
 
             modelFwd = tangentBase * m_facingSign;
@@ -194,8 +195,12 @@ void Player::PostUpdate()
             else
                 modelFwd = tangentBase * m_facingSign;
 
+            // up × modelFwd で正規直交右手系を維持（全重力方向で det=+1）
             up.Cross(modelFwd, modelRight);
-            modelRight.Normalize();
+            if (modelRight.LengthSquared() > 0.0001f)
+                modelRight.Normalize();
+            else
+                modelRight = Math::Vector3{ 0.0f, 0.0f, 1.0f };
         }
 
         const Math::Matrix rot(

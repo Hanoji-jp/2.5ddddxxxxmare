@@ -4,6 +4,9 @@
 // 基本シェーダー
 //
 //============================================================
+// KdShaderManager.h より先に include されるため前方宣言
+enum class KdDepthStencilState;
+
 class KdStandardShader
 {
 public:
@@ -275,7 +278,9 @@ public:
 
 	// 任意の頂点群からなるポリゴンライン描画
 	void DrawVertices(const std::vector<KdPolygon::Vertex>& vertices, const Math::Matrix& mWorld = Math::Matrix::Identity,
-		const Math::Color& colRate = kWhiteColor);
+		const Math::Color& colRate = kWhiteColor,
+		KdDepthStencilState depthState = static_cast<KdDepthStencilState>(2),
+		D3D_PRIMITIVE_TOPOLOGY topology = D3D_PRIMITIVE_TOPOLOGY_LINELIST);
 
 	//================================================
 	// 初期化・解放
