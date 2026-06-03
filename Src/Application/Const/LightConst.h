@@ -19,6 +19,9 @@ namespace LightConst
     // 平行光の影（シャドウマップ）の描画範囲
     // ShadowAreaSize : 影を生成する正方領域の一辺の長さ（大きいほど遠くまで影が落ちる）
     // ShadowAreaHeight : ライト方向の深度範囲（高さ）。範囲外のオブジェクトは影を落とさない
-    constexpr Math::Vector2 ShadowAreaSize   = { 80.0f, 80.0f };
-    constexpr float         ShadowAreaHeight = 100.0f;
+    constexpr Math::Vector2 ShadowAreaSize   = { 160.0f, 160.0f };
+    constexpr float         ShadowAreaHeight = 200.0f;
+
+    // ライト設定の保存先
+    constexpr const char* SavePath = "Asset/Data/sun_light.csv";
 }

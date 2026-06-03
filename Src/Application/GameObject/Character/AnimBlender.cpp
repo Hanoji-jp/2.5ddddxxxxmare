@@ -1,6 +1,20 @@
 ﻿#include "../../../Pch.h"
 #include "AnimBlender.h"
 
+bool AnimBlender::ChangeAnimation(const std::string& _animName,
+                                  bool _isLoop,
+                                  int  _blendFrames)
+{
+    if (!m_pModelWork) { return false; }
+
+    // モデルワーク経由でワンクッション取得（存在しない名前は nullptr）
+    const auto spAnim = m_pModelWork->GetAnimation(_animName);
+    if (!spAnim) { return false; }
+
+    ChangeAnimation(spAnim, _isLoop, _blendFrames);
+    return true;
+}
+
 void AnimBlender::ChangeAnimation(const std::shared_ptr<KdAnimationData>& _spNext,
                                   bool _isLoop,
                                   int  _blendFrames)
@@ -29,43 +43,51 @@ void AnimBlender::ChangeAnimation(const std::shared_ptr<KdAnimationData>& _spNex
     m_isBlending  = true;
 }
 
-void AnimBlender::Update(KdModelWork& _modelWork)
+void AnimBlender::Update(KdModelWork& _modelWork, float speed)
 {
-    if (!_modelWork.IsEnable()) { return; }
+	// m_pModelWork が Init() 済みで、渡された modelWork と一致しているか確認
+	// ポインタがズレている場合は再登録して続行
+	if (m_pModelWork != &_modelWork) { m_pModelWork = &_modelWork; }
 
-    // 書き込み可能なノードリストを取得
-    auto& nodes = _modelWork.WorkNodes();
+	if (!_modelWork.IsEnable()) { return; }
 
-    if (m_isBlending)
-    {
-        // ----- ブレンド中 -----
+	// 書き込み可能なノードリストを取得
+	auto& nodes = _modelWork.WorkNodes();
+	if (nodes.empty()) { return; }
 
-        // 前アニメのノード状態をコピーして進める
-        std::vector<KdModelWork::Node> fromNodes = nodes;
-        m_prevAnimator.AdvanceTime(fromNodes);
+	if (m_isBlending)
+	{
 
-        // 新アニメのノード状態をコピーして進める
-        std::vector<KdModelWork::Node> toNodes = nodes;
-        m_currentAnimator.AdvanceTime(toNodes);
+		//ここに関しては京ちゃんのコードと仕様が全く違うからあまり参考にはならんかも
+		//おいどんはmodelの中にアニメーションをぶち込んでいるので
+		// ----- ブレンド中 -----
 
-        // ブレンド比率（0→1）
-        const float t = m_blendTime / m_blendFrames;
+		// 前アニメのノード状態をコピーして進める
+		std::vector<KdModelWork::Node> fromNodes = nodes;
+		m_prevAnimator.AdvanceTime(fromNodes, speed);
 
-        // ノードをブレンド
-        BlendNodes(nodes, fromNodes, toNodes, t);
+		// 新アニメのノード状態をコピーして進める
+		std::vector<KdModelWork::Node> toNodes = nodes;
+		m_currentAnimator.AdvanceTime(toNodes, speed);
 
-        m_blendTime += 1.0f;
+		// ブレンド比率（0→1）
+		const float t = m_blendTime / m_blendFrames;
 
-        if (m_blendTime >= m_blendFrames)
-        {
-            m_isBlending = false;
-        }
-    }
-    else
-    {
-        // ----- 通常再生 -----
-        m_currentAnimator.AdvanceTime(nodes);
-    }
+		// ノードをブレンド
+		BlendNodes(nodes, fromNodes, toNodes, t);
+
+		m_blendTime += 1.0f;
+
+		if (m_blendTime >= m_blendFrames)
+		{
+			m_isBlending = false;
+		}
+	}
+	else
+	{
+		// ----- 通常再生 -----
+		m_currentAnimator.AdvanceTime(nodes, speed);
+	}
 }
 
 void AnimBlender::BlendNodes(std::vector<KdModelWork::Node>&       _dst,
@@ -78,19 +100,19 @@ void AnimBlender::BlendNodes(std::vector<KdModelWork::Node>&       _dst,
 
     for (size_t i = 0; i < count; ++i)
     {
-        // XMMatrixDecompose は XMVECTOR（16バイト）が必要なので専用変数を使う
+        // XMMatrixDecompose は１６バイトが必要なので専用変数をつかえよ
         DirectX::XMVECTOR scaleFrom, rotFrom, transFrom;
         DirectX::XMVECTOR scaleTo,   rotTo,   transTo;
 
         DirectX::XMMatrixDecompose(&scaleFrom, &rotFrom, &transFrom, _from[i].m_localTransform);
         DirectX::XMMatrixDecompose(&scaleTo,   &rotTo,   &transTo,   _to[i].m_localTransform);
 
-        // 各成分をLerp / Slerp
+        // 各Lerp / Slerp
         const DirectX::XMVECTOR blendScale = DirectX::XMVectorLerp(scaleFrom, scaleTo, _t);
         const DirectX::XMVECTOR blendRot   = DirectX::XMQuaternionSlerp(rotFrom, rotTo, _t);
         const DirectX::XMVECTOR blendTrans = DirectX::XMVectorLerp(transFrom, transTo, _t);
 
-        // 行列を再構築
+        // 行列のやつ
         _dst[i].m_localTransform =
             DirectX::XMMatrixScalingFromVector(blendScale)
             * DirectX::XMMatrixRotationQuaternion(blendRot)

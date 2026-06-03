@@ -55,10 +55,10 @@ namespace CollisionConst
 
     // Box床判定：hitDist がこれ未満（レイ起点のすぐ直下）はBox内部誤検出として除外
     // GroundRayOffset - GroundSnapDist より小さければ内側からのヒット
-    constexpr float GroundHitDistMin        = 0.4f;
+    constexpr float GroundHitDistMin        = 0.2f;
 
     // 着地時の m_upDir 補正速度（lerp係数）：1.0f=瞬時、小さいほど滑らか
-    constexpr float GroundUpDirSlerpSpeed   = 0.3f;
+    constexpr float GroundUpDirSlerpSpeed   = 0.8f;
 
     // 壁レイ方向（8方向）の数
     constexpr int   WallRayDirCount     = 8;

@@ -100,6 +100,29 @@ void WarpHoleEditor::DrawGui()
 			m_dirty    = true;
 		}
 
+		// テレポート型かどうか
+		bool teleport = h.Teleport;
+		if (ImGui::Checkbox("Teleport (暗転瞬間移動)", &teleport))
+		{
+			h.Teleport = teleport;
+			m_dirty    = true;
+		}
+		if (h.Teleport)
+		{
+			ImGui::SameLine();
+			ImGui::TextDisabled("← Waypoints は使用されません");
+		}
+
+		// 一歩通行 / 双方向
+		bool oneWay = h.OneWay;
+		if (ImGui::Checkbox("One Way (一歩通行)", &oneWay))
+		{
+			h.OneWay = oneWay;
+			m_dirty  = true;
+		}
+		ImGui::SameLine();
+		ImGui::TextDisabled(h.OneWay ? "Entry→Exit のみ" : "Entry⇔Exit 双方向");
+
 		// ---- Waypoint リスト ----
 		ImGui::Separator();
 		ImGui::Text("Waypoints (%d)", static_cast<int>(h.Waypoints.size()));
@@ -217,6 +240,10 @@ void WarpHoleEditor::Save() const
 		// 口元方向（後方互換のため末尾に追記）
 		ofs << "," << h.EntryMouthDir.x << "," << h.EntryMouthDir.y << "," << h.EntryMouthDir.z
 			<< "," << h.ExitMouthDir.x  << "," << h.ExitMouthDir.y  << "," << h.ExitMouthDir.z;
+		// テレポート型フラグ（後方互換）
+		ofs << "," << (h.Teleport ? 1 : 0);
+		// 一歩通行フラグ（後方互換）
+		ofs << "," << (h.OneWay ? 1 : 0);
 		ofs << "\n";
 	}
 }
@@ -261,6 +288,18 @@ void WarpHoleEditor::Load()
 		{
 			h.EntryMouthDir = { vals[mouthBase],     vals[mouthBase + 1], vals[mouthBase + 2] };
 			h.ExitMouthDir  = { vals[mouthBase + 3], vals[mouthBase + 4], vals[mouthBase + 5] };
+		}
+		// テレポート型フラグ（後方互換）
+		const int teleportIdx = mouthBase + 6;
+		if (teleportIdx < static_cast<int>(vals.size()))
+		{
+			h.Teleport = (static_cast<int>(vals[teleportIdx]) != 0);
+		}
+		// 一歩通行フラグ（後方互換：存在しなければデフォルト=一歩通行）
+		const int oneWayIdx = mouthBase + 7;
+		if (oneWayIdx < static_cast<int>(vals.size()))
+		{
+			h.OneWay = (static_cast<int>(vals[oneWayIdx]) != 0);
 		}
 		m_holes.push_back(h);
 	}

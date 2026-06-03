@@ -42,9 +42,15 @@ namespace PlayerConst
     // 矢の発射オフセット
     constexpr float ArrowOffsetY     = 1.0f;
 
+    // ダッシュ倍率（Shift 長押し）
+    constexpr float DashSpeedMul     = 1.85f;  // 移動速度の倍率
+    constexpr float DashAccelMul     = 1.6f;   // 加速度の倍率
+    constexpr float DashAnimSpeedMul = 1.7f;   // アニメ再生速度の倍率
+
     // モデルパス
     constexpr const char* ModelPath  = "Asset/Data/Player.gltf";
     constexpr const char* SwordPath  = "Asset/Data/Sword.gltf";
     constexpr const char* BowPath    = "Asset/Data/Bow.gltf";
     constexpr const char* ArrowPath  = "Asset/Data/Bow_Arrow.gltf";
+    constexpr const char* DustPath   = "Asset/Data/Box.gltf";  // 足元煙パーティクル用
 }

@@ -69,7 +69,7 @@ void RoomBoundsEditor::Save() const
     if (!ofs) { return; }
 
     // ヘッダ行
-    ofs << "minX,maxX,minY,maxY,triggerX,blendX\n";
+    ofs << "minX,maxX,minY,maxY,triggerX,blendX,mode\n";
 
     for (const auto& r : m_rooms)
     {
@@ -78,7 +78,8 @@ void RoomBoundsEditor::Save() const
             << r.minY    << ","
             << r.maxY    << ","
             << r.triggerX << ","
-            << r.blendX  << "\n";
+            << r.blendX  << ","
+            << static_cast<int>(r.mode) << "\n";
     }
 }
 
@@ -117,6 +118,12 @@ void RoomBoundsEditor::Load()
         if (!nextFloat(r.maxY))     { continue; }
         if (!nextFloat(r.triggerX)) { continue; }
         if (!nextFloat(r.blendX))   { continue; }
+        // mode（旧CSVには無い列 → デフォルト SideScroll のまま）
+        float modeVal = 0.0f;
+        if (nextFloat(modeVal))
+        {
+            r.mode = static_cast<CameraConst::CameraMode>(static_cast<int>(modeVal));
+        }
 
         m_rooms.push_back(r);
     }
@@ -202,6 +209,23 @@ void RoomBoundsEditor::DrawGui()
         changed |= ImGui::DragFloat("blendX",   &r.blendX,   0.1f, 0.0f, 50.0f);
 
         if (changed) { m_dirty = true; }
+
+        // カメラモード
+        ImGui::Separator();
+        ImGui::Text("Camera Mode");
+        {
+            static constexpr const char* kModeNames[] = {
+                "SideScroll (2.5D)",
+                "Fixed2D (純2D固定)",
+                "TopDown (俯瞰)",
+            };
+            int modeIdx = static_cast<int>(r.mode);
+            if (ImGui::Combo("Mode##camMode", &modeIdx, kModeNames, 3))
+            {
+                r.mode  = static_cast<CameraConst::CameraMode>(modeIdx);
+                changed = true;
+            }
+        }
 
         // 削除ボタン
         ImGui::Spacing();

@@ -23,7 +23,9 @@
 #include"../../Const/CheckpointConst.h"
 #include"../../GameObject/UI/HpUI.h"
 #include"../../GameObject/Light/PointLightObject.h"
-
+#include"../../Const/LightConst.h"
+#include"../../GameObject/Effect/FootDust.h"
+#include"../../Manager/ItemManager.h"
 class GameScene : public BaseScene
 {
 public :
@@ -39,13 +41,18 @@ private:
 	void DrawDebugExtra()     override;
 	void DrawUnLitExtra()     override;  // 背景Box描画
 	void DrawLitExtra()       override;  // 惑星モデル描画
+	void DrawSpriteExtra() override;  // フェードオーバーレイ描画
 
 	void RebuildEnemies();
 	void RebuildCheckpoints();
 	void RebuildWarpHoles();
 
+	// 画面フラッシュをトリガー（強さ 0〜1）
+	void TriggerFlash(float alpha) { m_flashAlpha = std::max(m_flashAlpha, alpha); }
+
 	std::shared_ptr<Player>  m_spPlayer   = nullptr;
 	SideScrollCamera*        m_pCamera    = nullptr;
+
 	std::vector<RoomBounds> m_rooms;
 
 	// インゲームマップエディター
@@ -60,9 +67,12 @@ private:
 	//---- Waypoint ワープ進行状態 ----
 	enum class WarpPhase
 	{
-		None,       // 通常
-		Sucking,    // 吸い込み中（入口に向かって収縮・SetPos制御）
-		Traveling,  // パス移動中
+		None,                 // 通常
+		Sucking,              // 吸い込み中（入口に向かって収縮）
+		Traveling,            // パス移動中（トンネル型）
+		TeleportFadeOut,      // テレポート型：Entry奥へ移動しながら暗転
+		TeleportHold,         // テレポート型：完全暗転＋瞬間移動
+		TeleportFadeIn,       // テレポート型：Exit奥から口元へ移動しながら明転
 	};
 	WarpPhase                              m_warpPhase         = WarpPhase::None;
 	std::vector<Math::Vector3>             m_warpPath;
@@ -74,7 +84,8 @@ private:
 	// 弧長ベースの等速移動用：ウェイポイントを Catmull-Rom で密にサンプリングした曲線
 	std::vector<Math::Vector3>             m_warpCurve;        // サンプリング済み曲線点
 	float                                  m_warpCurveTotalLen = 0.0f; // 曲線の総延長
-	float                                  m_warpDist          = 0.0f;  // 始点からの進行距離
+	float                                  m_warpDist          = 0.0f;  // 始点からの進行距離（弧長）
+	float                                  m_warpProgress      = 0.0f;  // 0→1 イージング用タイム進捗
 	Math::Vector3                          m_warpSuckStartPos; // 吸い込み開始時のプレイヤー位置
 	float                                  m_warpSuckProgress  = 0.0f; // 0→1
 	float                                  m_warpSuckStartAngle = 0.0f; // 螺旋開始角度
@@ -83,6 +94,34 @@ private:
 	bool                    m_editorMode  = false;
 	bool                    m_f2Prev      = false;
 	EditorCamera*           m_pEditorCam  = nullptr;
+
+	// テレポート型ワープのフェード状態
+	float           m_teleportFadeAlpha    = 0.0f;
+	float           m_teleportHoldTimer    = 0.0f;
+	Math::Vector3   m_teleportExitPos;
+	Math::Vector3   m_teleportExitDir;
+	bool            m_currentWarpTeleport  = false;
+
+	// テレポート出現スケールポップ
+	float           m_teleportPopTimer     = 0.0f;  // >0 でポップアニメ再生中
+
+	// 画面フラッシュ（白）
+	float           m_flashAlpha           = 0.0f;  // 現在の白フラッシュ強度
+
+	// HP ダメージ検知（前フレームの HP を保持）
+	int             m_prevPlayerHp         = -1;
+
+	// FootDust 生成タイマー
+	float           m_dustTimer            = 0.0f;
+
+	// ワープ完了後の再トリガー防止クールダウン（秒）
+	float           m_warpCooldown         = 0.0f;
+
+	// テレポート型の入退場パス（密にサンプリング済み）
+	std::vector<Math::Vector3> m_teleportEntryPath;  // Entry口元→奥（吸い込みパス）
+	std::vector<Math::Vector3> m_teleportExitPath;   // Exit奥→口元（吐き出しパス）
+	float           m_teleportPathDist     = 0.0f;   // パス上の進行距離
+	float           m_teleportPathTotalLen = 0.0f;   // パス全長
 
 	// エディター配置敵リスト
 	std::vector<std::shared_ptr<Enemy>> m_enemies;
@@ -100,7 +139,18 @@ private:
 	// ポイントライトリスト
 	std::vector<std::shared_ptr<PointLightObject>> m_pointLights;
 
+	// アイテムマネージャー
+	ItemManager m_itemManager;
+
+	// 太陽光（ディレクショナルライト）設定
+	Math::Vector3 m_sunDir      = LightConst::DirLightDir;
+	Math::Vector3 m_sunColor    = LightConst::DirLightColor;
+	Math::Vector4 m_ambientColor = LightConst::AmbientColor;
+
 	void Respawn();
 	void SaveSpawn();
 	void LoadSpawn();
+	void ApplySunLight();   // 保持している値をシェーダーへ反映
+	void SaveSunLight();    // 太陽光設定をCSVへ保存
+	void LoadSunLight();    // 太陽光設定をCSVから読み込み
 };

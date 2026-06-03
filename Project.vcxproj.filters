@@ -297,6 +297,16 @@
     <ClInclude Include="Src\Framework\Utility\ThreadPool\KdThreadPool.h" />
     <ClInclude Include="Src\Application\Const\StarFieldConst.h" />
     <ClInclude Include="Src\Application\GameObject\BackGround\StarField.h" />
+    <ClInclude Include="Src\Application\Const\JuiceConst.h" />
+    <ClInclude Include="Src\Application\GameObject\Effect\FootDust.h" />
+    <ClInclude Include="Src\Application\Const\PostProcessConst.h" />
+    <ClInclude Include="Src\Application\Const\GravityRingConst.h" />
+    <ClInclude Include="Src\Application\GameObject\Effect\GravityRingEffect.h" />
+    <ClInclude Include="Distribute\AnimBlender\AnimBlender.h" />
+    <ClInclude Include="Src\Application\Const\ItemConst.h" />
+    <ClInclude Include="Src\Application\GameObject\Item\HitBox.h" />
+    <ClInclude Include="Src\Application\GameObject\Item\Coin.h" />
+    <ClInclude Include="Src\Application\Manager\ItemManager.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Pch.cpp">
@@ -469,6 +479,11 @@
     <ClCompile Include="Src\Application\Editor\WarpHoleEditor.cpp" />
     <ClCompile Include="Src\Application\GameObject\Gimmick\WarpHole.cpp" />
     <ClCompile Include="Src\Application\GameObject\BackGround\StarField.cpp" />
+    <ClCompile Include="Src\Application\GameObject\Effect\FootDust.cpp" />
+    <ClCompile Include="Src\Application\GameObject\Effect\GravityRingEffect.cpp" />
+    <ClCompile Include="Distribute\AnimBlender\AnimBlender.cpp" />
+    <ClCompile Include="Src\Application\GameObject\Item\Coin.cpp" />
+    <ClCompile Include="Src\Application\Manager\ItemManager.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Src\Framework\Shader\inc_KdCommon.hlsli">

@@ -85,6 +85,9 @@ public:
     const Math::Vector3& GetVelocity() const { return m_velocity; }
     void SetVelocity(const Math::Vector3& v)  { m_velocity = v; }
 
+    bool IsGround()            const { return m_isGround; }
+    int  GetCurrentPlanetIndex() const { return m_currentPlanetIndex; }
+
     virtual void TakeDamage(int _damage);
 
     // マップオブジェクトをセット（コリジョン判定に使用）

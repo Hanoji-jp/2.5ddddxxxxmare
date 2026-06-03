@@ -6,6 +6,9 @@ Texture2D g_baseTex       : register(t0);   // ベースカラーテクスチャ
 Texture2D g_metalRoughTex : register(t1);   // メタリック(b)/ラフネス(g)テクスチャ
 Texture2D g_emissiveTex   : register(t2);   // 発光テクスチャ
 Texture2D g_normalTex     : register(t3);   // 法線マップ
+Texture2D g_grassTex       : register(t4);   // 芝生テクスチャ（トリプレーナー）
+Texture2D g_grassNormalTex : register(t5);   // 芝生法線マップ（盛り上がり表現）
+Texture2D g_grassEdgeTex   : register(t6);   // 草エッジ（境目）テクスチャ
 
 // 特殊処理用テクスチャ
 Texture2D g_dirShadowMap  : register(t10);  // 平行光シャドウマップ
@@ -28,8 +31,8 @@ static const float PI = 3.14159265358979f;
 static const float k_RimPower    = 3.0f;   // 縁の鋭さ（大きいほど縁だけ光る）
 static const float k_RimStrength = 0.7f;   // 縁光の強さ
 // 擬似環境反射（スペキュラIBL近似）：滑らかな面に宇宙が映り込む
-static const float k_EnvReflectUpMul   = 1.5f;  // 上方向（星空側）の反射の明るさ倍率
-static const float k_EnvReflectDownMul = 0.2f;  // 下方向（暗い宇宙）の反射の明るさ倍率
+static const float k_EnvReflectUpMul   = 4.0f;  // 上方向（星空側）の反射の明るさ倍率
+static const float k_EnvReflectDownMul = 0.8f;  // 下方向（暗い宇宙）の反射の明るさ倍率
 
 //=============================================================
 // トーンマッピング / 色変換
@@ -242,7 +245,80 @@ float4 main(VSOutput In) : SV_Target0
 		discard;
 
 	//------------------------------------------
-	// カメラ方向
+	// 芝生ブレンド（法線が重力上方向を向いている面に芝テクスチャをブレンド）
+	//------------------------------------------
+	if (g_UseGrass)
+	{
+		// ワールド法線と重力上方向のdotで上向き度合いを計算
+		float upDot = dot(normalize(In.wN), normalize(g_GravityUpDir));
+		// smoothstep でブレンド境界を滑らかに
+		float grassBlend = smoothstep(
+			1.0f - g_GrassBlendSharpness * 0.5f,
+			1.0f,
+			pow(saturate(upDot), g_GrassBlendSharpness));
+
+		// 芝テクスチャをトリプレーナーでサンプリング
+		float3 blend = pow(abs(normalize(In.wN)), 4.0f);
+		blend /= (blend.x + blend.y + blend.z + 1e-5f);
+		float3 gScaled = In.wPos * g_GrassTriplanarScale;
+		float4 gx = g_grassTex.Sample(g_ss, gScaled.yz);
+		float4 gy = g_grassTex.Sample(g_ss, gScaled.xz);
+		float4 gz = g_grassTex.Sample(g_ss, gScaled.xy);
+		float4 grassColor = gx * blend.x + gy * blend.y + gz * blend.z;
+
+		baseColor.rgb = lerp(baseColor.rgb, grassColor.rgb, grassBlend);
+	}
+
+	//------------------------------------------
+	// エッジ（境目）テクスチャブレンド
+	// upDot が EdgeWidth の帯域（草と側面の境目）に専用テクスチャをオーバーレイ
+	//------------------------------------------
+	if (g_UseGrassEdge)
+	{
+		float upDot = dot(normalize(In.wN), normalize(g_GravityUpDir));
+
+		// エッジ帯域：upDot が (grassThreshold - edgeWidth) 〜 grassThreshold の範囲
+		// grassThreshold = 草が始まる upDot の値（草ブレンドの開始点と一致させる）
+		float grassStart = 1.0f - g_GrassBlendSharpness * 0.5f;
+		float edgeCenter = grassStart;								// 帯の中心
+		float halfWidth  = g_GrassEdgeWidth * 0.5f;
+
+		// 帯域の中心に向かって強くなる山形のブレンド率
+		float edgeBlend = 1.0f - saturate(abs(upDot - edgeCenter) / max(halfWidth, 1e-5f));
+		edgeBlend = smoothstep(0.0f, 1.0f, edgeBlend);
+
+		if (edgeBlend > 0.001f)
+		{
+			// エッジテクスチャをトリプレーナーでサンプリング
+			float3 tpBlend  = pow(abs(normalize(In.wN)), 4.0f);
+			tpBlend /= (tpBlend.x + tpBlend.y + tpBlend.z + 1e-5f);
+			float3 eScaled  = In.wPos * g_GrassEdgeTexScale;
+			float4 ex = g_grassEdgeTex.Sample(g_ss, eScaled.yz);
+			float4 ey = g_grassEdgeTex.Sample(g_ss, eScaled.xz);
+			float4 ez = g_grassEdgeTex.Sample(g_ss, eScaled.xy);
+			float4 edgeColor = ex * tpBlend.x + ey * tpBlend.y + ez * tpBlend.z;
+
+			baseColor.rgb = lerp(baseColor.rgb, edgeColor.rgb, edgeBlend);
+		}
+	}
+
+	//------------------------------------------
+	// 全面エッジブレンド（Box本体の全面に薄暗いテクスチャを上書き）
+	//------------------------------------------
+	if (g_UseGrassEdge && g_FullEdgeStrength > 0.001f)
+	{
+		float3 tpBlend = pow(abs(normalize(In.wN)), 4.0f);
+		tpBlend /= (tpBlend.x + tpBlend.y + tpBlend.z + 1e-5f);
+		float3 eScaled = In.wPos * g_GrassEdgeTexScale;
+		float4 ex = g_grassEdgeTex.Sample(g_ss, eScaled.yz);
+		float4 ey = g_grassEdgeTex.Sample(g_ss, eScaled.xz);
+		float4 ez = g_grassEdgeTex.Sample(g_ss, eScaled.xy);
+		float4 fullEdgeColor = ex * tpBlend.x + ey * tpBlend.y + ez * tpBlend.z;
+		// 暗め補正（薄暗い印象にする）
+		fullEdgeColor.rgb *= 0.75f;
+		baseColor.rgb = lerp(baseColor.rgb, fullEdgeColor.rgb, g_FullEdgeStrength);
+	}
+
 	//------------------------------------------
 	float3 vCam    = g_CamPos - In.wPos;
 	float  camDist = length(vCam);
@@ -264,7 +340,40 @@ float4 main(VSOutput In) : SV_Target0
 	wN = normalize(wN);
 
 	//------------------------------------------
-	// 球法線：ローポリ球のシェーディング段差を消す
+	// 芝生法線ブレンド（上向き面だけ草の凹凸法線に差し替えて盛り上がり表現）
+	//------------------------------------------
+	if (g_UseGrass && g_UseGrassNormal)
+	{
+		float upDot      = dot(normalize(In.wN), normalize(g_GravityUpDir));
+		float grassBlend = smoothstep(
+			1.0f - g_GrassBlendSharpness * 0.5f,
+			1.0f,
+			pow(saturate(upDot), g_GrassBlendSharpness));
+
+		if (grassBlend > 0.001f)
+		{
+			// 草法線をトリプレーナーでサンプリング
+			float3 tpBlend  = pow(abs(normalize(In.wN)), 4.0f);
+			tpBlend /= (tpBlend.x + tpBlend.y + tpBlend.z + 1e-5f);
+			float3 gScaled  = In.wPos * g_GrassTriplanarScale;
+			float3 gnx = g_grassNormalTex.Sample(g_ss, gScaled.yz).rgb * 2.0f - 1.0f;
+			float3 gny = g_grassNormalTex.Sample(g_ss, gScaled.xz).rgb * 2.0f - 1.0f;
+			float3 gnz = g_grassNormalTex.Sample(g_ss, gScaled.xy).rgb * 2.0f - 1.0f;
+			float3 grassN = normalize(gnx * tpBlend.x + gny * tpBlend.y + gnz * tpBlend.z);
+
+			// ワールド空間に変換
+			row_major float3x3 mTBN2 =
+			{
+				normalize(In.wT),
+				normalize(In.wB),
+				normalize(In.wN),
+			};
+			grassN = normalize(mul(grassN, mTBN2));
+
+			// 草ブレンド率でモデル法線と合成
+			wN = normalize(lerp(wN, grassN, grassBlend));
+		}
+	}
 	//   面の法線ではなく「球中心 → ピクセル」方向を法線として使う。
 	//   ポリゴン数に関係なく完全に滑らかな陰影になる。
 	//------------------------------------------
@@ -356,9 +465,10 @@ float4 main(VSOutput In) : SV_Target0
 		float3 fresnel  = F0 + (max(1.0f - roughness, F0) - F0) *
 						  pow(saturate(1.0f - NdotV), 5.0f);
 
-		// 粗い面は反射をぼかす＝弱める
-		float  glossy   = 1.0f - roughness;
-		outColor += envColor * fresnel * glossy;
+		// 粗い面は反射をぼかす＝弱める　金属ほど強く反射
+		float  glossy   = (1.0f - roughness) * (0.4f + 0.6f * metallic);
+		// 影の中では反射も弱める（影が反射光で洗い流されるのを防ぐ）
+		outColor += envColor * fresnel * glossy * lerp(0.4f, 1.0f, shadow);
 	}
 
 	// ---- リムライト（縁光）：宇宙空間の浮遊感・立体感を強調 ----
@@ -367,7 +477,8 @@ float4 main(VSOutput In) : SV_Target0
 		float  rim   = pow(1.0f - NdotV, k_RimPower);
 		// 平行光の当たっている側ほど縁が強く光る（逆光リムの自然さ）
 		float  backLit = saturate(dot(wN, normalize(-g_DL_Dir))) * 0.5f + 0.5f;
-		outColor += rim * k_RimStrength * backLit * g_DL_Color;
+		// 太陽光由来の縁光なので、影の中では消す（影を洗い流さない）
+		outColor += rim * k_RimStrength * backLit * g_DL_Color * shadow;
 	}
 
 	// ---- エミッシブ ----

@@ -58,6 +58,10 @@ struct PlanetData
 	std::unique_ptr<KdCollider>  pCollider;
 	Math::Matrix                 mWorld = Math::Matrix::Identity;
 
+	// 草キャップモデル（Box惑星の上面に乗せる薄い板）
+	std::shared_ptr<KdModelWork> grassCapWork;
+	Math::Matrix                 mGrassCapWorld = Math::Matrix::Identity;
+
 	// unique_ptr を持つため、コピー禁止・ムーブ許可
 	PlanetData()                             = default;
 	PlanetData(PlanetData&&)                 = default;
@@ -133,6 +137,15 @@ private:
 	PlanetGravityManager& operator=(const PlanetGravityManager&) = delete;
 
 	std::vector<PlanetData> m_planets;
+
+	// 芝生テクスチャ（Box惑星の上面ブレンド用）
+	std::shared_ptr<KdTexture> m_spGrassTex;
+
+	// 芝生法線マップ（盛り上がり表現用）
+	std::shared_ptr<KdTexture> m_spGrassNormalTex;
+
+	// 草エッジ（境目）テクスチャ（側面上部の土/境目表現）
+	std::shared_ptr<KdTexture> m_spGrassEdgeTex;
 	int                     m_selectedIndex = -1;
 	bool                    m_worldDirty    = true;  // true の間だけ全惑星のワールド行列を再計算
 };

@@ -29,13 +29,23 @@ public:
 	// 並び順：入口の口元 → 入口の奥 → 出口の奥 → 出口の口元
 	std::vector<Math::Vector3> BuildTunnelCenterPath() const;
 
+	// テレポート型用：Entry 口元→奥 の密なパスを返す（吸い込みアニメ用）
+	std::vector<Math::Vector3> BuildTeleportEntryPath() const;
+	// テレポート型用：Exit 奥→口元 の密なパスを返す（吐き出しアニメ用）
+	std::vector<Math::Vector3> BuildTeleportExitPath() const;
+	// 逆走用：Exit 口元→奥（逆走時の吸い込みパス）
+	std::vector<Math::Vector3> BuildTeleportExitPathReverse() const;
+	// 逆走用：Entry 奥→口元（逆走時の吐き出しパス）
+	std::vector<Math::Vector3> BuildTeleportEntryPathReverse() const;
+
 private:
 	// 中心線（点列）に沿ってワイヤーフレームトンネルを一本描画する。
 	//   両端を口元として太く、中間を細くするトランペット半径プロファイル。
 	void DrawTunnelAlongPath(const std::vector<Math::Vector3>& path,
 							 const Math::Color& entryCol,
 							 const Math::Color& exitCol,
-							 float animOffset) const;
+							 float animOffset,
+							 bool entryMouthOnly = false) const;
 
 	// 軸ベクトル計算ヘルパー
 	static void MakeBasis(const Math::Vector3& normal,

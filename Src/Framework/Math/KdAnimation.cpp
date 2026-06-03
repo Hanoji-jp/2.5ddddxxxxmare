@@ -165,6 +165,9 @@ void KdAnimator::AdvanceTime(std::vector<KdModelWork::Node>& rNodes, float speed
 		// 対応するモデルノードのインデックス
 		UINT idx = rAnimNode.m_nodeOffset;
 
+		// インデックス範囲チェック（壊れたアニメデータでのクラッシュ防止）
+		if (idx >= static_cast<UINT>(rNodes.size())) { continue; }
+
 		auto prev = rNodes[idx].m_localTransform;
 
 		// アニメーションデータによる行列補間

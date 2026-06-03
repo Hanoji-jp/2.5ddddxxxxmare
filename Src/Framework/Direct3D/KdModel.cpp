@@ -186,9 +186,9 @@ const std::shared_ptr<KdAnimationData> KdModelData::GetAnimation(std::string_vie
 }
 
 // アニメーションデータ取得：番号指定
-const std::shared_ptr<KdAnimationData> KdModelData::GetAnimation(UINT index) const
+const std::shared_ptr<KdAnimationData> KdModelData::GetAnimation(uint32_t index) const
 {
-	return index >= m_spAnimations.size() ? nullptr : m_spAnimations[index];
+	return index >= static_cast<uint32_t>(m_spAnimations.size()) ? nullptr : m_spAnimations[index];
 }
 
 // 解放
@@ -258,7 +258,9 @@ KdModelWork::Node* KdModelWork::FindWorkNode(std::string_view name)
 
 // モデル設定：コピーノードの生成
 void KdModelWork::SetModelData(const std::shared_ptr<KdModelData>& rModel)
-{ 
+{
+	if (!rModel) { m_spData = nullptr; m_coppiedNodes.clear(); return; }
+
 	m_spData = rModel;
 
 	size_t nodeSize = rModel->GetOriginalNodes().size();

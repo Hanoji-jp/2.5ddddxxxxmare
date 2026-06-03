@@ -145,6 +145,7 @@ void BaseScene::DrawSprite()
 		{
 			obj->DrawSprite();
 		}
+		DrawSpriteExtra();
 	}
 	KdShaderManager::Instance().m_spriteShader.End();
 }

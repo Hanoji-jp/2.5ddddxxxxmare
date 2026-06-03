@@ -12,8 +12,9 @@ void Enemy::InitModel(const char* _path)
     {
         m_modelWork.SetModelData(spData);
 
-        const auto idleData = m_modelWork.GetAnimation("Idle");
-        if (idleData) { m_animBlender.ChangeAnimation(idleData, true, 0); }
+        // AnimBlender にモデルワークを登録
+        m_animBlender.Init(&m_modelWork);
+        m_animBlender.ChangeAnimation(std::string("Idle"), true, 0);
     }
 }
 
@@ -22,10 +23,7 @@ void Enemy::ChangeAnim(const std::string& _name, bool _loop)
     // 同じアニメーションなら再セットしない（リセット防止）
     if (m_currentAnimName == _name) { return; }
 
-    const auto spAnim = m_modelWork.GetAnimation(_name);
-    if (!spAnim) { return; }
-
-    m_animBlender.ChangeAnimation(spAnim, _loop, EnemyConst::AnimBlendFrames);
+    if (!m_animBlender.ChangeAnimation(_name, _loop, EnemyConst::AnimBlendFrames)) { return; }
     m_currentAnimName = _name;
 }
 
@@ -92,6 +90,31 @@ void Enemy::Update()
     m_animBlender.Update(m_modelWork);
 
     Character::Update();
+
+    // ── 撃破バウンス開始 ─────────────────────────────────────
+    if (IsDead() && !m_deathBounceActive)
+    {
+        m_deathBounceActive = true;
+        m_deathBounceVelY   = JuiceConst::DeathBounceVel;
+        m_deathFadeAlpha    = 1.0f;
+    }
+
+    // バウンス中の位置・フェード更新
+    if (m_deathBounceActive)
+    {
+        constexpr float kDt      = 1.0f / 60.0f;
+        constexpr float kGravity = 14.0f;  // バウンス用擬似重力
+        m_deathBounceVelY -= kGravity * kDt;
+        Math::Vector3 pos = GetPos();
+        pos.y += m_deathBounceVelY * kDt;
+        SetPos(pos);
+
+        m_deathFadeAlpha -= JuiceConst::DeathFadeSpeed * kDt;
+        if (m_deathFadeAlpha <= 0.0f)
+        {
+            m_isExpired = true;
+        }
+    }
 }
 
 void Enemy::PostUpdate()
@@ -100,7 +123,8 @@ void Enemy::PostUpdate()
 
     // ワールド行列を更新
     const Math::Vector3 pos   = GetPos();
-    const float         scale = EnemyConst::ModelScale;
+    const float         scale = EnemyConst::ModelScale
+                              * (m_deathBounceActive ? std::max(0.0f, m_deathFadeAlpha) : 1.0f);
     const float         yaw   = std::atan2f(m_facingDir.x, m_facingDir.z);
 
     m_mWorld = DirectX::XMMatrixScaling(scale, scale, scale)

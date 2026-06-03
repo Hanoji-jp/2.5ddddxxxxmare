@@ -2,6 +2,17 @@
 
 namespace CameraConst
 {
+	//==========================================================
+	// カメラモード
+	// ルーム（ZONE）ごとに挙動を切り替える
+	//==========================================================
+	enum class CameraMode
+	{
+		SideScroll,   // 既存：2.5D横スクロール（LittleNightmares風）
+		Fixed2D,      // 純2D：カメラを完全固定・横スクロールなし
+		TopDown,      // 俯瞰：マップ中心の真上から見下ろす
+	};
+
 	// 基本オフセット
 	constexpr float OffsetY          = 3.0f;   // ターゲットより上にずらす量
 	constexpr float OffsetZ          = -15.0f; // ターゲットより手前にずらす量
@@ -38,4 +49,16 @@ namespace CameraConst
 
 	// ルーム遷移
 	constexpr float TransitionLerp   = 0.07f;
+
+	// ── TopDown モード専用 ──────────────────────────────────────
+	constexpr float TopDownHeight    = 25.0f;  // カメラの高さ（プレイヤー上方）
+	constexpr float TopDownOffsetZ   =  0.0f;  // 奥行きオフセット（真上なので0）
+	constexpr float TopDownFovDeg    = 60.0f;  // TopDown時のFOV（広め）
+
+	// ── Fixed2D モード専用 ─────────────────────────────────────
+	// マリギャラ2Dモード風：プレイヤーをX/Yとも追従、Z固定、フワフワなし・ロールなし
+	constexpr float Fixed2DPosLerp  = 0.12f;   // カメラ位置補間
+	constexpr float Fixed2DLookLerp = 0.10f;   // 注視点補間
+	constexpr float Fixed2DOffsetY  = 2.0f;    // プレイヤーからの縦オフセット
+	constexpr float Fixed2DOffsetZ  = -14.0f;  // 深度オフセット（完全横から見る）
 }

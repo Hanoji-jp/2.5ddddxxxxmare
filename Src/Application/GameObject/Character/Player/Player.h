@@ -5,6 +5,7 @@
 #include "../../Weapon/Sword.h"
 #include "../../Weapon/Bow.h"
 #include "../../Weapon/Arrow.h"
+#include "../../Item/HitBox.h"
 
 class Player : public Character
 {
@@ -12,12 +13,34 @@ public:
     Player()          { Init(); }
     virtual ~Player() {}
 
+    // m_animBlender が m_modelWork の生アドレスを持つためコピー・ムーブ禁止
+    Player(const Player&)            = delete;
+    Player& operator=(const Player&) = delete;
+    Player(Player&&)                 = delete;
+    Player& operator=(Player&&)      = delete;
+
     void Init()       override;
     void Update()     override;
     void PostUpdate() override;
     void DrawLit()    override;
 
     bool IsVisible() const override { return true; }
+
+    void TakeDamage(int _damage) override;
+
+    // GhostTrail 用：描画ワールド行列を公開
+    const Math::Matrix& GetDrawWorld() const { return m_drawWorld; }
+    // GhostTrail 用：モデルデータを公開
+    std::shared_ptr<KdModelData> GetModelData() const { return m_modelWork.GetData(); }
+    // FootDust 用：ダッシュ中かどうか
+    bool IsDashing() const { return m_isDashing; }
+
+    // アイテム取得用ヒットボックスを公開（ItemManager が毎フレーム参照）
+    HitBox& GetPickupHitBox() { return m_pickupHitBox; }
+
+    // 今フレームに惑星が切り替わったか（GameScene→カメラへのズームトリガー用）
+    bool IsPlanetChanged() const { return m_planetChangedThisFrame; }
+    void ResetPlanetChangedFlag()  { m_planetChangedThisFrame = false; }
 
 private:
     void Move();
@@ -30,6 +53,9 @@ private:
 
     KdModelWork  m_modelWork;
     AnimBlender  m_animBlender;
+
+    // アイテム取得用ヒットボックス
+    HitBox       m_pickupHitBox;
 
     // 描画専用ワールド行列（ピボット補正オフセットを含む。コリジョンには使わない）
     Math::Matrix m_drawWorld;
@@ -55,5 +81,20 @@ private:
 
     // 遠距離攻撃クールダウン
     int m_rangedCooldown = 0;
+
+    // 着地スクワッシュ（0=なし、>0=スクワッシュ中）
+    float m_squashTimer = 0.0f;
+
+    // 前フレームの着地状態（エッジ検出用）
+    bool m_wasGround = false;
+
+    // ダッシュ中フラグ
+    bool m_isDashing = false;
+
+    // 今フレームに惑星切り替わりが発生したか
+    bool m_planetChangedThisFrame = false;
+
+    // アニメーション再生速度倍率（通常=1.0、ダッシュ時は DashAnimSpeedMul）
+    float m_animSpeed = 1.0f;
 };
 

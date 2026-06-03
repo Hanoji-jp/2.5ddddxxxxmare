@@ -103,7 +103,7 @@ void SideScrollCamera::Update(const Math::Vector3& _targetPos, const Math::Vecto
 	// upDir.yが負 → 重力反転中（上下逆）
 	const float upSign = (m_upDir.y >= 0.0f) ? 1.0f : -1.0f;
 
-	// ── 1. ルーム遷移ステート更新 ──────────────────────────────
+	// ── 1. ルーム遷移ステート更新（全モード共通） ──────────────
 	constexpr float kDt = 1.0f / 60.0f;
 	if (!m_rooms.empty() && m_currentRoom + 1 < static_cast<int>(m_rooms.size()))
 	{
@@ -111,16 +111,14 @@ void SideScrollCamera::Update(const Math::Vector3& _targetPos, const Math::Vecto
 
 		if (!m_isTransitioning && _targetPos.x >= cur.triggerX)
 		{
-			// triggerX を踏んだ瞬間に遷移開始
 			m_nextRoom          = m_currentRoom + 1;
 			m_transitionRate    = 0.0f;
 			m_isTransitioning   = true;
-			m_transitionStartX  = m_pos.x;  // 起点を記録
+			m_transitionStartX  = m_pos.x;
 		}
 
 		if (m_isTransitioning)
 		{
-			// 時間ベースで transitionRate を 0→1 に進める
 			m_transitionRate += kDt * CameraConst::RoomTransitionSpeed;
 			if (m_transitionRate >= 1.0f)
 			{
@@ -133,97 +131,128 @@ void SideScrollCamera::Update(const Math::Vector3& _targetPos, const Math::Vecto
 		}
 	}
 
-	// ── 2. 浮遊ボブ ───────────────────────────────────────────
-	const auto& cs = CameraSettings::Instance();
-	constexpr float kDeltaTime  = 1.0f / 60.0f;
-	constexpr float kTwoPi     = 6.28318530f;
-	m_floatTimer = std::fmod(m_floatTimer + kDeltaTime * cs.FloatSpeed, kTwoPi);
-	const float floatY = std::sinf(m_floatTimer)        * cs.FloatAmplitude * (1.0f - m_wallZoomRate);
-	const float floatX = std::sinf(m_floatTimer * 0.7f) * cs.FloatAmplitude * 0.4f * (1.0f - m_wallZoomRate);
+	// 現在のルームのモードを取得
+	const CameraConst::CameraMode mode = m_rooms.empty()
+		? CameraConst::CameraMode::SideScroll
+		: m_rooms[m_currentRoom].mode;
 
-	// ── 3. OffsetZ ────────────────────────────────────────────
-	const float baseOffsetZ = cs.OffsetZ;
-
-	// ── 4. 目標位置・注視点 ────────────────────────────────────
-	Math::Vector3 targetPos    = CalcTargetCamPos(_targetPos, floatY, floatX, baseOffsetZ, upSign);
-	Math::Vector3 targetLookAt = CalcTargetLookAt(_targetPos);
-
-	// ── 4c. クランプ＋ズーム（クランプに当たったらちょいズーム）────
-	if (!m_rooms.empty())
+	// ── 惑星到達ズームアウト→戻り（全モード共通）──────────────
+	constexpr float kDeltaTime = 1.0f / 60.0f;
+	float planetZoomOffset = 0.0f;
+	if (m_planetZoomTimer > 0.0f)
 	{
-		const RoomBounds& cur = m_rooms[m_currentRoom];
-
-		// 目標クランプ範囲（遷移中は次ルーム、通常は現ルーム）
-		const RoomBounds& targetRoom = (m_isTransitioning && m_nextRoom < static_cast<int>(m_rooms.size()))
-			? m_rooms[m_nextRoom] : cur;
-		const float targetMinX = targetRoom.minX;
-		const float targetMaxX = targetRoom.maxX;
-
-		// 初回は即セット、以降は Lerp でじわっと追従（ルーム切替時のテレポート防止）
-		if (!m_initialized)
-		{
-			m_clampMinX = targetMinX;
-			m_clampMaxX = targetMaxX;
-		}
-		else
-		{
-			m_clampMinX = std::lerp(m_clampMinX, targetMinX, CameraConst::RoomTransitionSpeed * (1.0f / 60.0f));
-			m_clampMaxX = std::lerp(m_clampMaxX, targetMaxX, CameraConst::RoomTransitionSpeed * (1.0f / 60.0f));
-		}
-
-		// ① baseOffsetZ でのクランプ境界（FOV端が壁を超えない位置）
-		const float planeDist0 = std::abs(baseOffsetZ);
-		const float halfView0  = (m_mProj._11 > 0.0f) ? (planeDist0 / m_mProj._11) : 0.0f;
-		const float clampMin0  = m_clampMinX + halfView0;
-		const float clampMax0  = m_clampMaxX - halfView0;
-
-		// ② プレイヤーがクランプ境界を超えた量 → ズーム率を更新
-		const float idealX = _targetPos.x;
-		float overX = 0.0f;
-		if      (idealX > clampMax0) { overX = idealX - clampMax0; }
-		else if (idealX < clampMin0) { overX = clampMin0 - idealX; }
-
-		// sqrt カーブでほんのりズーム
-		const float targetZoomRate = std::clamp(
-			std::sqrtf(overX * cs.WallZoomSensitivity),
-			0.0f, cs.WallZoomMaxRatio);
-		m_wallZoomRate = std::lerp(m_wallZoomRate, targetZoomRate, cs.WallZoomLerp);
-
-		// ③ ズーム後の actualOffsetZ で halfViewX を再計算
-		const float actualOffsetZ = baseOffsetZ * (1.0f - m_wallZoomRate);
-		const float planeDist1    = std::abs(actualOffsetZ);
-		const float halfView1     = (m_mProj._11 > 0.0f) ? (planeDist1 / m_mProj._11) : 0.0f;
-		const float clampMin1     = m_clampMinX + halfView1;
-		const float clampMax1     = m_clampMaxX - halfView1;
-
-		// ④ 目標X を確定
-		// 遷移中は起点(遷移開始時のカメラX) → 次ルームのminX+FOV左端 へスライド
-		if (m_isTransitioning && m_nextRoom < static_cast<int>(m_rooms.size()))
-		{
-			const RoomBounds& nxt  = m_rooms[m_nextRoom];
-			const float nextEntryX = nxt.minX + halfView1;
-			const float t          = m_transitionRate;
-			const float smooth     = t * t * (3.0f - 2.0f * t);
-			targetPos.x    = std::lerp(m_transitionStartX, nextEntryX, smooth);
-			targetLookAt.x = targetPos.x;
-		}
-		else if (clampMin1 <= clampMax1)
-		{
-			targetPos.x    = std::clamp(idealX,         clampMin1, clampMax1);
-			targetLookAt.x = std::clamp(targetLookAt.x, clampMin1, clampMax1);
-		}
-		else
-		{
-			const float center = (m_clampMinX + m_clampMaxX) * 0.5f;
-			targetPos.x    = center;
-			targetLookAt.x = center;
-		}
-
-		// ⑤ Z を即反映
-		targetPos.z = actualOffsetZ;
+		constexpr float kDecay = 1.5f;
+		m_planetZoomTimer -= kDeltaTime * kDecay;
+		m_planetZoomTimer  = std::max(m_planetZoomTimer, 0.0f);
+		const float zoomCurve = std::sinf(m_planetZoomTimer * 3.14159f);
+		planetZoomOffset = zoomCurve * JuiceConst::PlanetZoomOutAmount;
 	}
 
-	// ── 4b. 初回は即座にセット ─────────────────────────────────
+	// ── 2. モード別のターゲット位置・注視点を計算 ──────────────
+	const auto& cs = CameraSettings::Instance();
+	Math::Vector3 targetPos;
+	Math::Vector3 targetLookAt;
+	float         targetRollDeg = 0.0f;
+
+	if (mode == CameraConst::CameraMode::TopDown)
+	{
+		// ── TopDown : プレイヤー（またはルーム中心）の真上から見下ろす ──
+		const Math::Vector3 roomCenter = CalcBlendedRoomCenter(_targetPos);
+
+		// カメラはルーム中心の真上、注視点はルーム中心（ズームは高さに加算）
+		targetPos    = { roomCenter.x, roomCenter.y + CameraConst::TopDownHeight + planetZoomOffset, roomCenter.z + CameraConst::TopDownOffsetZ };
+		targetLookAt = { roomCenter.x, roomCenter.y, roomCenter.z };
+
+		targetRollDeg = 0.0f;
+	}
+	else if (mode == CameraConst::CameraMode::Fixed2D)
+	{
+		// ── Fixed2D : マリギャラ2Dモード風 ──────────────────────
+		targetPos    = { _targetPos.x, _targetPos.y + CameraConst::Fixed2DOffsetY, CameraConst::Fixed2DOffsetZ + planetZoomOffset };
+		targetLookAt = { _targetPos.x, _targetPos.y, 0.0f };
+		targetRollDeg = 0.0f;
+	}
+	else
+	{
+		// ── SideScroll : 既存の横スクロール挙動 ──────────────────
+		constexpr float kTwoPi    = 6.28318530f;
+		m_floatTimer = std::fmod(m_floatTimer + kDeltaTime * cs.FloatSpeed, kTwoPi);
+		const float floatY = std::sinf(m_floatTimer)        * cs.FloatAmplitude * (1.0f - m_wallZoomRate);
+		const float floatX = std::sinf(m_floatTimer * 0.7f) * cs.FloatAmplitude * 0.4f * (1.0f - m_wallZoomRate);
+
+		const float baseOffsetZ = cs.OffsetZ;
+
+		targetPos    = CalcTargetCamPos(_targetPos, floatY, floatX, baseOffsetZ + planetZoomOffset, upSign);
+		targetLookAt = CalcTargetLookAt(_targetPos);
+
+		if (!m_rooms.empty())
+		{
+			const RoomBounds& cur = m_rooms[m_currentRoom];
+			const RoomBounds& targetRoom = (m_isTransitioning && m_nextRoom < static_cast<int>(m_rooms.size()))
+				? m_rooms[m_nextRoom] : cur;
+
+			if (!m_initialized)
+			{
+				m_clampMinX = targetRoom.minX;
+				m_clampMaxX = targetRoom.maxX;
+			}
+			else
+			{
+				m_clampMinX = std::lerp(m_clampMinX, targetRoom.minX, CameraConst::RoomTransitionSpeed * (1.0f / 60.0f));
+				m_clampMaxX = std::lerp(m_clampMaxX, targetRoom.maxX, CameraConst::RoomTransitionSpeed * (1.0f / 60.0f));
+			}
+
+			const float planeDist0 = std::abs(baseOffsetZ);
+			const float halfView0  = (m_mProj._11 > 0.0f) ? (planeDist0 / m_mProj._11) : 0.0f;
+			const float clampMin0  = m_clampMinX + halfView0;
+			const float clampMax0  = m_clampMaxX - halfView0;
+
+			const float idealX = _targetPos.x;
+			float overX = 0.0f;
+			if      (idealX > clampMax0) { overX = idealX - clampMax0; }
+			else if (idealX < clampMin0) { overX = clampMin0 - idealX; }
+
+			const float targetZoomRate = std::clamp(
+				std::sqrtf(overX * cs.WallZoomSensitivity),
+				0.0f, cs.WallZoomMaxRatio);
+			m_wallZoomRate = std::lerp(m_wallZoomRate, targetZoomRate, cs.WallZoomLerp);
+
+			const float actualOffsetZ = (baseOffsetZ + planetZoomOffset) * (1.0f - m_wallZoomRate);
+			const float planeDist1    = std::abs(actualOffsetZ);
+			const float halfView1     = (m_mProj._11 > 0.0f) ? (planeDist1 / m_mProj._11) : 0.0f;
+			const float clampMin1     = m_clampMinX + halfView1;
+			const float clampMax1     = m_clampMaxX - halfView1;
+
+			if (m_isTransitioning && m_nextRoom < static_cast<int>(m_rooms.size()))
+			{
+				const RoomBounds& nxt  = m_rooms[m_nextRoom];
+				const float nextEntryX = nxt.minX + halfView1;
+				const float t          = m_transitionRate;
+				const float smooth     = t * t * (3.0f - 2.0f * t);
+				targetPos.x    = std::lerp(m_transitionStartX, nextEntryX, smooth);
+				targetLookAt.x = targetPos.x;
+			}
+			else if (clampMin1 <= clampMax1)
+			{
+				targetPos.x    = std::clamp(idealX,         clampMin1, clampMax1);
+				targetLookAt.x = std::clamp(targetLookAt.x, clampMin1, clampMax1);
+			}
+			else
+			{
+				const float center = (m_clampMinX + m_clampMaxX) * 0.5f;
+				targetPos.x    = center;
+				targetLookAt.x = center;
+			}
+
+			targetPos.z = actualOffsetZ;
+		}
+
+		// ロール計算
+		const float offsetX = _targetPos.x - m_pos.x;
+		targetRollDeg = std::clamp(offsetX * cs.RollSensitivity, -cs.RollMaxDeg, cs.RollMaxDeg);
+	}
+
+	// ── 3. 初回は即座にセット ──────────────────────────────────
 	if (!m_initialized)
 	{
 		m_pos       = targetPos;
@@ -231,41 +260,54 @@ void SideScrollCamera::Update(const Math::Vector3& _targetPos, const Math::Vecto
 		m_initialized = true;
 	}
 
-	// ── 5. 位置・注視点をゆっくり補間（ふわふわ） ──────────────
-	// カメラYがプレイヤーより下に落ちると上を向いてしまうため、
-	// targetYの最低値をプレイヤーY + 最小オフセットで保証する
-	const float minCamY = _targetPos.y + CameraConst::MinCamOffsetY;
-	if (targetPos.y < minCamY) { targetPos.y = minCamY; }
-
-	m_pos       = Math::Vector3::Lerp(m_pos,       targetPos,    cs.PosLerp);
-	m_lookAtPos = Math::Vector3::Lerp(m_lookAtPos, targetLookAt, cs.LookAtLerp);
-
-	// lerp後も下回っていたら即座に矯正（初回やラグ対策）
-	if (m_pos.y < minCamY) { m_pos.y = minCamY; }
-
-	// ── 最終安全ガード ─────────────────────────────────────────
-	// 注視点YがカメラYを超えると前方ベクトルが上向きになり空しか映らなくなる
-	constexpr float kLookAtMargin = 0.5f;
-	if (m_lookAtPos.y >= m_pos.y - kLookAtMargin)
+	// ── 4. 補間（TopDown / Fixed2D でも Lerp で滑らかに切り替わる） ──
+	if (mode == CameraConst::CameraMode::SideScroll)
 	{
-		m_lookAtPos.y = m_pos.y - kLookAtMargin;
+		const float minCamY = _targetPos.y + CameraConst::MinCamOffsetY;
+		if (targetPos.y < minCamY) { targetPos.y = minCamY; }
 	}
 
-	// ── 6. ロール ──────────────────────────────────────────────
-	const float offsetX       = _targetPos.x - m_pos.x;
-	const float targetRollDeg = std::clamp(
-		offsetX * cs.RollSensitivity,
-		-cs.RollMaxDeg,
-		 cs.RollMaxDeg);
+	if (mode == CameraConst::CameraMode::Fixed2D)
+	{
+		m_pos       = Math::Vector3::Lerp(m_pos,       targetPos,    CameraConst::Fixed2DPosLerp);
+		m_lookAtPos = Math::Vector3::Lerp(m_lookAtPos, targetLookAt, CameraConst::Fixed2DLookLerp);
+	}
+	else
+	{
+		m_pos       = Math::Vector3::Lerp(m_pos,       targetPos,    cs.PosLerp);
+		m_lookAtPos = Math::Vector3::Lerp(m_lookAtPos, targetLookAt, cs.LookAtLerp);
+
+		if (mode != CameraConst::CameraMode::TopDown)
+		{
+			const float minCamY = _targetPos.y + CameraConst::MinCamOffsetY;
+			if (m_pos.y < minCamY) { m_pos.y = minCamY; }
+
+			constexpr float kLookAtMargin = 0.5f;
+			if (m_lookAtPos.y >= m_pos.y - kLookAtMargin)
+			{
+				m_lookAtPos.y = m_pos.y - kLookAtMargin;
+			}
+		}
+	}
+
+	// ── 5. ロール ─────────────────────────────────────────────
 	m_rollDeg = std::lerp(m_rollDeg, targetRollDeg, cs.RollLerp);
 
-	// ── 7. LookAt 基底を構築 ────────────────────────────────────
-	const Math::Vector3 worldUp(0.0f, 1.0f, 0.0f);
+	// ── 6. LookAt 基底を構築 ────────────────────────────────────
+	Math::Vector3 worldUp;
+	if (mode == CameraConst::CameraMode::TopDown)
+	{
+		// TopDown は真下を向くため、Forward が -Y → Up 基底に +Z を使う
+		worldUp = { 0.0f, 0.0f, 1.0f };
+	}
+	else
+	{
+		worldUp = { 0.0f, 1.0f, 0.0f };
+	}
 
 	Math::Vector3 fwd = m_lookAtPos - m_pos;
 
-	// プレイヤーがカメラに近づきすぎると前方ベクトルが上を向く問題を防ぐ
-	// 水平距離に対してピッチ（仰角）を最大 CameraConst::MaxPitchDeg 度に制限
+	if (mode == CameraConst::CameraMode::SideScroll)
 	{
 		const float horizLen = std::sqrtf(fwd.x * fwd.x + fwd.z * fwd.z);
 		const float maxTan   = std::tanf(DirectX::XMConvertToRadians(CameraConst::MaxPitchDeg));
@@ -279,24 +321,50 @@ void SideScrollCamera::Update(const Math::Vector3& _targetPos, const Math::Vecto
 
 	Math::Vector3 right;
 	worldUp.Cross(fwd, right);
-	right.Normalize();
+	if (right.LengthSquared() < 1e-6f)
+	{
+		// fwd が worldUp と平行（真下向きなど）→ 代替ベクトルで安定化
+		right = { 1.0f, 0.0f, 0.0f };
+	}
+	else
+	{
+		right.Normalize();
+	}
 
 	Math::Vector3 up;
 	fwd.Cross(right, up);
 	up.Normalize();
 
-	const float rollRad         = DirectX::XMConvertToRadians(m_rollDeg);
-	const float cosR            = std::cosf(rollRad);
-	const float sinR            = std::sinf(rollRad);
+	const float rollRad             = DirectX::XMConvertToRadians(m_rollDeg);
+	const float cosR                = std::cosf(rollRad);
+	const float sinR                = std::sinf(rollRad);
 	const Math::Vector3 rolledRight = right * cosR + up * (-sinR);
 	const Math::Vector3 rolledUp    = right * sinR + up *   cosR;
 
-	// ── 9. カメラワールド行列を確定 ─────────────────────────────
+	// ── 7. カメラワールド行列を確定 ─────────────────────────────
+
+	// ── 8. カメラシェイク適用 ────────────────────────────────
+	Math::Vector3 shakeOffset = { 0.0f, 0.0f, 0.0f };
+	if (m_shakeStrength > 0.0f)
+	{
+		m_shakeTimer   += kDt * 37.0f;  // ノイズ周波数
+		m_shakeStrength = std::max(0.0f,
+			m_shakeStrength - JuiceConst::ShakeDecay * kDt);
+
+		const float sx = std::sinf(m_shakeTimer * 1.00f) + std::sinf(m_shakeTimer * 2.31f);
+		const float sy = std::sinf(m_shakeTimer * 0.87f) + std::sinf(m_shakeTimer * 1.73f);
+		shakeOffset.x = sx * 0.5f * m_shakeStrength;
+		shakeOffset.y = sy * 0.5f * m_shakeStrength;
+	}
+
 	Math::Matrix mCam;
 	mCam._11 = rolledRight.x; mCam._12 = rolledRight.y; mCam._13 = rolledRight.z; mCam._14 = 0.0f;
 	mCam._21 = rolledUp.x;    mCam._22 = rolledUp.y;    mCam._23 = rolledUp.z;    mCam._24 = 0.0f;
 	mCam._31 = fwd.x;         mCam._32 = fwd.y;         mCam._33 = fwd.z;         mCam._34 = 0.0f;
-	mCam._41 = m_pos.x;       mCam._42 = m_pos.y;       mCam._43 = m_pos.z;       mCam._44 = 1.0f;
+	mCam._41 = m_pos.x + shakeOffset.x;
+	mCam._42 = m_pos.y + shakeOffset.y;
+	mCam._43 = m_pos.z;
+	mCam._44 = 1.0f;
 
 	SetCameraMatrix(mCam);
 }

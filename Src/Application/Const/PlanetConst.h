@@ -33,6 +33,10 @@ namespace PlanetConst
 	// upDir の補間速度（1.0 = 即時、小さいほど緩やか。0.05〜0.1 が自然）
 	constexpr float UpDirSlerpSpeed       = 0.08f;
 
+	// m_upDir（ロジック用）の補間速度。角コーナーで即時スナップするのを防ぐ
+	// Visual より速め（0.15〜0.25）にして物理的挙動とのズレを最小化
+	constexpr float UpDirLogicSlerpSpeed  = 0.20f;
+
 	// デバッグ表示色（サーフェス円）
 	constexpr float SurfaceColorR = 0.3f;
 	constexpr float SurfaceColorG = 0.8f;
@@ -66,4 +70,48 @@ namespace PlanetConst
 
 	// トリプレーナーUV のワールド座標スケール（値が小さいほどテクスチャが細かく繰り返す）
 	constexpr float TriplanarScale = 0.1f;
+
+	// 芝生テクスチャのパス（Box惑星の上面ブレンド用）
+	constexpr const char* GrassTexPath       = "Asset/Texture/grass.png";
+
+	// 芝生法線マップのパス（盛り上がり表現用）
+	constexpr const char* GrassNormalTexPath = "Asset/Texture/grass_normal.png";
+
+	// 草エッジ（境目）テクスチャのパス（側面上部の土/境目表現）
+	constexpr const char* GrassEdgeTexPath   = "Asset/Texture/grass_edge.png";
+
+	// エッジ帯域の幅（upDot 空間。0.1〜0.5 推奨）
+	constexpr float GrassEdgeWidth           = 0.3f;
+
+	// エッジテクスチャのトリプレーナースケール
+	constexpr float GrassEdgeTexScale        = 0.15f;
+
+	// 芝生ブレンドの鋭さ（2〜8推奨。大きいほど境界がくっきり）
+	constexpr float GrassBlendSharpness = 4.0f;
+
+	// 芝生テクスチャのトリプレーナースケール
+	constexpr float GrassTriplanarScale = 0.15f;
+
+	// 草キャップモデル（Box惑星の上面に乗せる薄い板）
+	// Box.gltf を Y スケール極小で代用（専用モデルがあれば差し替える）
+	static constexpr const char* GrassCapModelPath = "Asset/Data/Box.gltf";
+
+	// 草キャップの Y 方向の厚み（BoxHalfExtents.y に掛ける比率）
+	constexpr float GrassCapThickness    = 0.3f;
+
+	// 草キャップを上面からどれだけ上に浮かせるか（BoxHalfExtents.y に対する比率）
+	constexpr float GrassCapYOffset      = 1.0f;  // 上面ちょうどに乗る
+
+	// 草キャップの XZ スケール比率（Box の XZ より少し大きめにはみ出す）
+	constexpr float GrassCapXZScale      = 1.08f;
+
+	// 草キャップの最小はみ出し量（Left/Right キャップがない場合でも常にこの量だけ伸ばす）
+	constexpr float GrassCapMinOverhang  = 0.29f;
+
+	// Box本体の全面エッジブレンド強度（0=無効 1=フル上書き。薄暗くしたいので 0.3〜0.5 推奨）
+	constexpr float BoxFullEdgeStrength  = 0.35f;
+
+	// Box面判定ヒステリシス：現在の重力方向と一致する面にこの距離のバイアスを加える
+	// 値が大きいほどコーナーで面が切り替わりにくくなる（0.3〜1.0 推奨）
+	constexpr float BoxFaceHysteresis   = 0.8f;
 }

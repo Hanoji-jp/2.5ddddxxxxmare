@@ -60,7 +60,7 @@ public:
 
 	// アニメーションデータ取得
 	const std::shared_ptr<KdAnimationData> GetAnimation(std::string_view animName) const;
-	const std::shared_ptr<KdAnimationData> GetAnimation(UINT index) const;
+	const std::shared_ptr<KdAnimationData> GetAnimation(uint32_t index) const;
 
 	// それぞれのノードのインデックスリスト取得
 	const std::vector<int>& GetRootNodeIndices() const { return m_rootNodeIndices; }
@@ -150,7 +150,7 @@ public:
 
 	// アニメーションデータ取得
 	const std::shared_ptr<KdAnimationData> GetAnimation(std::string_view animName) const { return !m_spData ? nullptr : m_spData->GetAnimation(animName); }
-	const std::shared_ptr<KdAnimationData> GetAnimation(int index) const { return !m_spData ? nullptr : m_spData->GetAnimation(index); }
+	const std::shared_ptr<KdAnimationData> GetAnimation(uint32_t index) const { return !m_spData ? nullptr : m_spData->GetAnimation(index); }
 
 	// モデル設定：コピーノードの生成
 	void SetModelData(const std::shared_ptr<KdModelData>& rModel);

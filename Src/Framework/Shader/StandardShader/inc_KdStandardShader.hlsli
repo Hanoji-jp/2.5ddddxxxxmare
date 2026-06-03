@@ -16,6 +16,20 @@ cbuffer cbObject : register(b0)
 	float g_TriplanarScale;		// トリプレーナーUV スケール（ワールド座標に掛ける値）
 	int   g_SphereNormal;		// 球法線を中心方向で解析計算するフラグ
 	float g__tripad;			// パディング
+
+	// 芝生ブレンド
+	int   g_UseGrass;			// 芝生ブレンド有効フラグ
+	float g_GrassBlendSharpness;// ブレンドの鋭さ（大きいほど境界がくっきり）
+	float g_GrassTriplanarScale;// 芝テクスチャのスケール
+	int   g_UseGrassNormal;		// 芝生法線マップ有効フラグ（盛り上がり表現）
+	float3 g_GravityUpDir;		// 重力の「上」方向（芝が生える面の判定に使う）
+	float g__grasspad2;			// パディング
+
+	// エッジ（境目）テクスチャブレンド
+	int   g_UseGrassEdge;		// エッジブレンド有効フラグ
+	float g_GrassEdgeWidth;		// エッジ帯域の幅（0.1〜0.5推奨。upDot のどの範囲をエッジとするか）
+	float g_GrassEdgeTexScale;	// エッジテクスチャのトリプレーナースケール
+	float g_FullEdgeStrength;	// 全面エッジテクスチャブレンド強度（0=無効 1=フル上書き）
 };
 
 // 定数バッファ(メッシュ単位)

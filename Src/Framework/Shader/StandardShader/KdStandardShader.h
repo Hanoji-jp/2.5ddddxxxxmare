@@ -37,6 +37,20 @@ public:
 		float			TriplanarScale = 0.1f;	// ワールド座標スケール
 		int				SphereNormal   = 0;		// 球法線を中心方向で解析計算するフラグ
 		float			_tripad        = 0.0f;	// パディング
+
+		// 芝生ブレンド
+		int				UseGrass            = 0;    // 芝生ブレンド有効フラグ
+		float			GrassBlendSharpness = 4.0f; // ブレンドの鋭さ
+		float			GrassTriplanarScale = 0.1f; // 芝テクスチャスケール
+		int				UseGrassNormal      = 0;    // 草法線マップ有効フラグ（盛り上がり）
+		Math::Vector3	GravityUpDir        = { 0.0f, 1.0f, 0.0f }; // 重力の上方向
+		float			_grasspad2          = 0.0f;
+
+		// エッジ（境目）テクスチャ
+		int				UseGrassEdge      = 0;    // エッジブレンド有効フラグ
+		float			GrassEdgeWidth    = 0.3f; // エッジ帯域の幅（upDot 空間）
+		float			GrassEdgeTexScale = 0.15f;// エッジテクスチャのスケール
+		float			FullEdgeStrength  = 0.0f; // 全面エッジブレンド強度（0=無効 1=フル）
 	};
 
 	// 定数バッファ(メッシュ単位更新)
@@ -72,6 +86,69 @@ public:
 		auto& cb = m_cb0_Obj.Work();
 		cb.UseTriplanar   = enable ? 1 : 0;
 		cb.TriplanarScale = scale;
+		m_dirtyCBObj = true;
+	}
+
+	// 芝生テクスチャを設定（t4スロットに即セット）
+	void SetGrassTexture(std::shared_ptr<KdTexture> _tex)
+	{
+		m_grassTex = _tex;
+		ID3D11ShaderResourceView* srv = m_grassTex
+			? m_grassTex->WorkSRView()
+			: KdDirect3D::Instance().GetWhiteTex()->WorkSRView();
+		KdDirect3D::Instance().WorkDevContext()->PSSetShaderResources(4, 1, &srv);
+	}
+
+	// 草法線マップを設定（t5スロットに即セット）
+	void SetGrassNormalTexture(std::shared_ptr<KdTexture> _tex)
+	{
+		m_grassNormalTex = _tex;
+		ID3D11ShaderResourceView* srv = m_grassNormalTex
+			? m_grassNormalTex->WorkSRView()
+			: KdDirect3D::Instance().GetNormalTex()->WorkSRView();
+		KdDirect3D::Instance().WorkDevContext()->PSSetShaderResources(5, 1, &srv);
+		m_cb0_Obj.Work().UseGrassNormal = (_tex != nullptr) ? 1 : 0;
+		m_dirtyCBObj = true;
+	}
+
+	// エッジ（境目）テクスチャを設定（t6スロットに即セット）
+	// width : エッジ帯域の幅（upDot 空間, 0.1〜0.5 推奨）
+	// texScale : トリプレーナースケール
+	void SetGrassEdgeTexture(std::shared_ptr<KdTexture> _tex,
+							 float width    = 0.3f,
+							 float texScale = 0.15f)
+	{
+		m_grassEdgeTex = _tex;
+		ID3D11ShaderResourceView* srv = m_grassEdgeTex
+			? m_grassEdgeTex->WorkSRView()
+			: KdDirect3D::Instance().GetWhiteTex()->WorkSRView();
+		KdDirect3D::Instance().WorkDevContext()->PSSetShaderResources(6, 1, &srv);
+		auto& cb = m_cb0_Obj.Work();
+		cb.UseGrassEdge      = (_tex != nullptr) ? 1 : 0;
+		cb.GrassEdgeWidth    = width;
+		cb.GrassEdgeTexScale = texScale;
+		m_dirtyCBObj = true;
+	}
+	// 全面エッジブレンド強度を設定（0=無効 1=フル）
+	void SetFullEdgeStrength(float strength)
+	{
+		m_cb0_Obj.Work().FullEdgeStrength = strength;
+		m_dirtyCBObj = true;
+	}
+
+	// upDir   : 重力の「上」方向（この方向を向いている面に芝が生える）
+	// sharpness: ブレンド境界の鋭さ（2〜8推奨）
+	// grassScale: 芝テクスチャのトリプレーナースケール
+	void SetGrassBlend(bool enable,
+					   const Math::Vector3& upDir       = { 0.0f, 1.0f, 0.0f },
+					   float sharpness                  = 4.0f,
+					   float grassScale                 = 0.15f)
+	{
+		auto& cb = m_cb0_Obj.Work();
+		cb.UseGrass            = enable ? 1 : 0;
+		cb.GravityUpDir        = upDir;
+		cb.GrassBlendSharpness = sharpness;
+		cb.GrassTriplanarScale = grassScale;
 		m_dirtyCBObj = true;
 	}
 
@@ -262,7 +339,10 @@ private:
 	ID3D11PixelShader* m_PS_GenDepthFromLight = nullptr;	// 光からの深度
 
 	// テクスチャ
-	std::shared_ptr<KdTexture>	m_dissolveTex = nullptr;	// ディゾルブで使用するデフォルトテクスチャ
+	std::shared_ptr<KdTexture>	m_dissolveTex    = nullptr;	// ディゾルブで使用するデフォルトテクスチャ
+	std::shared_ptr<KdTexture>	m_grassTex       = nullptr;	// 芝生テクスチャ（t4スロット）
+	std::shared_ptr<KdTexture>	m_grassNormalTex = nullptr;	// 芝生法線マップ（t5スロット）
+	std::shared_ptr<KdTexture>	m_grassEdgeTex   = nullptr;	// 草エッジ（境目）テクスチャ（t6スロット）
 
 	// 定数バッファ
 	KdConstantBuffer<cbObject>		m_cb0_Obj;				// オブジェクト単位で更新

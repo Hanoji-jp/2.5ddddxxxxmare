@@ -17,6 +17,10 @@ namespace WarpHoleConst
 	// Waypointを移動する速度（単位：ワールド/秒）
 	constexpr float WarpMoveSpeed       = 25.0f;
 
+	// ワープ移動の総時間（秒）。速度ではなく時間で制御する。
+	// InOutExpo イージングにより始終が遅く中間が速くなる。
+	constexpr float WarpTravelDuration  = 1.2f;
+
 	//--------------------------------------------------
 	// 発射速度プロファイル（マリオギャラクシー ランチスター風）
 	//   発射直後にドンッと最高速 → 緩やかに巡航速度へ落ち着く
@@ -122,4 +126,17 @@ namespace WarpHoleConst
 	// 保存
 	//--------------------------------------------------
 	constexpr const char* SavePath      = "Asset/Data/warp_holes.csv";
+
+	//--------------------------------------------------
+	// テレポート型：フェード演出
+	//--------------------------------------------------
+	// フェードアウト／フェードインの速度（1フレームあたりアルファ増減量）
+	constexpr float TeleportFadeSpeed   = 0.04f;   // 約25フレームで完全暗転
+
+	// テレポート後、フェードインが始まるまでの待機時間（秒）
+	constexpr float TeleportHoldTime    = 0.1f;
+
+	// ワープ完了後の再トリガー防止クールダウン（秒）
+	// Exit 近くに出てもすぐに吸い込まれないようにする
+	constexpr float WarpCooldownTime    = 2.5f;
 }

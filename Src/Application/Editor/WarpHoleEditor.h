@@ -21,6 +21,14 @@ struct WarpHoleData
 	Math::Vector3              EntryMouthDir = { 0.0f, 0.0f, 0.0f };
 	Math::Vector3              ExitMouthDir  = { 0.0f, 0.0f, 0.0f };
 
+	// true: テレポート型（暗転→瞬間移動→明転）
+	// false: 既存のトンネル移動型
+	bool                       Teleport  = false;
+
+	// true: 一歩通行（Entry→Exit のみ）
+	// false: 双方向（Exit→Entry も通過可）
+	bool                       OneWay    = true;
+
 	// 入口口元の向きを解決（未設定なら入口→出口の直線方向）
 	Math::Vector3 GetEntryMouthDir() const
 	{

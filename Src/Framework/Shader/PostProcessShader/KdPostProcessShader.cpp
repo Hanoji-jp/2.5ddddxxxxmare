@@ -1,4 +1,5 @@
 ﻿#include "KdPostProcessShader.h"
+#include "../../../Application/Const/PostProcessConst.h"
 
 // ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// /////
 // シェーダー本体の生成、定数バッファの生成
@@ -85,6 +86,7 @@ bool KdPostProcessShader::Init()
 	// ぼかし画像
 	m_blurRTPack.CreateRenderTarget(backBuffer->GetWidth(), backBuffer->GetHeight());
 	m_strongBlurRTPack.CreateRenderTarget(backBuffer->GetWidth() / 2, backBuffer->GetHeight() / 2);
+	m_motionBlurRTPack.CreateRenderTarget(backBuffer->GetWidth(), backBuffer->GetHeight());
 
 	// 被写界深度画像
 	m_depthOfFieldRTPack.CreateRenderTarget(backBuffer->GetWidth(), backBuffer->GetHeight());
@@ -180,10 +182,99 @@ void KdPostProcessShader::PostEffectProcess()
 	m_postEffectRTChanger.UndoRenderTarget();
 
 	LightBloomProcess();
+
 	BlurProcess();
+
 	DepthOfFieldProcess();
 
-	KdShaderManager::Instance().m_spriteShader.DrawTex(m_depthOfFieldRTPack.m_RTTexture.get(), 0, 0);
+	// ---- モーションブラー（デバッグ: 常時強制ブラーで動作確認）----
+	{
+		const auto& camCB = KdShaderManager::Instance().GetCameraCB();
+		const Math::Vector3 camPos = camCB.CamPos;
+		m_camPosSet = false;
+
+		bool useMotionBlur = false;
+
+		if (m_prevCamPosValid)
+		{
+			const Math::Vector3 delta = camPos - m_prevCamPos;
+			const float speed = delta.Length();
+
+			if (speed >= PostProcessConst::MotionBlurSpeedThreshold)
+			{
+				// ワールド空間の移動ベクトルをView行列の回転成分（上3x3）でスクリーン方向に変換
+				// ※ カメラ位置自体をVPで投影すると現在位置は常にNDC(0,0)になるため使えない
+				const Math::Vector3 deltaDir = delta / speed; // 正規化方向
+
+				// Viewの回転成分のみ適用（位置は無視）
+				const Math::Matrix& mView = camCB.mView;
+				Math::Vector2 screenDir = {
+					deltaDir.x * mView._11 + deltaDir.y * mView._21 + deltaDir.z * mView._31,
+					deltaDir.x * mView._12 + deltaDir.y * mView._22 + deltaDir.z * mView._32
+				};
+				// UV空間はY反転
+				screenDir.y = -screenDir.y;
+
+				const float strength = std::min(speed * PostProcessConst::MotionBlurScale,
+												PostProcessConst::MotionBlurMaxStrength);
+				Math::Vector2 blurDir = screenDir;
+				blurDir.Normalize();
+				blurDir *= strength;
+
+				const float blurLen = blurDir.Length();
+				if (blurLen > 0.00001f)
+				{
+					const float strength = std::min(blurLen * PostProcessConst::MotionBlurScale,
+													PostProcessConst::MotionBlurMaxStrength);
+					blurDir.Normalize();
+					blurDir *= strength;
+
+					GenerateMotionBlurTexture(
+						m_depthOfFieldRTPack.m_RTTexture,
+						m_motionBlurRTPack.m_RTTexture,
+						m_motionBlurRTPack.m_viewPort,
+						PostProcessConst::MotionBlurSamplingRadius,
+						blurDir);
+
+					KdShaderManager::Instance().m_spriteShader.DrawTex(
+						m_motionBlurRTPack.m_RTTexture.get(), 0, 0);
+
+					useMotionBlur = true;
+				}
+			}
+		}
+		else
+		{
+			// 初回フレームは通常描画
+			m_prevCamPosValid = true;
+		}
+
+		m_prevCamPos = camPos;
+
+		if (!useMotionBlur)
+		{
+			KdShaderManager::Instance().m_spriteShader.DrawTex(m_depthOfFieldRTPack.m_RTTexture.get(), 0, 0);
+		}
+	}
+}
+
+void KdPostProcessShader::DrawDamageFlash()
+{
+	if (m_damageFlashTimer <= 0.0f) { return; }
+
+	constexpr float kDt = 1.0f / 60.0f;
+	m_damageFlashTimer -= kDt / PostProcessConst::DamageFlashDuration;
+	m_damageFlashTimer = std::max(m_damageFlashTimer, 0.0f);
+
+	// イーズアウトで強度を計算
+	const float t     = m_damageFlashTimer * m_damageFlashTimer;
+	const float alpha = t * PostProcessConst::DamageFlashIntensity;
+
+	const auto& bb = KdDirect3D::Instance().GetBackBuffer();
+	const int w = static_cast<int>(bb->GetWidth());
+	const int h = static_cast<int>(bb->GetHeight());
+	const Math::Color col = { 1.0f, 0.0f, 0.0f, alpha };
+	KdShaderManager::Instance().m_spriteShader.DrawBox(w / 2, h / 2, w / 2, h / 2, &col, true);
 }
 
 void KdPostProcessShader::LightBloomProcess()
@@ -289,6 +380,43 @@ void KdPostProcessShader::CreateBlurOffsetList(std::vector<Math::Vector3>& dstIn
 	{
 		dstInfo[i].z /= totalWeight;
 	}
+}
+
+void KdPostProcessShader::GenerateMotionBlurTexture(
+	std::shared_ptr<KdTexture>& spSrcTex,
+	std::shared_ptr<KdTexture>& spDstTex,
+	D3D11_VIEWPORT& VP,
+	int blurRadius,
+	const Math::Vector2& dir)
+{
+	SetBlurToDevice();
+	KdShaderManager::Instance().ChangeSamplerState(KdSamplerState::Linear_Clamp);
+
+	// UV空間の方向をそのままオフセットとして使う1パスの方向ブラー
+	std::vector<Math::Vector3> blurInfo;
+	const int totalSamples = blurRadius * 2 + 1;
+	blurInfo.resize(totalSamples);
+
+	float totalWeight = 0.0f;
+	for (int i = 0; i < totalSamples; ++i)
+	{
+		const int offset = i - blurRadius;
+		const float t = static_cast<float>(offset) / static_cast<float>(blurRadius);
+		blurInfo[i].x = dir.x * t;
+		blurInfo[i].y = dir.y * t;
+		const float weight = expf(-(t * t) / 0.5f);
+		blurInfo[i].z = weight;
+		totalWeight += weight;
+	}
+	for (int i = 0; i < totalSamples; ++i)
+	{
+		blurInfo[i].z /= totalWeight;
+	}
+
+	SetBlurInfo(blurInfo);
+	DrawTexture(&spSrcTex, 1, spDstTex, &VP);
+
+	KdShaderManager::Instance().UndoSamplerState();
 }
 
 void KdPostProcessShader::GenerateBlurTexture(std::shared_ptr<KdTexture>& spSrcTex, std::shared_ptr<KdTexture>& spDstTex, D3D11_VIEWPORT& VP, int blurRadius)

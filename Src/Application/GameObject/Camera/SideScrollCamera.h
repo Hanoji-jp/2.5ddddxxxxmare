@@ -1,5 +1,6 @@
 ﻿#pragma once
 #include "../../Const/CameraConst.h"
+#include "../../Const/JuiceConst.h"
 #include "RoomBounds.h"
 
 // 2.5D横スクロール用カメラ
@@ -13,6 +14,12 @@ public:
     void Update(const Math::Vector3& _targetPos, const Math::Vector3& _upDir = { 0.0f, 1.0f, 0.0f });
     void SetRooms(const std::vector<RoomBounds>& _rooms);
     int  GetCurrentRoomIndex() const { return m_currentRoom; }
+
+    // カメラシェイクを開始する（強さ 0〜1 程度）
+    void TriggerShake(float strength) { m_shakeStrength = std::max(m_shakeStrength, strength); }
+
+    // 惑星到達ズームをトリガー
+    void TriggerPlanetZoom() { m_planetZoomTimer = 1.0f; }
 
 private:
     Math::Vector3 CalcBlendedRoomCenter(const Math::Vector3& _targetPos) const;
@@ -46,4 +53,11 @@ private:
     float         m_transitionRate  = 0.0f;
     bool          m_isTransitioning = false;
     std::vector<RoomBounds> m_rooms;
+
+    // カメラシェイク
+    float         m_shakeStrength = 0.0f;
+    float         m_shakeTimer    = 0.0f;
+
+    // 惑星到達ズームアウト→戻り（0=無効、1=開始）
+    float         m_planetZoomTimer = 0.0f;
 };

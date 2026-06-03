@@ -2,6 +2,7 @@
 #include "../Character.h"
 #include "../AnimBlender.h"
 #include "../../../Const/EnemyConst.h"
+#include "../../../Const/JuiceConst.h"
 
 //==========================================================
 // Enemy  ─ 敵共通の抽象基底クラス
@@ -71,4 +72,9 @@ protected:
 
     KdModelWork  m_modelWork;
     AnimBlender  m_animBlender;
+
+    // 撃破バウンス
+    bool  m_deathBounceActive = false;
+    float m_deathBounceVelY   = 0.0f;  // 上方向速度
+    float m_deathFadeAlpha    = 1.0f;  // 1=不透明 → 0=透明
 };

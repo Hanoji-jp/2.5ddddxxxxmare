@@ -33,9 +33,19 @@ public:
 
 	void PostEffectProcess();
 
+	// モーションブラー用：毎フレームカメラ位置を渡す
+	void SetCameraPositionForMotionBlur(const Math::Vector3& pos) { m_currentCamPos = pos; m_camPosSet = true; }
+
+	// 被ダメ赤フラッシュをトリガー
+	void TriggerDamageFlash() { m_damageFlashTimer = 1.0f; }
+
+	// DrawSprite内から呼ぶ：赤フラッシュビネットを描画（Begin〜End内で呼ぶこと）
+	void DrawDamageFlash();
+
 	void GenerateBlurTexture(std::shared_ptr<KdTexture>& spSrcTex, std::shared_ptr<KdTexture>& spDstTex, D3D11_VIEWPORT& VP, int blurRadius);
 
 private:
+	void GenerateMotionBlurTexture(std::shared_ptr<KdTexture>& spSrcTex, std::shared_ptr<KdTexture>& spDstTex, D3D11_VIEWPORT& VP, int blurRadius, const Math::Vector2& dir);
 
 	void BlurProcess();
 	void LightBloomProcess();
@@ -95,6 +105,16 @@ private:
 
 	KdRenderTargetPack	m_blurRTPack;
 	KdRenderTargetPack	m_strongBlurRTPack;
+	KdRenderTargetPack	m_motionBlurRTPack;   // モーションブラー合成用
+
+	// 前フレームのカメラワールド座標（モーションブラー用）
+	Math::Vector3 m_prevCamPos     = { 0.0f, 0.0f, 0.0f };
+	Math::Vector3 m_currentCamPos  = { 0.0f, 0.0f, 0.0f };
+	bool          m_prevCamPosValid = false;
+	bool          m_camPosSet       = false;
+
+	// 被ダメ赤フラッシュ（0=消灯 〜 1=最大）
+	float         m_damageFlashTimer = 0.0f;
 
 	KdRenderTargetPack	m_depthOfFieldRTPack;
 

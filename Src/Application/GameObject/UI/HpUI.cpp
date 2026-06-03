@@ -13,7 +13,21 @@ void HpUI::DrawGui()
 	const int hp    = pChar->GetHp();
 	const int maxHp = 3;
 
-	ImGui::SetNextWindowPos(ImVec2(UIConst::HpIconStartX, UIConst::HpIconStartY), ImGuiCond_Always);
+	// ── HP シェイクオフセット計算 ──
+	constexpr float kDt = 1.0f / 60.0f;
+	float shakeOffsetX = 0.0f;
+	if (m_shakeTimer > 0.0f)
+	{
+		const float t    = m_shakeTimer / JuiceConst::HpShakeDuration;  // 1→0
+		const float wave = std::sinf(m_shakeTimer * JuiceConst::HpShakeFreq);
+		shakeOffsetX     = wave * JuiceConst::HpShakeAmp * t;
+		m_shakeTimer    -= kDt;
+		if (m_shakeTimer < 0.0f) { m_shakeTimer = 0.0f; }
+	}
+
+	ImGui::SetNextWindowPos(
+		ImVec2(UIConst::HpIconStartX + shakeOffsetX, UIConst::HpIconStartY),
+		ImGuiCond_Always);
 	ImGui::SetNextWindowBgAlpha(0.0f);
 	ImGui::Begin("##HpUI", nullptr,
 		ImGuiWindowFlags_NoTitleBar |

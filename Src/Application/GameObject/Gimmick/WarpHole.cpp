@@ -55,12 +55,52 @@ void WarpHole::DrawEffect()
 								   WarpHoleConst::ExitColorB,
 								   WarpHoleConst::ExitColorA };
 
-	// 飛行軌道（入口→中継点→出口）と完全に一致する中心線。
-	// この一本の線に沿ってトンネルを張ることで、入口→中継点→出口まで
-	// 途切れず繋がり、プレイヤーの移動経路ともピッタリ重なる。
-	// （中心線はキャッシュされるので毎フレームの再計算は発生しない）
-	BuildTunnelCenterPath();   // キャッシュを最新化
-	DrawTunnelAlongPath(m_centerPathCache, entryCol, exitCol, m_animOffset);
+	if (m_data.Teleport)
+	{
+		// テレポート型：入口と出口を繋がず、それぞれ独立した口元リングのみ描画
+		// 2点の疎なパスを ResamplePath で密にしてからトンネル描画する
+		// entryMouthOnly=true で path[0] 側だけ口元、奥は細管になる
+		const Math::Vector3 entryDir = m_data.GetEntryMouthDir();
+		const std::vector<Math::Vector3> entryRaw =
+		{
+			m_data.EntryPos,
+			m_data.EntryPos + entryDir * WarpHoleConst::FunnelDepth * 2.0f
+		};
+		const auto entryPath = ResamplePath(entryRaw, WarpHoleConst::CenterPathSpacing);
+		DrawTunnelAlongPath(entryPath, entryCol, entryCol, m_animOffset, true);
+
+		const Math::Vector3 exitDir = m_data.GetExitMouthDir();
+		if (!m_data.OneWay)
+		{
+			// 双方向：Exit も吸い込む方向（animOffset 反転）
+			const std::vector<Math::Vector3> exitRaw =
+			{
+				m_data.ExitPos,
+				m_data.ExitPos + exitDir * WarpHoleConst::FunnelDepth * 2.0f
+			};
+			const auto exitPath = ResamplePath(exitRaw, WarpHoleConst::CenterPathSpacing);
+			DrawTunnelAlongPath(exitPath, exitCol, exitCol, 1.0f - m_animOffset, true);
+		}
+		else
+		{
+			// 一方通行：Exit は「吐き出す穴」→ アニメを逆向きにする
+			const std::vector<Math::Vector3> exitRaw =
+			{
+				m_data.ExitPos,
+				m_data.ExitPos + exitDir * WarpHoleConst::FunnelDepth * 2.0f
+			};
+			const auto exitPath = ResamplePath(exitRaw, WarpHoleConst::CenterPathSpacing);
+			DrawTunnelAlongPath(exitPath, exitCol, exitCol, 1.0f - m_animOffset, true);
+		}
+	}
+	else
+	{
+		// 通常型：OneWay/双方向どちらも Waypoint を通る一本のトンネルで描画
+		// グロウリングの流れ方向（Entry→Exit）で一方通行を表現する
+		BuildTunnelCenterPath();
+		DrawTunnelAlongPath(m_centerPathCache, entryCol, exitCol, m_animOffset,
+							/*entryMouthOnly=*/false);
+	}
 
 	shaderMgr.UndoBlendState();
 }
@@ -113,7 +153,8 @@ bool WarpHole::CheckWarpTrigger(const Math::Vector3& pPos) const
 void WarpHole::DrawTunnelAlongPath(const std::vector<Math::Vector3>& path,
 								   const Math::Color& entryCol,
 								   const Math::Color& exitCol,
-								   float animOffset) const
+								   float animOffset,
+								   bool entryMouthOnly) const
 {
 	const int pointCount = static_cast<int>(path.size());
 	if (pointCount < 2) { return; }
@@ -186,8 +227,16 @@ void WarpHole::DrawTunnelAlongPath(const std::vector<Math::Vector3>& path,
 
 		MakeBasis(fwd, tan[i], bitan[i]);
 
-		const float distFromNearEnd = std::min(arc[i], totalLen - arc[i]);
-		radius[i] = RadiusAt(distFromNearEnd);
+		// 両端から近い方の距離でトランペット半径を決める
+		// entryMouthOnly の場合は Entry 端だけ口元にする（テレポート型用）
+		if (entryMouthOnly)
+		{
+			radius[i] = RadiusAt(distFromEntry);
+		}
+		else
+		{
+			radius[i] = RadiusAt(std::min(distFromEntry, distFromExit));
+		}
 		along[i]  = arc[i] / totalLen;
 	}
 
@@ -361,6 +410,55 @@ std::vector<Math::Vector3> WarpHole::BuildTunnelCenterPath() const
 	m_centerPathCache = ResamplePath(smooth, WarpHoleConst::CenterPathSpacing);
 	m_centerPathDirty = false;
 	return m_centerPathCache;
+}
+
+//----------------------------------------------------------
+// テレポート型用：Entry 口元 → 奥 の密なパス
+//----------------------------------------------------------
+std::vector<Math::Vector3> WarpHole::BuildTeleportEntryPath() const
+{
+	const Math::Vector3 dir = m_data.GetEntryMouthDir();
+	const std::vector<Math::Vector3> raw =
+	{
+		m_data.EntryPos,
+		m_data.EntryPos + dir * WarpHoleConst::FunnelDepth
+	};
+	return ResamplePath(raw, WarpHoleConst::CenterPathSpacing);
+}
+
+//----------------------------------------------------------
+// テレポート型用：Exit 奥 → 口元 の密なパス（吐き出し方向）
+//----------------------------------------------------------
+std::vector<Math::Vector3> WarpHole::BuildTeleportExitPath() const
+{
+	const Math::Vector3 dir = m_data.GetExitMouthDir();
+	// 奥から口元へ向かう順（吐き出し）
+	const std::vector<Math::Vector3> raw =
+	{
+		m_data.ExitPos + dir * WarpHoleConst::FunnelDepth,
+		m_data.ExitPos
+	};
+	return ResamplePath(raw, WarpHoleConst::CenterPathSpacing);
+}
+
+//----------------------------------------------------------
+// 逆走用：Exit 口元 → 奥（逆走時の吸い込みパス）
+//----------------------------------------------------------
+std::vector<Math::Vector3> WarpHole::BuildTeleportExitPathReverse() const
+{
+	auto path = BuildTeleportExitPath();
+	std::reverse(path.begin(), path.end());
+	return path;
+}
+
+//----------------------------------------------------------
+// 逆走用：Entry 奥 → 口元（逆走時の吐き出しパス）
+//----------------------------------------------------------
+std::vector<Math::Vector3> WarpHole::BuildTeleportEntryPathReverse() const
+{
+	auto path = BuildTeleportEntryPath();
+	std::reverse(path.begin(), path.end());
+	return path;
 }
 
 //----------------------------------------------------------
