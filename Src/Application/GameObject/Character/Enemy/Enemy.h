@@ -44,6 +44,12 @@ protected:
     virtual void Chase();
     virtual void DoAttack() = 0;   // 攻撃の実装は派生クラス必須
 
+    // 指定方向に崖または壁があるか判定（true なら反転すべき）
+    bool CheckEdgeAheadDir(const Math::Vector3& fwdDir) const;
+
+    // 巡回方向（m_patrolRight）で崖/壁チェック
+    bool CheckEdgeAhead() const;
+
     // モデル・アニメ初期化ヘルパー
     void InitModel(const char* _path);
 
@@ -52,6 +58,9 @@ protected:
 
     // 向きを目標方向に向ける
     void FaceTarget();
+
+    // 崖・壁反転検知を使うか（Cubun など崖で折り返す敵に true をセット）
+    bool    m_useEdgeDetection = false;
 
     AIState m_aiState     = AIState::Patrol;
     int     m_attackCool  = 0;

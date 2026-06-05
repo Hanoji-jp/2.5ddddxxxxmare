@@ -19,7 +19,6 @@ Math::Vector3 SideScrollCamera::CalcBlendedRoomCenter(const Math::Vector3& _targ
 
 	const RoomBounds& cr = m_rooms[m_currentRoom];
 
-	// minY/maxY が FLT_MAX のままの場合はプレイヤーY をそのまま使う
 	const bool validY = (cr.minY > -1e+30f && cr.maxY < 1e+30f);
 	const float centerY = validY ? (cr.minY + cr.maxY) * 0.5f : _targetPos.y;
 
@@ -27,7 +26,7 @@ Math::Vector3 SideScrollCamera::CalcBlendedRoomCenter(const Math::Vector3& _targ
 	{
 		(cr.minX + cr.maxX) * 0.5f,
 		centerY,
-		0.0f
+		cr.cameraZ
 	};
 
 	if (!m_isTransitioning || m_nextRoom == m_currentRoom ||
@@ -44,38 +43,32 @@ Math::Vector3 SideScrollCamera::CalcBlendedRoomCenter(const Math::Vector3& _targ
 	{
 		(nr.minX + nr.maxX) * 0.5f,
 		nextCenterY,
-		0.0f
+		nr.cameraZ
 	};
 
 	return Math::Vector3::Lerp(currentCenter, nextCenter, std::clamp(m_transitionRate, 0.0f, 1.0f));
 }
 
 // 目標カメラ位置（ルーム中心 + 部分追従 + 浮遊ボブ）
-Math::Vector3 SideScrollCamera::CalcTargetCamPos(const Math::Vector3& _targetPos, float _floatY, float _floatX, float _offsetZ, float _upSign) const
+Math::Vector3 SideScrollCamera::CalcTargetCamPos(const Math::Vector3& _targetPos, float _floatY, float _floatX, float _offsetZ, float _upSign, float _offsetX, float _offsetY) const
 {
-	const auto& cs = CameraSettings::Instance();
 	const Math::Vector3 roomCenter = CalcBlendedRoomCenter(_targetPos);
 
 	// 重力方向に応じてオフセット方向を反転
-	// upSign = +1 → 通常重力（カメラ上）、upSign = -1 → 反転重力（カメラ下）
-	constexpr float kInvertedExtraOffset = 5.0f;  // 重力反転時の追加下げオフセット
-	const float offsetY = cs.OffsetY * _upSign - (1.0f - _upSign) * 0.5f * kInvertedExtraOffset;
+	constexpr float kInvertedExtraOffset = 5.0f;
+	const float offsetY = _offsetY * _upSign - (1.0f - _upSign) * 0.5f * kInvertedExtraOffset;
 	float camY = _targetPos.y + offsetY + _floatY;
 
-	// 視野の縦幅を考慮（FOV 45度、距離15の場合、縦方向の視野は約±7.5）
-	constexpr float kViewHalfHeight = 10.0f;  // 余裕を持たせる
-	constexpr float kScreenMargin = 0.5f;
-
-	// upSignに応じてクランプ方向を変える
+	constexpr float kViewHalfHeight = 10.0f;
+	constexpr float kScreenMargin   = 0.5f;
 	const float minCamY = _targetPos.y - kViewHalfHeight + kScreenMargin;
 	const float maxCamY = _targetPos.y + kViewHalfHeight - kScreenMargin;
-
 	if (camY < minCamY) { camY = minCamY; }
 	else if (camY > maxCamY) { camY = maxCamY; }
 
 	return
 	{
-		_targetPos.x + _floatX,
+		_targetPos.x + _floatX + _offsetX,
 		camY,
 		_offsetZ
 	};
@@ -102,6 +95,52 @@ void SideScrollCamera::Update(const Math::Vector3& _targetPos, const Math::Vecto
 
 	// upDir.yが負 → 重力反転中（上下逆）
 	const float upSign = (m_upDir.y >= 0.0f) ? 1.0f : -1.0f;
+
+	// ── 0. フォーカスオフセット補間（重力ローカル→ワールド）────────
+	// ルームのfocusOffsetをupDir基底でワールド空間へ変換してLerp補間
+	{
+		// 現在ルームのfocusOffset（重力ローカル）を取得
+		Math::Vector3 localFocus = { 0.0f, 0.0f, 0.0f };
+		float focusLerp = CameraConst::FocusOffsetLerp;
+
+		if (!m_rooms.empty())
+		{
+			const RoomBounds& cur = m_rooms[m_currentRoom];
+			localFocus  = cur.focusOffset;
+			focusLerp   = (cur.focusLerpSpeed > 0.0f) ? cur.focusLerpSpeed : CameraConst::FocusOffsetLerp;
+
+			// 遷移中は次ルームのオフセットへ線形ブレンド
+			if (m_isTransitioning && m_nextRoom < static_cast<int>(m_rooms.size()))
+			{
+				const RoomBounds& nxt = m_rooms[m_nextRoom];
+				const float t = std::clamp(m_transitionRate, 0.0f, 1.0f);
+				localFocus = Math::Vector3::Lerp(cur.focusOffset, nxt.focusOffset, t);
+				const float nxtLerp = (nxt.focusLerpSpeed > 0.0f) ? nxt.focusLerpSpeed : CameraConst::FocusOffsetLerp;
+				focusLerp = std::lerp(focusLerp, nxtLerp, t);
+			}
+		}
+
+		// 重力ローカル基底を構築（upDir = Y軸、Z軸 = カメラ奥行き方向）
+		const Math::Vector3 gravUp    = m_upDir;                         // ローカルY
+		Math::Vector3 gravRight = { gravUp.y, -gravUp.x, 0.0f };        // upDirに直交する水平右方向（XY面内）
+		if (gravRight.LengthSquared() < 1e-6f)
+		{
+			gravRight = { 0.0f, 0.0f, 1.0f };
+		}
+		gravRight.Normalize();
+		Math::Vector3 gravForward;
+		gravUp.Cross(gravRight, gravForward);
+		gravForward.Normalize();
+
+		// ローカル→ワールド変換
+		const Math::Vector3 targetFocusWorld =
+			gravRight   * localFocus.x +
+			gravUp      * localFocus.y +
+			gravForward * localFocus.z;
+
+		// スムーズに補間
+		m_focusOffsetWorld = Math::Vector3::Lerp(m_focusOffsetWorld, targetFocusWorld, focusLerp);
+	}
 
 	// ── 1. ルーム遷移ステート更新（全モード共通） ──────────────
 	constexpr float kDt = 1.0f / 60.0f;
@@ -154,6 +193,45 @@ void SideScrollCamera::Update(const Math::Vector3& _targetPos, const Math::Vecto
 	Math::Vector3 targetLookAt;
 	float         targetRollDeg = 0.0f;
 
+	// ── effective offset: ルームのオーバーライドがあれば使い、なければグローバル値 ──
+	float effectiveOffsetX = cs.OffsetX;
+	float effectiveOffsetY = cs.OffsetY;
+	float effectiveOffsetZ = cs.OffsetZ;
+	if (!m_rooms.empty())
+	{
+		const RoomBounds& cur = m_rooms[m_currentRoom];
+		if (cur.useOffsetOverride)
+		{
+			effectiveOffsetX = cur.overrideOffsetX;
+			effectiveOffsetY = cur.overrideOffsetY;
+			effectiveOffsetZ = cur.overrideOffsetZ;
+		}
+
+		// 遷移中: 次ルームのオーバーライドへブレンド
+		if (m_isTransitioning && m_nextRoom < static_cast<int>(m_rooms.size()))
+		{
+			const RoomBounds& nxt = m_rooms[m_nextRoom];
+			const float t = std::clamp(m_transitionRate, 0.0f, 1.0f);
+			const float nxtX = nxt.useOffsetOverride ? nxt.overrideOffsetX : cs.OffsetX;
+			const float nxtY = nxt.useOffsetOverride ? nxt.overrideOffsetY : cs.OffsetY;
+			const float nxtZ = nxt.useOffsetOverride ? nxt.overrideOffsetZ : cs.OffsetZ;
+				effectiveOffsetX = std::lerp(effectiveOffsetX, nxtX, t);
+					effectiveOffsetY = std::lerp(effectiveOffsetY, nxtY, t);
+					effectiveOffsetZ = std::lerp(effectiveOffsetZ, nxtZ, t);
+				}
+			}
+
+			// minY/maxY が設定されていないルームはプレイヤーY中心（offsetY=0）
+			// 設定されている場合のみ effectiveOffsetY を使って上下にずらす
+			{
+				const bool hasMinY = !m_rooms.empty() && (m_rooms[m_currentRoom].minY > -1e+30f);
+				const bool hasMaxY = !m_rooms.empty() && (m_rooms[m_currentRoom].maxY <  1e+30f);
+				if (!hasMinY && !hasMaxY)
+				{
+					effectiveOffsetY = 0.0f;
+				}
+			}
+
 	if (mode == CameraConst::CameraMode::TopDown)
 	{
 		// ── TopDown : プレイヤー（またはルーム中心）の真上から見下ろす ──
@@ -168,8 +246,22 @@ void SideScrollCamera::Update(const Math::Vector3& _targetPos, const Math::Vecto
 	else if (mode == CameraConst::CameraMode::Fixed2D)
 	{
 		// ── Fixed2D : マリギャラ2Dモード風 ──────────────────────
-		targetPos    = { _targetPos.x, _targetPos.y + CameraConst::Fixed2DOffsetY, CameraConst::Fixed2DOffsetZ + planetZoomOffset };
-		targetLookAt = { _targetPos.x, _targetPos.y, 0.0f };
+		const float currentCameraZ = m_rooms.empty() ? 0.0f : m_rooms[m_currentRoom].cameraZ;
+		const float targetCameraZ  = (!m_rooms.empty() && m_isTransitioning && m_nextRoom < static_cast<int>(m_rooms.size()))
+			? m_rooms[m_nextRoom].cameraZ : currentCameraZ;
+		const float blendedCameraZ = std::lerp(currentCameraZ, targetCameraZ,
+			std::clamp(m_transitionRate, 0.0f, 1.0f));
+
+		// 底面に立っているとき（upSign=-1）はカメラを逆方向（下）にオフセット
+		// effectiveOffsetY を使うことでルーム別 or グローバル値が反映される
+		const float offsetY = effectiveOffsetY * upSign;
+
+		// フォーカスオフセットをプレイヤー位置に加算
+		const Math::Vector3 focusedTarget = _targetPos + m_focusOffsetWorld;
+
+		targetPos    = { focusedTarget.x + effectiveOffsetX, focusedTarget.y + offsetY, blendedCameraZ + effectiveOffsetZ + planetZoomOffset };
+		// 注視点はプレイヤーの実座標を直接向く
+		targetLookAt = focusedTarget;
 		targetRollDeg = 0.0f;
 	}
 	else
@@ -180,10 +272,14 @@ void SideScrollCamera::Update(const Math::Vector3& _targetPos, const Math::Vecto
 		const float floatY = std::sinf(m_floatTimer)        * cs.FloatAmplitude * (1.0f - m_wallZoomRate);
 		const float floatX = std::sinf(m_floatTimer * 0.7f) * cs.FloatAmplitude * 0.4f * (1.0f - m_wallZoomRate);
 
-		const float baseOffsetZ = cs.OffsetZ;
+		const float baseOffsetZ = m_useOffsetZOverride ? m_offsetZOverride : effectiveOffsetZ;
 
-		targetPos    = CalcTargetCamPos(_targetPos, floatY, floatX, baseOffsetZ + planetZoomOffset, upSign);
-		targetLookAt = CalcTargetLookAt(_targetPos);
+		// フォーカスオフセットをプレイヤー位置に加算してSideScroll基準位置を決定
+		const Math::Vector3 focusedTarget = _targetPos + m_focusOffsetWorld;
+
+		targetPos    = CalcTargetCamPos(focusedTarget, floatY, floatX, baseOffsetZ + planetZoomOffset, upSign, effectiveOffsetX, effectiveOffsetY);
+		// 注視点はプレイヤーの実座標を直接向く
+		targetLookAt = focusedTarget;
 
 		if (!m_rooms.empty())
 		{
@@ -244,7 +340,13 @@ void SideScrollCamera::Update(const Math::Vector3& _targetPos, const Math::Vecto
 				targetLookAt.x = center;
 			}
 
-			targetPos.z = actualOffsetZ;
+			// cameraZ: 遷移中は currentRoom→nextRoom をブレンド
+			const float currentCameraZ = m_rooms[m_currentRoom].cameraZ;
+			const float targetCameraZ  = (m_isTransitioning && m_nextRoom < static_cast<int>(m_rooms.size()))
+				? m_rooms[m_nextRoom].cameraZ : currentCameraZ;
+			const float blendedCameraZ = std::lerp(currentCameraZ, targetCameraZ,
+				std::clamp(m_transitionRate, 0.0f, 1.0f));
+			targetPos.z = actualOffsetZ + blendedCameraZ;
 		}
 
 		// ロール計算
@@ -258,6 +360,24 @@ void SideScrollCamera::Update(const Math::Vector3& _targetPos, const Math::Vecto
 		m_pos       = targetPos;
 		m_lookAtPos = targetLookAt;
 		m_initialized = true;
+	}
+
+	// ── 3.5 minY/maxY クランプ（ルーム設定が有効な場合のみ） ───
+	if (!m_rooms.empty())
+	{
+		const RoomBounds& cur = m_rooms[m_currentRoom];
+		// 遷移中はブレンドされた minY/maxY を使用
+		float blendedMinY = cur.minY;
+		float blendedMaxY = cur.maxY;
+		if (m_isTransitioning && m_nextRoom < static_cast<int>(m_rooms.size()))
+		{
+			const RoomBounds& nxt = m_rooms[m_nextRoom];
+			const float t = std::clamp(m_transitionRate, 0.0f, 1.0f);
+			blendedMinY = std::lerp(cur.minY, nxt.minY, t);
+			blendedMaxY = std::lerp(cur.maxY, nxt.maxY, t);
+		}
+		if (blendedMinY > -1e+30f) { targetPos.y = std::max(targetPos.y, blendedMinY); }
+		if (blendedMaxY <  1e+30f) { targetPos.y = std::min(targetPos.y, blendedMaxY); }
 	}
 
 	// ── 4. 補間（TopDown / Fixed2D でも Lerp で滑らかに切り替わる） ──

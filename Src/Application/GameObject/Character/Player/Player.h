@@ -91,6 +91,15 @@ private:
     // ダッシュ中フラグ
     bool m_isDashing = false;
 
+    // 攻撃モーション再生中フラグ（上半身 Attack 上書き管理用）
+    bool m_isAttacking = false;
+
+    // 傘アイテム所持中（未実装：デバッグキー P で取得/無）
+    bool m_hasParasol = false;
+
+    // 傘を開いているか（Fall 中のみ有効）
+    bool m_isParasolOpen = false;
+
     // 今フレームに惑星切り替わりが発生したか
     bool m_planetChangedThisFrame = false;
 

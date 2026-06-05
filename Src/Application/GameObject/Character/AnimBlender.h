@@ -42,6 +42,14 @@ public:
     // 現在のアニメーションが終了しているか（ループなしのとき有効）
     bool IsAnimationEnd() const { return m_currentAnimator.IsAnimationEnd(); }
 
+    // ---- 上半身アニメ上書き ----
+    // 指定ノード名集合だけ別アニメで上書きする（Walk 中 Attack など）
+    void SetUpperBodyAnim(const std::shared_ptr<KdAnimationData>& _spAnim,
+                          const std::vector<std::string>& _nodeNames,
+                          bool _isLoop = false);
+    void ClearUpperBodyAnim();
+    bool IsUpperBodyAnimEnd() const { return !m_upperBodyActive || m_upperBodyAnimator.IsAnimationEnd(); }
+
 private:
     // ノードリストのローカル行列を行列分解してLerpし直す
     static void BlendNodes(std::vector<KdModelWork::Node>&       _dst,
@@ -60,4 +68,9 @@ private:
     float m_blendTime    = 0.0f;    // 経過ブレンドフレーム
     float m_blendFrames  = 0.0f;    // ブレンド総フレーム数
     bool  m_isBlending   = false;   // ブレンド中か
+
+    // 上半身アニメ上書き
+    KdAnimator               m_upperBodyAnimator;
+    std::vector<std::string> m_upperBodyNodeNames; // 上書き対象ノード名
+    bool                     m_upperBodyActive = false;
 };

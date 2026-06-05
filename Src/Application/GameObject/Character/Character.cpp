@@ -1,5 +1,6 @@
 ﻿#include "../../../Pch.h"
 #include "Character.h"
+#include "../Gimmick/MovingFloor.h"
 
 void Character::Update()
 {
@@ -34,11 +35,26 @@ void Character::PostUpdate()
         m_currentFrameLog.upDir     = m_upDir;
 
         // 分軸処理：横→壁判定→縦→床・天井判定
+        m_preMovePos = GetPos();  // 水平移動前の位置を記録（移動床 XZ 判定に使う）
         ApplyVelocityHorizontal();
         CheckWall();
         ApplyVelocityVertical();
         CheckCeiling();
         CheckGround();
+
+        // ---- 乗り床追従：CheckGround で今フレーム乗っていると判定された床のみ追従 ----
+        if (m_pRidingFloor)
+        {
+            const auto spMF = m_pRidingFloor->lock();
+            if (spMF)
+            {
+                SetPos(GetPos() + spMF->GetDeltaMove());
+            }
+            else
+            {
+                m_pRidingFloor = nullptr;
+            }
+        }
 
         m_currentFrameLog.isGround = m_isGround;
 
@@ -106,7 +122,7 @@ void Character::ApplyGravity()
         if (m_isGround) { return; }  // velocity 加算のみスキップ、Slerp は上で完了済み
 
         const float radialVel = m_velocity.Dot(gravDir);
-        const float newRadial = std::min(radialVel + PlanetConst::GravityAccel, PlanetConst::MaxFallSpeed);
+        const float newRadial = std::min(radialVel + PlanetConst::GravityAccel * m_gravityScale, PlanetConst::MaxFallSpeed * m_gravityScale);
         if (newRadial > radialVel) { m_velocity += gravDir * (newRadial - radialVel); }
         return;
     }
@@ -180,7 +196,7 @@ void Character::ApplyGravity()
 
         if (m_isGround) { return; }  // velocity 加算のみスキップ、Slerp は上で完了済み
         const float radialVel = m_velocity.Dot(zoneGravDir);
-        const float newRadial = std::min(radialVel + PlanetConst::GravityAccel, PlanetConst::MaxFallSpeed);
+        const float newRadial = std::min(radialVel + PlanetConst::GravityAccel * m_gravityScale, PlanetConst::MaxFallSpeed * m_gravityScale);
         if (newRadial > radialVel) { m_velocity += zoneGravDir * (newRadial - radialVel); }
         return;
     }
@@ -198,7 +214,7 @@ void Character::ApplyGravity()
         m_upDirVisual.Normalize();
         if (m_isGround) { return; }  // velocity 加算のみスキップ、Slerp は上で完了済み
         const float radialVel = m_velocity.Dot(kDefaultGravDir);
-        const float newRadial = std::min(radialVel + PlanetConst::GravityAccel, PlanetConst::MaxFallSpeed);
+        const float newRadial = std::min(radialVel + PlanetConst::GravityAccel * m_gravityScale, PlanetConst::MaxFallSpeed * m_gravityScale);
         if (newRadial > radialVel) { m_velocity += kDefaultGravDir * (newRadial - radialVel); }
         return;
     }
@@ -304,9 +320,56 @@ void Character::CheckCeiling()
 
 void Character::CheckGround()
 {
-    m_isGround = false;
+    m_isGround     = false;
+    m_pRidingFloor = nullptr;
 
     const Math::Vector3 pos = GetPos();
+
+    // ---- ★ 移動床（Planet NormalGravity Box と同一の幾何距離方式）----
+    // 早期 return より前に判定することで惑星上でも必ず拾う
+    if (m_velocity.Dot(m_upDir) <= 0.1f)
+    {
+        for (auto& wpMF : m_movingFloors)
+        {
+            const auto spMF = wpMF.lock();
+            if (!spMF) { continue; }
+
+            const Math::Vector3  mfPos  = spMF->GetPos();
+            const Math::Vector3& half   = spMF->GetHalfExtents();
+            const Math::Vector3  lp     = pos - mfPos;
+
+            // XZ 範囲チェックは「水平移動前の位置」で行う
+            // CheckWall で押し返されて範囲内に戻った場合を弾くため
+            const Math::Vector3  lpPre  = m_preMovePos - mfPos;
+            if (std::abs(lpPre.x) > half.x) { continue; }
+            if (std::abs(lpPre.z) > half.z) { continue; }
+
+            // 上面 + キャップ外面からの Y 距離
+            const float capSurface = PlanetConst::GrassCapThickness * 2.0f;
+            const float surfaceY   = mfPos.y + half.y + capSurface;  // 絶対Y座標
+            const float distToSurf = pos.y - surfaceY;               // 正=上方, 負=めり込み
+
+            // 上すぎ → スキップ
+            if (distToSurf >  CollisionConst::GroundSnapDist) { continue; }
+            // 下すぎ → スキップ（側面から押し返されて床下に入った場合を弾く）
+            // 上方向からの着地のみを意図しているため、食い込みは極小値のみ許容
+            if (distToSurf < -CollisionConst::GroundHitDistMin) { continue; }
+
+            // 上面にスナップ（Y のみ補正）
+            Math::Vector3 corrected = GetPos();
+            corrected.y -= distToSurf;
+            SetPos(corrected);
+
+            // 下方向速度をカット
+            const float normalComp = m_velocity.Dot(m_upDir);
+            if (normalComp < 0.0f) { m_velocity -= m_upDir * normalComp; }
+
+            m_isGround = true;
+            m_airGravitySwitchCount = 0;
+            m_pRidingFloor = &wpMF;
+            return;
+        }
+    }
 
     // ---- ① Box惑星（Normal・非Normal共通）── 外側距離方式 ----
     if (m_pCurrentPlanet
@@ -731,6 +794,16 @@ void Character::CheckWall()
     if (spMap)
     {
         doMapRayPush(spMap);
+    }
+
+    // ---- 移動床 側面押し出し（レイキャスト方式）
+    for (auto& wpMF : m_movingFloors)
+    {
+        const auto spMF = wpMF.lock();
+        if (!spMF) { continue; }
+        const KdCollider* col = spMF->GetCollider();
+        if (!col) { continue; }
+        doPlanetRayPush(*col, spMF->GetWorldMatrix(), true);
     }
 
     SetPos(pos);

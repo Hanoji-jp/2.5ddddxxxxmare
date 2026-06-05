@@ -88,6 +88,29 @@ void AnimBlender::Update(KdModelWork& _modelWork, float speed)
 		// ----- 通常再生 -----
 		m_currentAnimator.AdvanceTime(nodes, speed);
 	}
+
+	// ---- 上半身アニメ上書き ----
+	if (m_upperBodyActive)
+	{
+		// 上半身だけ別アニメで進めてノードを上書き
+		std::vector<KdModelWork::Node> upperNodes = nodes;
+		m_upperBodyAnimator.AdvanceTime(upperNodes, speed);
+
+		for (size_t i = 0; i < nodes.size(); ++i)
+		{
+			const std::string& name = nodes[i].m_name;
+			for (const auto& target : m_upperBodyNodeNames)
+			{
+				if (name == target)
+				{
+					nodes[i].m_localTransform = upperNodes[i].m_localTransform;
+					break;
+				}
+			}
+		}
+
+		if (m_upperBodyAnimator.IsAnimationEnd()) { m_upperBodyActive = false; }
+	}
 }
 
 void AnimBlender::BlendNodes(std::vector<KdModelWork::Node>&       _dst,
@@ -118,4 +141,20 @@ void AnimBlender::BlendNodes(std::vector<KdModelWork::Node>&       _dst,
             * DirectX::XMMatrixRotationQuaternion(blendRot)
             * DirectX::XMMatrixTranslationFromVector(blendTrans);
     }
+}
+
+void AnimBlender::SetUpperBodyAnim(const std::shared_ptr<KdAnimationData>& _spAnim,
+                                   const std::vector<std::string>& _nodeNames,
+                                   bool _isLoop)
+{
+    if (!_spAnim) { return; }
+    m_upperBodyAnimator.SetAnimation(_spAnim, _isLoop);
+    m_upperBodyNodeNames = _nodeNames;
+    m_upperBodyActive    = true;
+}
+
+void AnimBlender::ClearUpperBodyAnim()
+{
+    m_upperBodyActive = false;
+    m_upperBodyNodeNames.clear();
 }

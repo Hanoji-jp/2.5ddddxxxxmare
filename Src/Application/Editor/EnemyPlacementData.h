@@ -1,15 +1,27 @@
 ﻿#pragma once
+#include "../GameObject/Character/Character.h"
 
 // エディターで配置する敵の種類
 enum class EnemyType
 {
-	Melee,    // 近距離型
 	Ranged,   // 遠距離型
+	Cubun,    // ジャンプ棘付き敵
+};
+
+// Cubun の出現向き
+enum class CubunFaceDir
+{
+	Up,    // 体の上が +Y（通常向き）
+	Down,  // 体の上が -Y（逆さ）
 };
 
 // 敵1体分の配置データ
 struct EnemyPlacementData
 {
-	EnemyType     type     = EnemyType::Melee;
-	Math::Vector3 position = { 0.0f, 0.0f, 0.0f };
+	EnemyType                    type          = EnemyType::Cubun;
+	Math::Vector3                position      = { 0.0f, 0.0f, 0.0f };
+
+	// Cubun 専用
+	CubunFaceDir                 cubunFaceDir  = CubunFaceDir::Up;
+	Character::ManualGravityDir  initGravDir   = Character::ManualGravityDir::None;
 };

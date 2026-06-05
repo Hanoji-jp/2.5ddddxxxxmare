@@ -21,9 +21,13 @@ public:
     // 惑星到達ズームをトリガー
     void TriggerPlanetZoom() { m_planetZoomTimer = 1.0f; }
 
+    // WarpHole通過後のZ基準オフセットを上書きする（0.0fで解除）
+    void SetOffsetZOverride(float z) { m_offsetZOverride = z; m_useOffsetZOverride = true; }
+    void ClearOffsetZOverride()      { m_useOffsetZOverride = false; }
+
 private:
     Math::Vector3 CalcBlendedRoomCenter(const Math::Vector3& _targetPos) const;
-    Math::Vector3 CalcTargetCamPos(const Math::Vector3& _targetPos, float _floatY, float _floatX, float _offsetZ, float _upSign) const;
+    Math::Vector3 CalcTargetCamPos(const Math::Vector3& _targetPos, float _floatY, float _floatX, float _offsetZ, float _upSign, float _offsetX, float _offsetY) const;
     Math::Vector3 CalcTargetLookAt(const Math::Vector3& _targetPos) const;
 
     // 補間後のカメラ位置
@@ -60,4 +64,12 @@ private:
 
     // 惑星到達ズームアウト→戻り（0=無効、1=開始）
     float         m_planetZoomTimer = 0.0f;
+
+    // WarpHole通過後のZ基準オーバーライド
+    float         m_offsetZOverride     = 0.0f;
+    bool          m_useOffsetZOverride  = false;
+
+    // ── フォーカスオフセット補間（重力ローカル空間）────────────
+    // 現在の補間済みオフセット（ワールド空間）
+    Math::Vector3 m_focusOffsetWorld    = { 0.0f, 0.0f, 0.0f };
 };

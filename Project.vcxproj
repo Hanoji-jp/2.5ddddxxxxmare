@@ -282,6 +282,7 @@
     <ClInclude Include="Src\Application\Const\CameraConst.h" />
     <ClInclude Include="Src\Application\Const\CheckpointConst.h" />
     <ClInclude Include="Src\Application\Const\CollisionConst.h" />
+    <ClInclude Include="Src\Application\Const\CubunConst.h" />
     <ClInclude Include="Src\Application\Const\EnemyConst.h" />
     <ClInclude Include="Src\Application\Const\GameConst.h" />
     <ClInclude Include="Src\Application\Const\GravityRingConst.h" />
@@ -289,6 +290,7 @@
     <ClInclude Include="Src\Application\Const\JuiceConst.h" />
     <ClInclude Include="Src\Application\Const\LightConst.h" />
     <ClInclude Include="Src\Application\Const\MapConst.h" />
+    <ClInclude Include="Src\Application\Const\MovingFloorConst.h" />
     <ClInclude Include="Src\Application\Const\PlanetConst.h" />
     <ClInclude Include="Src\Application\Const\PlayerConst.h" />
     <ClInclude Include="Src\Application\Const\PostProcessConst.h" />
@@ -299,6 +301,7 @@
     <ClInclude Include="Src\Application\Editor\CheckpointEditor.h" />
     <ClInclude Include="Src\Application\Editor\EnemyPlacementData.h" />
     <ClInclude Include="Src\Application\Editor\EnemyPlacementEditor.h" />
+    <ClInclude Include="Src\Application\Editor\MovingFloorEditor.h" />
     <ClInclude Include="Src\Application\Editor\RoomBoundsEditor.h" />
     <ClInclude Include="Src\Application\Editor\WarpHoleEditor.h" />
     <ClInclude Include="Src\Application\GameObject\BackGround\BackGround.h" />
@@ -309,13 +312,14 @@
     <ClInclude Include="Src\Application\GameObject\Camera\SideScrollCamera.h" />
     <ClInclude Include="Src\Application\GameObject\Character\AnimBlender.h" />
     <ClInclude Include="Src\Application\GameObject\Character\Character.h" />
+    <ClInclude Include="Src\Application\GameObject\Character\Enemy\Cubun.h" />
     <ClInclude Include="Src\Application\GameObject\Character\Enemy\Enemy.h" />
-    <ClInclude Include="Src\Application\GameObject\Character\Enemy\EnemyMelee.h" />
     <ClInclude Include="Src\Application\GameObject\Character\Enemy\EnemyRanged.h" />
     <ClInclude Include="Src\Application\GameObject\Character\Player\Player.h" />
     <ClInclude Include="Src\Application\GameObject\Checkpoint\Checkpoint.h" />
     <ClInclude Include="Src\Application\GameObject\Effect\FootDust.h" />
     <ClInclude Include="Src\Application\GameObject\Effect\GravityRingEffect.h" />
+    <ClInclude Include="Src\Application\GameObject\Gimmick\MovingFloor.h" />
     <ClInclude Include="Src\Application\GameObject\Gimmick\WarpHole.h" />
     <ClInclude Include="Src\Application\GameObject\Item\Coin.h" />
     <ClInclude Include="Src\Application\GameObject\Item\HitBox.h" />
@@ -384,10 +388,13 @@
     <ClCompile Include="..\Library\imgui\imgui_stdlib.cpp" />
     <ClCompile Include="..\Library\imgui\imgui_tables.cpp" />
     <ClCompile Include="..\Library\imgui\imgui_widgets.cpp" />
-    <ClCompile Include="Distribute\AnimBlender\AnimBlender.cpp"><ExcludedFromBuild>true</ExcludedFromBuild></ClCompile>
+    <ClCompile Include="Distribute\AnimBlender\AnimBlender.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="Src\Application\Camera\CameraSettings.cpp" />
     <ClCompile Include="Src\Application\Editor\CheckpointEditor.cpp" />
     <ClCompile Include="Src\Application\Editor\EnemyPlacementEditor.cpp" />
+    <ClCompile Include="Src\Application\Editor\MovingFloorEditor.cpp" />
     <ClCompile Include="Src\Application\Editor\RoomBoundsEditor.cpp" />
     <ClCompile Include="Src\Application\Editor\WarpHoleEditor.cpp" />
     <ClCompile Include="Src\Application\GameObject\BackGround\BackGround.cpp" />
@@ -396,13 +403,14 @@
     <ClCompile Include="Src\Application\GameObject\Camera\SideScrollCamera.cpp" />
     <ClCompile Include="Src\Application\GameObject\Character\AnimBlender.cpp" />
     <ClCompile Include="Src\Application\GameObject\Character\Character.cpp" />
+    <ClCompile Include="Src\Application\GameObject\Character\Enemy\Cubun.cpp" />
     <ClCompile Include="Src\Application\GameObject\Character\Enemy\Enemy.cpp" />
-    <ClCompile Include="Src\Application\GameObject\Character\Enemy\EnemyMelee.cpp" />
     <ClCompile Include="Src\Application\GameObject\Character\Enemy\EnemyRanged.cpp" />
     <ClCompile Include="Src\Application\GameObject\Character\Player\Player.cpp" />
     <ClCompile Include="Src\Application\GameObject\Checkpoint\Checkpoint.cpp" />
     <ClCompile Include="Src\Application\GameObject\Effect\FootDust.cpp" />
     <ClCompile Include="Src\Application\GameObject\Effect\GravityRingEffect.cpp" />
+    <ClCompile Include="Src\Application\GameObject\Gimmick\MovingFloor.cpp" />
     <ClCompile Include="Src\Application\GameObject\Gimmick\WarpHole.cpp" />
     <ClCompile Include="Src\Application\GameObject\Item\Coin.cpp" />
     <ClCompile Include="Src\Application\GameObject\Light\PointLightObject.cpp" />

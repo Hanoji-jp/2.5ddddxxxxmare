@@ -1,6 +1,8 @@
 ﻿#include "../../../../Pch.h"
 #include "Enemy.h"
 #include "../../../../Application/Manager/ModelManager.h"
+#include "../../../../Application/Manager/PlanetGravityManager.h"
+#include "../../../../Application/Const/CollisionConst.h"
 
 void Enemy::InitModel(const char* _path)
 {
@@ -138,8 +140,101 @@ void Enemy::DrawLit()
     KdShaderManager::Instance().m_StandardShader.DrawModel(m_modelWork, m_mWorld);
 }
 
+bool Enemy::CheckEdgeAheadDir(const Math::Vector3& fwdDir) const
+{
+    if (!m_isGround) { return false; }
+
+    const Math::Vector3 pos = GetPos();
+
+    // ── 壁チェック ─────────────────────────────────────────────
+    // 前方にレイを飛ばして壁に当たったら反転
+    {
+        const Math::Vector3 rayOrigin = pos + m_upDir * EnemyConst::WallCheckRayUpOffset;
+        const KdCollider::RayInfo wallRay(KdCollider::TypeBump, rayOrigin, fwdDir,
+            EnemyConst::WallCheckRayLen);
+
+        const auto& planets = PlanetGravityManager::Instance().GetPlanets();
+        for (const auto& p : planets)
+        {
+            if (!p.pCollider) { continue; }
+            std::list<KdCollider::CollisionResult> results;
+            if (!p.pCollider->Intersects(wallRay, p.mWorld, &results)) { continue; }
+            for (const auto& r : results)
+            {
+                if (r.m_hitNDir.Dot(fwdDir) >= 0.0f) { continue; }
+                if (std::abs(r.m_hitNDir.Dot(m_upDir)) > CollisionConst::WallNormalUpThreshold) { continue; }
+                return true; // 壁あり
+            }
+        }
+
+        const auto spMap = m_wpMap.lock();
+        if (spMap)
+        {
+            std::list<KdCollider::CollisionResult> results;
+            if (spMap->Intersects(wallRay, &results))
+            {
+                for (const auto& r : results)
+                {
+                    if (r.m_hitNDir.Dot(fwdDir) >= 0.0f) { continue; }
+                    if (std::abs(r.m_hitNDir.Dot(m_upDir)) > CollisionConst::WallNormalUpThreshold) { continue; }
+                    return true; // 壁あり
+                }
+            }
+        }
+    }
+
+    // ── 崖チェック ─────────────────────────────────────────────
+    // 一歩先の足元に地面がなければ崖
+    {
+        const Math::Vector3 probeBase = pos + fwdDir * EnemyConst::EdgeCheckStepDist
+                                            + m_upDir * EnemyConst::EdgeCheckRayUpOffset;
+        const KdCollider::RayInfo groundRay(KdCollider::TypeGround, probeBase, -m_upDir,
+            EnemyConst::EdgeCheckGroundLen);
+
+        bool foundGround = false;
+
+        const auto& planets = PlanetGravityManager::Instance().GetPlanets();
+        for (const auto& p : planets)
+        {
+            if (!p.pCollider) { continue; }
+            std::list<KdCollider::CollisionResult> results;
+            if (p.pCollider->Intersects(groundRay, p.mWorld, &results))
+            {
+                if (!results.empty()) { foundGround = true; break; }
+            }
+        }
+
+        if (!foundGround)
+        {
+            const auto spMap = m_wpMap.lock();
+            if (spMap)
+            {
+                std::list<KdCollider::CollisionResult> results;
+                if (spMap->Intersects(groundRay, &results) && !results.empty())
+                    foundGround = true;
+            }
+        }
+
+        if (!foundGround) { return true; } // 崖あり
+    }
+
+    return false;
+}
+
+bool Enemy::CheckEdgeAhead() const
+{
+    const Math::Vector3 fwdDir = { m_patrolRight ? 1.0f : -1.0f, 0.0f, 0.0f };
+    return CheckEdgeAheadDir(fwdDir);
+}
+
 void Enemy::Patrol()
 {
+    // 崖・壁検知：着地中かつ前方に障害がある場合は即反転
+    if (m_useEdgeDetection && CheckEdgeAhead())
+    {
+        m_patrolRight = !m_patrolRight;
+    }
+
     // スポーン地点から PatrolRange を超えたら折り返す
     const float dx = GetPos().x - m_spawnPos.x;
     if (dx >  EnemyConst::PatrolRange) { m_patrolRight = false; }
@@ -177,6 +272,19 @@ void Enemy::Chase()
     toTarget.y = 0.0f;
     if (toTarget.LengthSquared() < 1e-4f) { return; }
     toTarget.Normalize();
+
+    // 崖・壁チェック：追跡方向の前方に障害があれば追跡を諦めて停止
+    if (m_useEdgeDetection && CheckEdgeAheadDir(toTarget))
+    {
+        // 速度を減速させて止まる（崖に落ちない）
+        m_moveVelocity = Math::Vector3::Lerp(m_moveVelocity, Math::Vector3::Zero,
+            EnemyConst::Deceleration / EnemyConst::MoveSpeed);
+        if (m_moveVelocity.LengthSquared() < 0.0001f) { m_moveVelocity = Math::Vector3::Zero; }
+        m_velocity.x = m_moveVelocity.x;
+        m_velocity.z = m_moveVelocity.z;
+        ChangeAnim("Idle");
+        return;
+    }
 
     // 目標速度へ Lerp で加速
     const Math::Vector3 targetVel = toTarget * EnemyConst::MoveSpeed;

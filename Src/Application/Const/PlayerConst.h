@@ -1,4 +1,6 @@
 ﻿#pragma once
+#include <vector>
+#include <string>
 
 // プレイヤーに関わる定数
 namespace PlayerConst
@@ -46,6 +48,30 @@ namespace PlayerConst
     constexpr float DashSpeedMul     = 1.85f;  // 移動速度の倍率
     constexpr float DashAccelMul     = 1.6f;   // 加速度の倍率
     constexpr float DashAnimSpeedMul = 1.7f;   // アニメ再生速度の倍率
+
+    // 傘スロー落下の重力スケール（1.0=通常、小さいほど遅い）
+    constexpr float ParasolGravityScale = 0.25f;
+
+    // 上半身ノード名リスト（Walk 中 Attack を上半身だけ上書きするのに使用）
+    // Body より上の階層に属するノードをすべて列挙する
+    inline const std::vector<std::string>& UpperBodyNodes()
+    {
+        static const std::vector<std::string> s_nodes = {
+            "Body", "Body.001", "Head",
+            "shoulder.R", "arm.R", "ParasolHand.R",
+            "shoulder.L", "arm.L", "SwordHand.L",
+        };
+        return s_nodes;
+    }
+
+    // 左腕チェーン（Fall 中 Attack で shoulder.L 以降だけ上書きするのに使用）
+    inline const std::vector<std::string>& LeftArmNodes()
+    {
+        static const std::vector<std::string> s_nodes = {
+            "shoulder.L", "arm.L", "SwordHand.L",
+        };
+        return s_nodes;
+    }
 
     // モデルパス
     constexpr const char* ModelPath  = "Asset/Data/Player.gltf";

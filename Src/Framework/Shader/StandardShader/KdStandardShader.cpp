@@ -247,6 +247,9 @@ void KdStandardShader::DrawModel(KdModelWork& rModel, const Math::Matrix& mWorld
 	// 全描画用メッシュノードを描画
 	for (auto& nodeIdx : data->GetDrawMeshNodeIndices())
 	{
+		// visible フラグが false のノードはスキップ
+		if (!workNodes[nodeIdx].m_visible) { continue; }
+
 		// 描画
 		DrawMesh(dataNodes[nodeIdx].m_spMesh.get(), workNodes[nodeIdx].m_worldTransform * mWorld,
 			data->GetMaterials(), colRate, emissive);

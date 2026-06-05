@@ -76,4 +76,18 @@ namespace EnemyConst
     // -------------------------------------------------------
     // ゴーストスフィアの半径
     constexpr float GhostSphereRadius = 0.6f;
+
+    // -------------------------------------------------------
+    // 崖・壁反転検知（Edge Detection）
+    // -------------------------------------------------------
+    // 前方に飛ばす崖チェック用レイの水平距離（足元の先）
+    constexpr float EdgeCheckStepDist    = 0.7f;
+    // 崖チェック下方レイの長さ
+    constexpr float EdgeCheckGroundLen   = 4.0f;
+    // 崖チェック下方レイの起点高さオフセット（足元から少し上）
+    constexpr float EdgeCheckRayUpOffset = 0.4f;
+    // 前方壁チェックレイの長さ
+    constexpr float WallCheckRayLen      = 0.65f;
+    // 前方壁チェックレイの高さオフセット（体中心付近）
+    constexpr float WallCheckRayUpOffset = 0.6f;
 }

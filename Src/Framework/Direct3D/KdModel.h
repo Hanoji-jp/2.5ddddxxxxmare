@@ -110,6 +110,8 @@ public:
 		Math::Matrix	m_localTransform;	// 直属の親ボーンからの行列
 		Math::Matrix	m_worldTransform;	// 原点からの行列
 
+		bool			m_visible = true;	// 描画するか
+
 		void copy(const KdModelData::Node& rNode)
 		{
 			m_name = rNode.m_name;
@@ -158,6 +160,19 @@ public:
 	void SetModelData(std::string_view fileName);
 
 	bool NeedCalcNodeMatrices() { return m_needCalcNode; }
+
+	// ノード単位の表示切替
+	void SetNodeVisible(std::string_view name, bool visible)
+	{
+		for (auto& n : m_coppiedNodes)
+		{
+			if (n.m_name == name.data()) { n.m_visible = visible; return; }
+		}
+	}
+	void SetAllNodesVisible(bool visible)
+	{
+		for (auto& n : m_coppiedNodes) { n.m_visible = visible; }
+	}
 
 private:
 

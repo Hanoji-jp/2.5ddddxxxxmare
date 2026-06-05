@@ -3,7 +3,6 @@
 #include"../BaseScene/BaseScene.h"
 #include"../../GameObject/Character/Player/Player.h"
 #include"../../GameObject/Character/Enemy/Enemy.h"
-#include"../../GameObject/Character/Enemy/EnemyMelee.h"
 #include"../../GameObject/Character/Enemy/EnemyRanged.h"
 #include"../../GameObject/BackGround/BackGround.h"
 #include"../../GameObject/BackGround/StarField.h"
@@ -13,6 +12,7 @@
 #include"../../Editor/EnemyPlacementEditor.h"
 #include"../../Editor/CheckpointEditor.h"
 #include"../../Editor/WarpHoleEditor.h"
+#include"../../Editor/MovingFloorEditor.h"
 #include"../../GameObject/Gimmick/WarpHole.h"
 #include"../../Manager/PlanetGravityManager.h"
 #include"../../Manager/ManualGravityZoneManager.h"
@@ -26,6 +26,8 @@
 #include"../../Const/LightConst.h"
 #include"../../GameObject/Effect/FootDust.h"
 #include"../../Manager/ItemManager.h"
+#include"../../GameObject/Gimmick/MovingFloor.h"
+#include"../../GameObject/Character/Enemy/Cubun.h"
 class GameScene : public BaseScene
 {
 public :
@@ -46,6 +48,7 @@ private:
 	void RebuildEnemies();
 	void RebuildCheckpoints();
 	void RebuildWarpHoles();
+	void RebuildMovingFloors();
 
 	// 画面フラッシュをトリガー（強さ 0〜1）
 	void TriggerFlash(float alpha) { m_flashAlpha = std::max(m_flashAlpha, alpha); }
@@ -60,6 +63,7 @@ private:
 	EnemyPlacementEditor    m_enemyEditor;
 	CheckpointEditor        m_checkpointEditor;
 	WarpHoleEditor          m_warpHoleEditor;
+	MovingFloorEditor       m_movingFloorEditor;
 
 	// ワープホールオブジェクトリスト
 	std::vector<std::shared_ptr<WarpHole>> m_warpHoles;
@@ -126,6 +130,12 @@ private:
 	// エディター配置敵リスト
 	std::vector<std::shared_ptr<Enemy>> m_enemies;
 
+	// 移動する床リスト
+	std::vector<std::shared_ptr<MovingFloor>> m_movingFloors;
+
+	// Cubun 敵リスト
+	std::vector<std::shared_ptr<Cubun>> m_cubuns;
+
 	// プレイヤースポーン座標
 	Math::Vector3           m_spawnPos       = { SpawnConst::DefaultX, SpawnConst::DefaultY, SpawnConst::DefaultZ };
 
@@ -153,4 +163,7 @@ private:
 	void ApplySunLight();   // 保持している値をシェーダーへ反映
 	void SaveSunLight();    // 太陽光設定をCSVへ保存
 	void LoadSunLight();    // 太陽光設定をCSVから読み込み
+
+	// WarpHole通過完了時にカメラZ基準を ExitDir から更新する
+	void UpdateCameraZFromExitDir(const Math::Vector3& exitDir);
 };

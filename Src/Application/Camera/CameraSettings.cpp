@@ -21,6 +21,7 @@ void CameraSettings::DrawGui()
     ImGui::Separator();
 
     ImGui::Text("-- Basic Offset --");
+    ImGui::DragFloat("OffsetX (right)",   &OffsetX,          0.05f, -50.0f,  50.0f);
     ImGui::DragFloat("OffsetY (up)",      &OffsetY,          0.05f, -50.0f,  50.0f);
     ImGui::DragFloat("OffsetZ (depth)",   &OffsetZ,          0.1f,  -100.0f, -1.0f);
 
@@ -68,6 +69,7 @@ void CameraSettings::Save() const
     std::ofstream ofs(SavePath);
     if (!ofs) { return; }
 
+    ofs << "OffsetX,"          << OffsetX          << "\n";
     ofs << "OffsetY,"          << OffsetY          << "\n";
     ofs << "OffsetZ,"          << OffsetZ          << "\n";
     ofs << "PosLerp,"          << PosLerp          << "\n";
@@ -110,7 +112,8 @@ void CameraSettings::Load()
         try { value = std::stof(line.substr(comma + 1)); }
         catch (...) { continue; }
 
-        if      (key == "OffsetY")           OffsetY          = value;
+        if      (key == "OffsetX")           OffsetX          = value;
+        else if (key == "OffsetY")           OffsetY          = value;
         else if (key == "OffsetZ")           OffsetZ          = value;
         else if (key == "PosLerp")           PosLerp          = value;
         else if (key == "LookAtLerp")        LookAtLerp       = value;

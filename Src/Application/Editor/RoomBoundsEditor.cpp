@@ -19,10 +19,9 @@ void RoomBoundsEditor::DrawDebugLines() const
     for (int i = 0; i < static_cast<int>(m_rooms.size()); ++i)
     {
         const RoomBounds& r = m_rooms[i];
-
         const bool isSelected = (i == m_selectedIdx);
 
-        // minX : 青（選択中は明るい青）
+        // minX : 青
         {
             const Math::Color col = isSelected
                 ? Math::Color(0.3f, 0.6f, 1.0f, 1.0f)
@@ -33,7 +32,7 @@ void RoomBoundsEditor::DrawDebugLines() const
                 col);
         }
 
-        // maxX : 赤（選択中は明るい赤）
+        // maxX : 赤
         {
             const Math::Color col = isSelected
                 ? Math::Color(1.0f, 0.5f, 0.5f, 1.0f)
@@ -44,7 +43,7 @@ void RoomBoundsEditor::DrawDebugLines() const
                 col);
         }
 
-        // triggerX : 黄（FLT_MAX なら描かない）
+        // triggerX : 黄
         if (r.triggerX < FLT_MAX * 0.5f)
         {
             const Math::Color col = isSelected
@@ -54,6 +53,40 @@ void RoomBoundsEditor::DrawDebugLines() const
                 { r.triggerX, kLineBottom, kLineZ },
                 { r.triggerX, kLineTop,    kLineZ },
                 col);
+        }
+
+        // minY / maxY : 緑の水平線（X範囲内に引く）
+        {
+            const float lineXA = (r.minX > -FLT_MAX * 0.5f) ? r.minX : -50.0f;
+            const float lineXB = (r.maxX <  FLT_MAX * 0.5f) ? r.maxX :  50.0f;
+
+            if (r.minY > -FLT_MAX * 0.5f)
+            {
+                const Math::Color col = isSelected
+                    ? Math::Color(0.3f, 1.0f, 0.5f, 1.0f)
+                    : Math::Color(0.0f, 0.8f, 0.2f, 0.8f);
+                wire.AddDebugLine({ lineXA, r.minY, kLineZ }, { lineXB, r.minY, kLineZ }, col);
+            }
+            if (r.maxY < FLT_MAX * 0.5f)
+            {
+                const Math::Color col = isSelected
+                    ? Math::Color(0.3f, 1.0f, 0.5f, 1.0f)
+                    : Math::Color(0.0f, 0.8f, 0.2f, 0.8f);
+                wire.AddDebugLine({ lineXA, r.maxY, kLineZ }, { lineXB, r.maxY, kLineZ }, col);
+            }
+        }
+
+        // cameraZ : マジェンタの縦線（X範囲内）
+        {
+            const float lineXA = (r.minX > -FLT_MAX * 0.5f) ? r.minX : -50.0f;
+            const float lineXB = (r.maxX <  FLT_MAX * 0.5f) ? r.maxX :  50.0f;
+            const Math::Color col = isSelected
+                ? Math::Color(1.0f, 0.5f, 1.0f, 1.0f)
+                : Math::Color(0.8f, 0.2f, 0.8f, 0.8f);
+            wire.AddDebugLine({ lineXA, kLineBottom, r.cameraZ }, { lineXA, kLineTop, r.cameraZ }, col);
+            wire.AddDebugLine({ lineXB, kLineBottom, r.cameraZ }, { lineXB, kLineTop, r.cameraZ }, col);
+            wire.AddDebugLine({ lineXA, kLineBottom, r.cameraZ }, { lineXB, kLineBottom, r.cameraZ }, col);
+            wire.AddDebugLine({ lineXA, kLineTop,    r.cameraZ }, { lineXB, kLineTop,    r.cameraZ }, col);
         }
     }
 
@@ -69,7 +102,7 @@ void RoomBoundsEditor::Save() const
     if (!ofs) { return; }
 
     // ヘッダ行
-    ofs << "minX,maxX,minY,maxY,triggerX,blendX,mode\n";
+    ofs << "minX,maxX,minY,maxY,triggerX,blendX,cameraZ,mode,focusX,focusY,focusZ,focusLerp,useOffOvr,ovrX,ovrY,ovrZ\n";
 
     for (const auto& r : m_rooms)
     {
@@ -79,7 +112,16 @@ void RoomBoundsEditor::Save() const
             << r.maxY    << ","
             << r.triggerX << ","
             << r.blendX  << ","
-            << static_cast<int>(r.mode) << "\n";
+            << r.cameraZ << ","
+            << static_cast<int>(r.mode) << ","
+            << r.focusOffset.x << ","
+            << r.focusOffset.y << ","
+            << r.focusOffset.z << ","
+            << r.focusLerpSpeed << ","
+            << (r.useOffsetOverride ? 1 : 0) << ","
+            << r.overrideOffsetX << ","
+            << r.overrideOffsetY << ","
+            << r.overrideOffsetZ << "\n";
     }
 }
 
@@ -118,12 +160,27 @@ void RoomBoundsEditor::Load()
         if (!nextFloat(r.maxY))     { continue; }
         if (!nextFloat(r.triggerX)) { continue; }
         if (!nextFloat(r.blendX))   { continue; }
-        // mode（旧CSVには無い列 → デフォルト SideScroll のまま）
+        // cameraZ（旧CSVには無い列 → デフォルト 0.0f）
+        float cameraZVal = 0.0f;
+        if (nextFloat(cameraZVal)) { r.cameraZ = cameraZVal; }
+        // mode（旧CSVには無い列 → デフォルト SideScroll）
         float modeVal = 0.0f;
         if (nextFloat(modeVal))
         {
             r.mode = static_cast<CameraConst::CameraMode>(static_cast<int>(modeVal));
         }
+        // focusOffset / focusLerpSpeed（旧CSVには無い列 → デフォルト 0.0f）
+        float fx = 0.0f, fy = 0.0f, fz = 0.0f, fl = 0.0f;
+        if (nextFloat(fx)) { r.focusOffset.x = fx; }
+        if (nextFloat(fy)) { r.focusOffset.y = fy; }
+        if (nextFloat(fz)) { r.focusOffset.z = fz; }
+        if (nextFloat(fl)) { r.focusLerpSpeed = fl; }
+        // useOffsetOverride / overrideOffset（旧CSVには無い列 → デフォルト false / 0.0f）
+        float useOvr = 0.0f, ox = 0.0f, oy = 3.0f, oz = -14.0f;
+        if (nextFloat(useOvr)) { r.useOffsetOverride = (useOvr > 0.5f); }
+        if (nextFloat(ox)) { r.overrideOffsetX = ox; }
+        if (nextFloat(oy)) { r.overrideOffsetY = oy; }
+        if (nextFloat(oz)) { r.overrideOffsetZ = oz; }
 
         m_rooms.push_back(r);
     }
@@ -201,6 +258,10 @@ void RoomBoundsEditor::DrawGui()
         changed |= ImGui::DragFloat("minY",     &r.minY,    0.1f);
         changed |= ImGui::DragFloat("maxY",     &r.maxY,    0.1f);
 
+        // Z 基準位置
+        ImGui::Text("Camera Z Position");
+        changed |= ImGui::DragFloat("cameraZ",  &r.cameraZ, 0.1f);
+
         ImGui::Separator();
 
         // ルーム遷移
@@ -225,6 +286,48 @@ void RoomBoundsEditor::DrawGui()
                 r.mode  = static_cast<CameraConst::CameraMode>(modeIdx);
                 changed = true;
             }
+        }
+
+        // フォーカスオフセット
+        ImGui::Separator();
+        ImGui::Text("Focus Offset (Gravity Local)");
+        ImGui::TextDisabled("X=Right  Y=Up(along gravity)  Z=Forward");
+        changed |= ImGui::DragFloat3("focusOffset", &r.focusOffset.x, 0.05f, -50.0f, 50.0f);
+
+        // Basic Offset オーバーライド
+        ImGui::Separator();
+        ImGui::Text("Basic Offset Override");
+        ImGui::TextDisabled("ON にするとこのルームだけ独自の XYZ オフセットを使用");
+        changed |= ImGui::Checkbox("useOffsetOverride", &r.useOffsetOverride);
+        if (r.useOffsetOverride)
+        {
+            changed |= ImGui::DragFloat("overrideOffsetX", &r.overrideOffsetX, 0.05f, -50.0f, 50.0f);
+            changed |= ImGui::DragFloat("overrideOffsetY", &r.overrideOffsetY, 0.05f, -50.0f, 50.0f);
+            changed |= ImGui::DragFloat("overrideOffsetZ", &r.overrideOffsetZ, 0.1f, -100.0f, -1.0f);
+            if (ImGui::Button("Reset##offsetOverride"))
+            {
+                r.overrideOffsetX = 0.0f;
+                r.overrideOffsetY = 3.0f;
+                r.overrideOffsetZ = -14.0f;
+                changed = true;
+            }
+        }
+
+        // focusLerpSpeed: 0.0f のときデフォルト速度を使用
+        ImGui::TextDisabled("focusLerp: 0=use default (%.3f)", CameraConst::FocusOffsetLerp);
+        changed |= ImGui::DragFloat("focusLerpSpeed", &r.focusLerpSpeed, 0.005f, 0.0f, 1.0f);
+        if (ImGui::IsItemHovered())
+        {
+            ImGui::SetTooltip("0.0 = デフォルト速度を使用\n大きいほどカメラが素早く追従");
+        }
+
+        // リセットボタン
+        ImGui::SameLine();
+        if (ImGui::Button("Reset##focus"))
+        {
+            r.focusOffset    = { 0.0f, 0.0f, 0.0f };
+            r.focusLerpSpeed = 0.0f;
+            changed = true;
         }
 
         // 削除ボタン

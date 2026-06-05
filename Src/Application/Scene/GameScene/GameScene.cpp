@@ -123,6 +123,7 @@ void GameScene::Event()
 	}
 
 	// ── エディタ Dirty チェック（モードに関わらず毎フレーム反映）──────
+	if (m_enemyEditor.IsDirty())
 	{
 		RebuildEnemies();
 		m_enemyEditor.ClearDirty();
@@ -147,6 +148,11 @@ void GameScene::Event()
 			}
 		}
 		m_warpHoleEditor.ClearDirty();
+	}
+	if (m_movingFloorEditor.IsDirty())
+	{
+		RebuildMovingFloors();
+		m_movingFloorEditor.ClearDirty();
 	}
 
 	// ── ゲームモード時のみ実行 ──────────────────────────
@@ -365,6 +371,7 @@ void GameScene::Event()
 						Math::Vector3 dir = m_teleportExitDir;
 						dir.Normalize();
 						m_spPlayer->SetVelocity(dir * WarpHoleConst::LaunchSpeed);
+						UpdateCameraZFromExitDir(dir);
 						// スケールポップ開始
 						m_teleportPopTimer = JuiceConst::PopDuration;
 					}
@@ -394,6 +401,7 @@ void GameScene::Event()
 					Math::Vector3 dir = m_warpExitDir;
 					dir.Normalize();
 					m_spPlayer->SetVelocity(dir * WarpHoleConst::LaunchSpeed);
+					UpdateCameraZFromExitDir(dir);
 				}
 				else
 				{
@@ -673,6 +681,7 @@ void GameScene::DrawDebugExtra()
 		m_enemyEditor.DrawDebugSpheres();
 		m_checkpointEditor.DrawDebugSpheres();
 		m_warpHoleEditor.DrawDebug();
+		m_movingFloorEditor.DrawDebug();
 		PlanetGravityManager::Instance().DrawDebugShapes();
 	}
 }
@@ -701,6 +710,7 @@ void GameScene::DrawGui()
 	m_enemyEditor.DrawGui();
 	m_checkpointEditor.DrawGui();
 	m_warpHoleEditor.DrawGui();
+	m_movingFloorEditor.DrawGui();
 	CameraSettings::Instance().DrawGui();
 	PlanetGravityManager::Instance().DrawGui();
 	ManualGravityZoneManager::Instance().DrawGui();
@@ -809,36 +819,34 @@ void GameScene::Respawn()
 void GameScene::RebuildEnemies()
 {
 	// 既存の敵をシーンから除去
-	for (auto& e : m_enemies)
-	{
-		e->Expire();
-	}
+	for (auto& e : m_enemies) { e->Expire(); }
 	m_enemies.clear();
+	for (auto& c : m_cubuns)  { c->Expire(); }
+	m_cubuns.clear();
 
 	// EnemyPlacementEditor のデータから敵を生成
 	for (const auto& data : m_enemyEditor.GetPlacements())
 	{
-		std::shared_ptr<Enemy> spEnemy;
-
-		if (data.type == EnemyType::Melee)
+		if (data.type == EnemyType::Cubun)
 		{
-			auto sp = std::make_shared<EnemyMelee>();
+			auto sp = std::make_shared<Cubun>();
 			sp->SetPos(data.position);
+			sp->SetFaceDir(data.cubunFaceDir);
+			sp->SetInitGravDir(data.initGravDir);
 			sp->Init();
-			spEnemy = sp;
+			if (m_spPlayer) { sp->SetTarget(m_spPlayer); }
+			m_cubuns.push_back(sp);
+			AddObject(sp);
 		}
 		else
 		{
 			auto sp = std::make_shared<EnemyRanged>();
 			sp->SetPos(data.position);
 			sp->Init();
-			spEnemy = sp;
+			if (m_spPlayer) { sp->SetTarget(m_spPlayer); }
+			m_enemies.push_back(sp);
+			AddObject(sp);
 		}
-
-		if (m_spPlayer) { spEnemy->SetTarget(m_spPlayer); }
-
-		m_enemies.push_back(spEnemy);
-		AddObject(spEnemy);
 	}
 }
 
@@ -870,6 +878,30 @@ void GameScene::RebuildWarpHoles()
 		m_warpHoles.push_back(sp);
 		AddObject(sp);
 	}
+}
+
+void GameScene::RebuildMovingFloors()
+{
+	for (auto& mf : m_movingFloors) { mf->Expire(); }
+	m_movingFloors.clear();
+
+	for (const auto& data : m_movingFloorEditor.GetFloors())
+	{
+		auto sp = std::make_shared<MovingFloor>();
+		sp->SetData(data);
+		sp->Init();
+		m_movingFloors.push_back(sp);
+		AddObject(sp);
+	}
+
+	// プレイヤー・敵に移動床リストを渡す
+	std::vector<std::weak_ptr<MovingFloor>> wpList;
+	wpList.reserve(m_movingFloors.size());
+	for (auto& sp : m_movingFloors) { wpList.push_back(sp); }
+
+	if (m_spPlayer) { m_spPlayer->SetMovingFloorObjects(wpList); }
+	for (auto& sp : m_enemies)  { sp->SetMovingFloorObjects(wpList); }
+	for (auto& sp : m_cubuns)   { sp->SetMovingFloorObjects(wpList); }
 }
 
 void GameScene::Init()
@@ -909,12 +941,8 @@ void GameScene::Init()
 	m_spHpUI->SetPlayer(m_spPlayer);
 	AddObject(m_spHpUI);
 
-	// テスト用コインをスポーン座標付近に配置
-	m_itemManager.SpawnCoin(m_spawnPos + Math::Vector3{ 3.0f, 2.0f, 0.0f });
-	m_itemManager.SpawnCoin(m_spawnPos + Math::Vector3{ 6.0f, 2.0f, 0.0f });
-	m_itemManager.SpawnCoin(m_spawnPos + Math::Vector3{ 9.0f, 2.0f, 0.0f });
 
- // ルームエディター初期化・読込
+	// ルームエディター初期化・読込
 	m_roomEditor.Load();
 	if (m_roomEditor.GetRooms().empty())
 	{
@@ -966,7 +994,12 @@ void GameScene::Init()
 
 	// HP UI を常時表示するためゲーム開始時からコールバックをセット
 	KdDebugGUI::Instance().SetGuiCallback([this] { DrawGui(); });
-}
+
+	// 移動床エディター → 移動床生成
+	RebuildMovingFloors();
+	m_movingFloorEditor.ClearDirty();
+
+	}
 
 void GameScene::SaveSpawn()
 {
@@ -1037,4 +1070,31 @@ void GameScene::LoadSunLight()
 	m_sunDir       = { vals[0], vals[1], vals[2] };
 	m_sunColor     = { vals[3], vals[4], vals[5] };
 	m_ambientColor = { vals[6], vals[7], vals[8], vals[9] };
+}
+
+//----------------------------------------------------------
+// WarpHole通過完了時にカメラのZ基準を ExitDir から更新する
+// ExitDir の Z 成分が正 → プレイヤーがZ+方向へ飛び出た → カメラを前にずらす
+// ExitDir の Z 成分が負 → Z- 方向 → カメラを後ろ
+// Z 成分がほぼ 0    → 元の OffsetZ を維持（オーバーライドなし）
+//----------------------------------------------------------
+void GameScene::UpdateCameraZFromExitDir(const Math::Vector3& exitDir)
+{
+	if (!m_pCamera) { return; }
+
+	const auto& cs = CameraSettings::Instance();
+	constexpr float kZThreshold = 0.3f;      // Z方向とみなす閾値
+	constexpr float kZShiftAmount = 8.0f;    // 基準Zのシフト量
+
+	if (std::fabsf(exitDir.z) >= kZThreshold)
+	{
+		// ExitDirのZ符号に応じてカメラZをシフト
+		const float newZ = cs.OffsetZ - exitDir.z * kZShiftAmount;
+		m_pCamera->SetOffsetZOverride(newZ);
+	}
+	else
+	{
+		// Z方向への移動でなければオーバーライドを解除して標準に戻す
+		m_pCamera->ClearOffsetZOverride();
+	}
 }

@@ -9,6 +9,7 @@
 struct CameraSettings
 {
     // ── 基本オフセット ──────────────────────────────────────
+    float OffsetX         =  0.0f;   // プレイヤーより右にずらす量
     float OffsetY         =  3.0f;   // プレイヤーより上にずらす量
     float OffsetZ         = -15.0f;  // プレイヤーより手前にずらす量（奥行き距離）
 

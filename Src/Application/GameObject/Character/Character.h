@@ -5,6 +5,8 @@
 #include "../../Manager/ManualGravityZoneManager.h"
 #include "../../../Framework/Utility/KdDebug/KdDebugWireFrame.h"
 
+class MovingFloor;  // 前方宣言
+
 // Player / Enemy 共通の基底クラス
 class Character : public KdGameObject
 {
@@ -93,6 +95,12 @@ public:
     // マップオブジェクトをセット（コリジョン判定に使用）
     void SetMapObject(const std::weak_ptr<KdGameObject>& _wpMap) { m_wpMap = _wpMap; }
 
+    // 移動床リストをセット（床・壁・天井判定に使用）
+    void SetMovingFloorObjects(const std::vector<std::weak_ptr<MovingFloor>>& floors)
+    {
+        m_movingFloors = floors;
+    }
+
     // コリジョンデバッグUI（ImGui）
     void DrawCollisionDebugGui();
 
@@ -161,6 +169,9 @@ protected:
 
     bool  m_isGround    = false;
 
+    // 重力スケール（1.0=通常、小さいほど落下が遅い。傘スロー落下などに使う）
+    float m_gravityScale = 1.0f;
+
     // 惑星重力用：現在の「上」方向（物理・判定用、即スナップ）
     Math::Vector3 m_upDir = { 0.0f, 1.0f, 0.0f };
 
@@ -185,6 +196,16 @@ protected:
     int m_prevPlanetIndex = -1;
 
     std::weak_ptr<KdGameObject> m_wpMap;
+
+    // 移動床リスト（床・壁・天井判定に使用）
+    std::vector<std::weak_ptr<MovingFloor>> m_movingFloors;
+
+    // CheckGround の移動床 XZ 判定用：ApplyVelocityHorizontal 前の位置
+    Math::Vector3 m_preMovePos = {};
+
+    // 現在乗っている移動床（nullptr なら乗っていない）
+    // CheckGround で毎フレーム更新される
+    const std::weak_ptr<MovingFloor>* m_pRidingFloor = nullptr;
 
     std::unique_ptr<KdDebugWireFrame> m_pDebugWire;
 

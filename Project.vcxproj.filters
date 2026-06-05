@@ -279,7 +279,6 @@
     <ClInclude Include="Src\Application\Const\CollisionConst.h" />
     <ClInclude Include="Src\Application\Manager\CollisionManager.h" />
     <ClInclude Include="Src\Application\Const\SpawnConst.h" />
-    <ClInclude Include="Src\Application\GameObject\Character\Enemy\EnemyMelee.h" />
     <ClInclude Include="Src\Application\GameObject\Character\Enemy\EnemyRanged.h" />
     <ClInclude Include="Src\Application\Editor\EnemyPlacementData.h" />
     <ClInclude Include="Src\Application\Editor\EnemyPlacementEditor.h" />
@@ -307,6 +306,11 @@
     <ClInclude Include="Src\Application\GameObject\Item\HitBox.h" />
     <ClInclude Include="Src\Application\GameObject\Item\Coin.h" />
     <ClInclude Include="Src\Application\Manager\ItemManager.h" />
+    <ClInclude Include="Src\Application\Const\MovingFloorConst.h" />
+    <ClInclude Include="Src\Application\GameObject\Gimmick\MovingFloor.h" />
+    <ClInclude Include="Src\Application\Const\CubunConst.h" />
+    <ClInclude Include="Src\Application\GameObject\Character\Enemy\Cubun.h" />
+    <ClInclude Include="Src\Application\Editor\MovingFloorEditor.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Pch.cpp">
@@ -467,7 +471,6 @@
     <ClCompile Include="Src\Application\GameObject\Character\AnimBlender.cpp" />
     <ClCompile Include="Src\Application\Editor\RoomBoundsEditor.cpp" />
     <ClCompile Include="Src\Application\Camera\CameraSettings.cpp" />
-    <ClCompile Include="Src\Application\GameObject\Character\Enemy\EnemyMelee.cpp" />
     <ClCompile Include="Src\Application\GameObject\Character\Enemy\EnemyRanged.cpp" />
     <ClCompile Include="Src\Application\Editor\EnemyPlacementEditor.cpp" />
     <ClCompile Include="Src\Application\GameObject\Checkpoint\Checkpoint.cpp" />
@@ -484,6 +487,9 @@
     <ClCompile Include="Distribute\AnimBlender\AnimBlender.cpp" />
     <ClCompile Include="Src\Application\GameObject\Item\Coin.cpp" />
     <ClCompile Include="Src\Application\Manager\ItemManager.cpp" />
+    <ClCompile Include="Src\Application\GameObject\Gimmick\MovingFloor.cpp" />
+    <ClCompile Include="Src\Application\GameObject\Character\Enemy\Cubun.cpp" />
+    <ClCompile Include="Src\Application\Editor\MovingFloorEditor.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Src\Framework\Shader\inc_KdCommon.hlsli">

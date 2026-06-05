@@ -89,6 +89,26 @@ void Player::Update()
     if (m_meleeCooldown  > 0) { --m_meleeCooldown; }
     if (m_rangedCooldown > 0) { --m_rangedCooldown; }
 
+    // Jump 状態で下降局面に入ったら Fall に自動遷移してパラソルを開けるようにする
+    if (m_state == State::Jump && !m_isGround)
+    {
+        const float upVel = m_velocity.Dot(GetUpDir());
+        if (upVel <= 0.0f) { m_state = State::Fall; }
+    }
+
+    // ---- 僘入力受付（空中かつ僘所持中なら常に受付） ----
+    if (!m_isGround && m_hasParasol)
+    {
+        if (GetAsyncKeyState('E') & 0x8000)
+        {
+            m_isParasolOpen = true;
+        }
+        if (GetAsyncKeyState('Q') & 0x8000)
+        {
+            m_isParasolOpen = false;
+        }
+    }
+
     // 状態に応じてアニメーション切り替え
     switch (m_state)
     {
@@ -101,17 +121,140 @@ void Player::Update()
             ChangeAnim("Idle", true);
         break;
     case State::Jump:
-        // Jumpアニメがない場合は Idle で代用
         if (!ChangeAnimIfExist("Jump", false)) { ChangeAnim("Idle", true); }
+        // ジャンプ中にパラソルを開いている場合は上半身だけ ParasolFall で上書き
+        if (m_isParasolOpen)
+        {
+            const auto spParasolAnim = m_modelWork.GetAnimation("ParasolFall");
+            if (spParasolAnim && m_animBlender.IsUpperBodyAnimEnd())
+            {
+                m_animBlender.SetUpperBodyAnim(spParasolAnim, PlayerConst::UpperBodyNodes(), true);
+            }
+        }
+        else
+        {
+            // 傘を閉じたら上書き解除
+            m_animBlender.ClearUpperBodyAnim();
+        }
         break;
     case State::Fall:
-        // Fallアニメがない場合は Idle で代用
-        if (!ChangeAnimIfExist("Fall", true)) { ChangeAnim("Idle", true); }
+        // 傘所持中: E で開く→ParasolFall / Q or デフォルト→Fall
+        if (m_hasParasol)
+        {
+            if (GetAsyncKeyState('E') & 0x8000)
+            {
+                if (!m_isParasolOpen)
+                {
+                    // 僘を開いた瞬間：既存の落下速度を即座にクランプ
+                    const float maxFall = PlanetConst::MaxFallSpeed * PlayerConst::ParasolGravityScale;
+                    const float downVel = m_velocity.Dot(-GetUpDir());
+                    if (downVel > maxFall)
+                    {
+                        m_velocity += GetUpDir() * (downVel - maxFall);
+                    }
+                }
+                m_isParasolOpen = true;
+            }
+            if (GetAsyncKeyState('Q') & 0x8000)
+            {
+                m_isParasolOpen = false;
+            }
+
+            if (m_isParasolOpen)
+            {
+                if (!ChangeAnimIfExist("ParasolFall", true)) { ChangeAnim("Fall", true); }
+            }
+            else
+            {
+                if (!ChangeAnimIfExist("Fall", true)) { ChangeAnim("Idle", true); }
+            }
+        }
+        else
+        {
+            m_isParasolOpen = false;
+            if (!ChangeAnimIfExist("Fall", true)) { ChangeAnim("Idle", true); }
+        }
         break;
     case State::Attack: ChangeAnim("Attack", false); break;
     case State::Dead:   ChangeAnim("Dead",   false); break;
     default: break;
     }
+
+    // ---- Walk / Fall / Jump 中 Attack: 上半身 or 左腕だけ Attack で上書き ----
+    if (m_isAttacking)
+    {
+        const bool isUpperBodyActive =
+            (m_state == State::Walk) ||
+            (m_state == State::Fall) ||
+            (m_state == State::Jump);
+
+        if (isUpperBodyActive)
+        {
+            // upper body アニメを AttackMelee でセット済み。終了したらリセット
+            if (m_animBlender.IsUpperBodyAnimEnd())
+            {
+                m_isAttacking = false;
+                m_animBlender.ClearUpperBodyAnim();
+            }
+        }
+        else
+        {
+            // 全身 Attack の場合は upper body は不要
+            m_animBlender.ClearUpperBodyAnim();
+        }
+    }
+
+    // Attack フラグ終了チェック（全身 Attack の場合）
+    if (m_isAttacking && m_state == State::Attack && m_animBlender.IsAnimationEnd())
+    {
+        m_isAttacking = false;
+        m_state = m_isGround ? State::Idle : State::Fall;
+    }
+
+    // 着地したら傘を閉じる
+    // 上半身アニメのクリアは Attack 中でない場合のみ（Walk中攻撃を維持するため）
+    if (m_isGround)
+    {
+        m_isParasolOpen = false;
+        if (!m_isAttacking)
+        {
+            m_animBlender.ClearUpperBodyAnim();
+        }
+    }
+
+    // 重力スケール: 落下中（downVel>0）かつ傘を開いているときのみ適用
+    {
+        const float downVel = m_velocity.Dot(-GetUpDir());
+        m_gravityScale = (m_isParasolOpen && downVel > 0.0f)
+            ? PlayerConst::ParasolGravityScale : 1.0f;
+    }
+
+    // パラソル落下中は毎フレーム落下速度をクランプ（壁衝突・重力切り替え後も維持）
+    if (m_isParasolOpen)
+    {
+        const float maxFall = PlanetConst::MaxFallSpeed * PlayerConst::ParasolGravityScale;
+        const float downVel = m_velocity.Dot(-GetUpDir());
+        if (downVel > maxFall)
+        {
+            m_velocity += GetUpDir() * (downVel - maxFall);
+        }
+    }
+
+    // ---- 傘デバッグ: P キーで傘アイテム取得トグル ----
+    if (GetAsyncKeyState('P') & 1)
+    {
+        m_hasParasol = !m_hasParasol;
+    }
+
+    // ---- ノード可視制御 ----
+    // OpenedParasol: 傘所持 かつ 開いているときのみ表示
+    m_modelWork.SetNodeVisible("OpenedParasol",  m_hasParasol && m_isParasolOpen);
+    // ClosedParasol: 傘所持 かつ 閉じているときのみ表示
+    m_modelWork.SetNodeVisible("ClosedParasol",  m_hasParasol && !m_isParasolOpen);
+
+    // 剣: Attack 中は HandledSword ON / BackSword OFF
+    m_modelWork.SetNodeVisible("HandledSword",  m_isAttacking);
+    m_modelWork.SetNodeVisible("BackSword",     !m_isAttacking);
 
     // アニメーション更新
     m_animBlender.Update(m_modelWork, m_animSpeed);
@@ -318,7 +461,8 @@ void Player::Move()
             m_facingSign = (tangent.Dot(worldInput) >= 0.0f) ? 1.0f : -1.0f;
         }
 
-        m_state = State::Walk;
+        if (m_isGround) { m_state = State::Walk; }
+        else if (m_state != State::Jump) { m_state = State::Fall; }
     }
     else
     {
@@ -363,7 +507,34 @@ void Player::AttackMelee()
     if (GetAsyncKeyState('Z') & 0x8000)
     {
         m_meleeCooldown = PlayerConst::MeleeCooldown;
-        m_state         = State::Attack;
+        m_isAttacking   = true;
+
+        if (m_state == State::Walk)
+        {
+            // Walk 中: 上半身だけ Attack で上書き
+            const auto spAttackAnim = m_modelWork.GetAnimation("Attack");
+            if (spAttackAnim)
+            {
+                m_animBlender.SetUpperBodyAnim(spAttackAnim, PlayerConst::UpperBodyNodes(), false);
+            }
+            // state は Walk のまま維持（下半身は Walk を継続）
+        }
+        else if (m_state == State::Fall || m_state == State::Jump)
+        {
+            // Fall/Jump 中: shoulder.L 以降の左腕チェーンのみ Attack で上書き
+            const auto spAttackAnim = m_modelWork.GetAnimation("Attack");
+            if (spAttackAnim)
+            {
+                m_animBlender.SetUpperBodyAnim(spAttackAnim, PlayerConst::LeftArmNodes(), false);
+            }
+            // state は Fall/Jump のまま維持（全身アニメは変えない）
+        }
+        else
+        {
+            // Idle 等 その他: 全身 Attack
+            m_animBlender.ClearUpperBodyAnim();
+            m_state = State::Attack;
+        }
     }
 }
 

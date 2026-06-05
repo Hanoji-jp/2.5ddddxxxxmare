@@ -61,4 +61,9 @@ namespace CameraConst
 	constexpr float Fixed2DLookLerp = 0.10f;   // 注視点補間
 	constexpr float Fixed2DOffsetY  = 2.0f;    // プレイヤーからの縦オフセット
 	constexpr float Fixed2DOffsetZ  = -14.0f;  // 深度オフセット（完全横から見る）
+
+	// ── フォーカスオフセット ────────────────────────────────────
+	// ルームごとに設定できる重力ローカル空間のカメラフォーカスオフセット補間速度
+	constexpr float FocusOffsetLerp        = 0.06f;  // デフォルト補間速度（ゆったり）
+	constexpr float FocusOffsetReturnLerp  = 0.04f;  // デフォルトへ戻るときの補間速度
 }
