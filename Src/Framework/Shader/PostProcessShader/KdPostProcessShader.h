@@ -69,8 +69,8 @@ private:
 	ID3D11PixelShader* m_PS_DoF = nullptr;
 	ID3D11PixelShader* m_PS_Bright = nullptr;
 
-	static const int kBlurSamplingRadius = 8;
-	static const int kLightBloomSamplingRadius = 4;
+	static const int kBlurSamplingRadius = 4;        // 8->4: ブラー1パスのサンプル数を削減
+	static const int kLightBloomSamplingRadius = 2;  // 4->2: ブルーム用サンプル数を削減
 
 	static const int kMaxSampling = 31;
 	struct cbBlur
@@ -119,7 +119,7 @@ private:
 	KdRenderTargetPack	m_depthOfFieldRTPack;
 
 	KdRenderTargetPack	m_brightEffectRTPack;
-	static const int	kLightBloomNum = 4;
+	static const int	kLightBloomNum = 2;  // 4->2: ブルームパス数を削減
 	KdRenderTargetPack	m_lightBloomRTPack[kLightBloomNum];
 
 	KdRenderTargetChanger m_postEffectRTChanger;

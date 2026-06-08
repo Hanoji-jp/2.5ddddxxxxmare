@@ -311,6 +311,7 @@
     <ClInclude Include="Src\Application\Const\CubunConst.h" />
     <ClInclude Include="Src\Application\GameObject\Character\Enemy\Cubun.h" />
     <ClInclude Include="Src\Application\Editor\MovingFloorEditor.h" />
+    <ClInclude Include="Src\Application\GameObject\Effect\StarBurstEffect.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Pch.cpp">
@@ -490,6 +491,7 @@
     <ClCompile Include="Src\Application\GameObject\Gimmick\MovingFloor.cpp" />
     <ClCompile Include="Src\Application\GameObject\Character\Enemy\Cubun.cpp" />
     <ClCompile Include="Src\Application\Editor\MovingFloorEditor.cpp" />
+    <ClCompile Include="Src\Application\GameObject\Effect\StarBurstEffect.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Src\Framework\Shader\inc_KdCommon.hlsli">

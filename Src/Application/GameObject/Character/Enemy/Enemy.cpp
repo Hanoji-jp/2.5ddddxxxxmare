@@ -229,10 +229,20 @@ bool Enemy::CheckEdgeAhead() const
 
 void Enemy::Patrol()
 {
-    // 崖・壁検知：着地中かつ前方に障害がある場合は即反転
-    if (m_useEdgeDetection && CheckEdgeAhead())
+    // 崖・壁検知：4フレームに1回実行（毎フレームのレイキャストは重いので間引き）
+    if (m_useEdgeDetection)
     {
-        m_patrolRight = !m_patrolRight;
+        ++m_edgeCheckInterval;
+        if (m_edgeCheckInterval >= 4)
+        {
+            m_edgeCheckInterval = 0;
+            m_edgeCheckCache = CheckEdgeAhead();
+        }
+        if (m_edgeCheckCache)
+        {
+            m_patrolRight = !m_patrolRight;
+            m_edgeCheckCache = false;  // 反転したらリセット
+        }
     }
 
     // スポーン地点から PatrolRange を超えたら折り返す
@@ -273,17 +283,25 @@ void Enemy::Chase()
     if (toTarget.LengthSquared() < 1e-4f) { return; }
     toTarget.Normalize();
 
-    // 崖・壁チェック：追跡方向の前方に障害があれば追跡を諦めて停止
-    if (m_useEdgeDetection && CheckEdgeAheadDir(toTarget))
+    // 崖・壁チェック：4フレームに1回実行
+    if (m_useEdgeDetection)
     {
-        // 速度を減速させて止まる（崖に落ちない）
-        m_moveVelocity = Math::Vector3::Lerp(m_moveVelocity, Math::Vector3::Zero,
-            EnemyConst::Deceleration / EnemyConst::MoveSpeed);
-        if (m_moveVelocity.LengthSquared() < 0.0001f) { m_moveVelocity = Math::Vector3::Zero; }
-        m_velocity.x = m_moveVelocity.x;
-        m_velocity.z = m_moveVelocity.z;
-        ChangeAnim("Idle");
-        return;
+        ++m_edgeCheckInterval;
+        if (m_edgeCheckInterval >= 4)
+        {
+            m_edgeCheckInterval = 0;
+            m_edgeCheckCache = CheckEdgeAheadDir(toTarget);
+        }
+        if (m_edgeCheckCache)
+        {
+            m_moveVelocity = Math::Vector3::Lerp(m_moveVelocity, Math::Vector3::Zero,
+                EnemyConst::Deceleration / EnemyConst::MoveSpeed);
+            if (m_moveVelocity.LengthSquared() < 0.0001f) { m_moveVelocity = Math::Vector3::Zero; }
+            m_velocity.x = m_moveVelocity.x;
+            m_velocity.z = m_moveVelocity.z;
+            ChangeAnim("Idle");
+            return;
+        }
     }
 
     // 目標速度へ Lerp で加速

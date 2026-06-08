@@ -82,4 +82,18 @@ namespace JuiceConst
 	// 惑星到達カメラズームアウト→戻り
 	//----------------------------------------------------------
 	constexpr float PlanetZoomOutAmount = 1.0f;   // ズームアウト量（offsetZ に加算）
+
+	//----------------------------------------------------------
+	// StarBurst パーティクル（撃破エフェクト）
+	//----------------------------------------------------------
+	constexpr int   StarBurstCount       = 18;     // スポーン粒数
+	constexpr float StarBurstScaleMin    = 0.05f;  // 初期スケール最小
+	constexpr float StarBurstScaleMax    = 0.18f;  // 初期スケール最大
+	constexpr float StarBurstShrinkMin   = 1.5f;   // 縮み速度最小
+	constexpr float StarBurstShrinkMax   = 4.5f;   // 縮み速度最大
+	constexpr float StarBurstSpeedMin    = 0.04f;  // 飛散速度最小
+	constexpr float StarBurstSpeedMax    = 0.18f;  // 飛散速度最大
+	constexpr float StarBurstLifetimeMin = 0.3f;   // 寿命最小（秒）
+	constexpr float StarBurstLifetimeMax = 0.7f;   // 寿命最大（秒）
+	constexpr float StarBurstEmissive    = 4.0f;   // 発光強度（青白く光る）
 }

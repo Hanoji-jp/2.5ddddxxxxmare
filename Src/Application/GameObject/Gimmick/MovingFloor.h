@@ -77,9 +77,10 @@ private:
 
 	Math::Vector3 m_center = {};
 	Math::Vector3 m_pos    = {};
-	Math::Vector3 m_size   = { MovingFloorConst::DefaultSizeX,
-							   MovingFloorConst::DefaultSizeY,
-							   MovingFloorConst::DefaultSizeZ };
+	Math::Vector3 m_size   = { 
+								MovingFloorConst::DefaultSizeX,
+							    MovingFloorConst::DefaultSizeY,
+							    MovingFloorConst::DefaultSizeZ };
 	Axis  m_axis         = Axis::X;
 	float m_range        = MovingFloorConst::DefaultRange;
 	float m_speed        = MovingFloorConst::MoveSpeed;

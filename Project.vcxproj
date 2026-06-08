@@ -319,6 +319,7 @@
     <ClInclude Include="Src\Application\GameObject\Checkpoint\Checkpoint.h" />
     <ClInclude Include="Src\Application\GameObject\Effect\FootDust.h" />
     <ClInclude Include="Src\Application\GameObject\Effect\GravityRingEffect.h" />
+    <ClInclude Include="Src\Application\GameObject\Effect\StarBurstEffect.h" />
     <ClInclude Include="Src\Application\GameObject\Gimmick\MovingFloor.h" />
     <ClInclude Include="Src\Application\GameObject\Gimmick\WarpHole.h" />
     <ClInclude Include="Src\Application\GameObject\Item\Coin.h" />
@@ -410,6 +411,7 @@
     <ClCompile Include="Src\Application\GameObject\Checkpoint\Checkpoint.cpp" />
     <ClCompile Include="Src\Application\GameObject\Effect\FootDust.cpp" />
     <ClCompile Include="Src\Application\GameObject\Effect\GravityRingEffect.cpp" />
+    <ClCompile Include="Src\Application\GameObject\Effect\StarBurstEffect.cpp" />
     <ClCompile Include="Src\Application\GameObject\Gimmick\MovingFloor.cpp" />
     <ClCompile Include="Src\Application\GameObject\Gimmick\WarpHole.cpp" />
     <ClCompile Include="Src\Application\GameObject\Item\Coin.cpp" />

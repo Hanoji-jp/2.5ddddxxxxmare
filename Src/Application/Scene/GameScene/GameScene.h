@@ -28,6 +28,7 @@
 #include"../../Manager/ItemManager.h"
 #include"../../GameObject/Gimmick/MovingFloor.h"
 #include"../../GameObject/Character/Enemy/Cubun.h"
+#include"../../GameObject/Effect/StarBurstEffect.h"
 class GameScene : public BaseScene
 {
 public :
@@ -48,6 +49,15 @@ private:
 	void RebuildEnemies();
 	void RebuildCheckpoints();
 	void RebuildWarpHoles();
+	// ─── StarBurst ビューア（手動テスト用）────────────────────
+	bool m_starBurstTestRequest = false;
+
+	// ─── Effekseer ビューア ──────────────────────────────────────
+	char  m_efkViewerPath[256] = "StarBlue.efk";
+	float m_efkViewerScale     = 1.0f;
+	float m_efkViewerSpeed     = 1.0f;
+	bool  m_efkViewerLoop      = false;
+
 	void RebuildMovingFloors();
 
 	// 画面フラッシュをトリガー（強さ 0〜1）

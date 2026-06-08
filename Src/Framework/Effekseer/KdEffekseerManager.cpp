@@ -45,6 +45,9 @@ void KdEffekseerManager::Draw()
 		return;
 	}
 
+	// 描画直前にカメラ行列を最新状態に同期
+	UpdateEkfCameraMatrix();
+
 	m_efkRenderer->BeginRendering();
 	m_efkManager->Draw();
 	m_efkRenderer->EndRendering();

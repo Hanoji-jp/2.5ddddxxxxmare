@@ -195,6 +195,10 @@ protected:
     // 前フレームの惑星インデックス（惑星乗り移り検出用）
     int m_prevPlanetIndex = -1;
 
+    // ComputeGravityInfluence の結果キャッシュ（ApplyGravity で1回だけ計算して使い回す）
+    GravityInfluenceResult m_gravCache;
+    bool                   m_gravCacheDirty = true;
+
     std::weak_ptr<KdGameObject> m_wpMap;
 
     // 移動床リスト（床・壁・天井判定に使用）

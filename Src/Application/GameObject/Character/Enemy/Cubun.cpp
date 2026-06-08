@@ -48,6 +48,12 @@ void Cubun::Init()
 //==========================================================
 void Cubun::Update()
 {
+	// 初回死亡検知でバーストエフェクトをリクエスト
+	if (IsDead() && !m_deathBounceActive)
+	{
+		m_requestBurstEffect = true;
+	}
+
 	if (IsDead()) { return; }
 
 	// ジャンプ制御（着地後 JumpInterval 秒ごとにジャンプ）

@@ -60,7 +60,11 @@ protected:
     void FaceTarget();
 
     // 崖・壁反転検知を使うか（Cubun など崖で折り返す敵に true をセット）
-    bool    m_useEdgeDetection = false;
+    bool    m_useEdgeDetection  = false;
+
+    // CheckEdgeAhead 間引きカウンタ（毎フレーム呼ぶと重いので数フレームに1回）
+    int     m_edgeCheckInterval = 0;
+    bool    m_edgeCheckCache    = false;  // 直前の CheckEdgeAhead の結果キャッシュ
 
     AIState m_aiState     = AIState::Patrol;
     int     m_attackCool  = 0;
@@ -86,4 +90,8 @@ protected:
     bool  m_deathBounceActive = false;
     float m_deathBounceVelY   = 0.0f;  // 上方向速度
     float m_deathFadeAlpha    = 1.0f;  // 1=不透明 → 0=透明
+
+public:
+    // 撃破エフェクトスポーンフラグ（GameScene 側が1フレームだけ読んで AddObject する）
+    bool  m_requestBurstEffect = false;
 };

@@ -4,6 +4,8 @@
 
 void Character::Update()
 {
+    // フレーム開始時にキャッシュを無効化（このフレームの最初の ComputeGravityInfluence で計算）
+    m_gravCacheDirty = true;
     ApplyGravity();
 }
 
@@ -81,7 +83,13 @@ void Character::DrawDebug()
 
 void Character::ApplyGravity()
 {
-    const GravityInfluenceResult gravResult = PlanetGravityManager::Instance().ComputeGravityInfluence(GetPos(), -m_upDir);
+    // ComputeGravityInfluence はフレームに1回だけ計算してキャッシュする
+    if (m_gravCacheDirty)
+    {
+        m_gravCache      = PlanetGravityManager::Instance().ComputeGravityInfluence(GetPos(), -m_upDir);
+        m_gravCacheDirty = false;
+    }
+    const GravityInfluenceResult gravResult = m_gravCache;
     m_prevPlanetIndex = m_currentPlanetIndex;
     // 着地中は現在の惑星を固定。空中のときだけ支配惑星に乗り換える
     if (!m_isGround)

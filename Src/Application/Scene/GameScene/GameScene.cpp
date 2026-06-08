@@ -594,6 +594,33 @@ void GameScene::Event()
 		// ── アイテム更新・取得判定 ──────────────────────
 		m_itemManager.Update(m_spPlayer->GetPickupHitBox());
 		m_itemManager.Refresh();
+
+		// ── Cubun 撃破バーストエフェクト ────────────────
+		{
+			const auto dustData = ModelManager::Instance().GetModel(PlayerConst::DustPath);
+			for (auto& sp : m_cubuns)
+			{
+				if (sp->m_requestBurstEffect)
+				{
+					sp->m_requestBurstEffect = false;
+					auto burst = std::make_shared<StarBurstEffect>();
+					burst->Spawn(sp->GetPos(), sp->GetUpDir(), dustData);
+					AddObject(burst);
+				}
+			}
+		}
+
+		// ── StarBurst 手動テスト（ImGui Viewer から） ──
+		if (m_starBurstTestRequest)
+		{
+			m_starBurstTestRequest = false;
+			const auto dustData = ModelManager::Instance().GetModel(PlayerConst::DustPath);
+			const Math::Vector3 pos = m_spPlayer ? m_spPlayer->GetPos() : Math::Vector3::Zero;
+			const Math::Vector3 up  = m_spPlayer ? m_spPlayer->GetUpDir() : Math::Vector3::Up;
+			auto burst = std::make_shared<StarBurstEffect>();
+			burst->Spawn(pos, up, dustData);
+			AddObject(burst);
+		}
 	}
 }
 
@@ -806,6 +833,38 @@ void GameScene::DrawGui()
 		}
 	}
 	ImGui::End();
+
+	// ─── StarBurst Viewer（手動テスト）───────────────────────────
+	if (ImGui::Begin("StarBurst Viewer"))
+	{
+		if (ImGui::Button("Play Burst at Player"))
+		{
+			m_starBurstTestRequest = true;
+		}
+	}
+	ImGui::End();
+
+	// ─── Effekseer Viewer ─────────────────────────────────────────
+	if (ImGui::Begin("Effekseer Viewer"))
+	{
+		ImGui::InputText("Effect File", m_efkViewerPath, sizeof(m_efkViewerPath));
+		ImGui::DragFloat("Scale",       &m_efkViewerScale, 0.1f, 0.1f, 100.0f);
+		ImGui::DragFloat("Speed",       &m_efkViewerSpeed, 0.05f, 0.01f, 10.0f);
+		ImGui::Checkbox("Loop",         &m_efkViewerLoop);
+
+		if (ImGui::Button("Play"))
+		{
+			const Math::Vector3 playPos = m_spPlayer ? m_spPlayer->GetPos() : Math::Vector3::Zero;
+			KdEffekseerManager::GetInstance().Play(
+				m_efkViewerPath, playPos, m_efkViewerScale, m_efkViewerSpeed, m_efkViewerLoop);
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("Stop All"))
+		{
+			KdEffekseerManager::GetInstance().StopAllEffect();
+		}
+	}
+	ImGui::End();
 }
 
 void GameScene::Respawn()
@@ -907,9 +966,9 @@ void GameScene::RebuildMovingFloors()
 void GameScene::Init()
 {
 	// カメラ（BaseSceneのm_cameraに所有権を渡し、観察用ポインタだけ保持）
-	auto upCamera  = std::make_unique<SideScrollCamera>();
-	m_pCamera      = upCamera.get();
-	m_camera       = std::move(upCamera);
+	auto spCamera  = std::make_shared<SideScrollCamera>();
+	m_pCamera      = spCamera.get();
+	m_camera       = spCamera;
 
 	// プレイヤー
 	m_spPlayer = std::make_shared<Player>();

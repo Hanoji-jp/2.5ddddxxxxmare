@@ -58,6 +58,9 @@ void BaseScene::PostUpdate()
 	{
 		obj->PostUpdate();
 	}
+
+	// Effekseer エフェクトのフレーム更新
+	KdEffekseerManager::GetInstance().Update();
 }
 
 void BaseScene::PreDraw()
@@ -66,6 +69,8 @@ void BaseScene::PreDraw()
 	if (m_camera)
 	{
 		m_camera->SetToShader();
+		// Effekseer にもカメラを渡す
+		KdEffekseerManager::GetInstance().SetCamera(m_camera);
 	}
 
 	for (auto& obj : m_objList)
@@ -108,7 +113,7 @@ void BaseScene::Draw()
 		{
 			obj->DrawLit();
 		}
-		DrawLitExtra();
+	DrawLitExtra();
 	}
 	KdShaderManager::Instance().m_StandardShader.EndLit();
 
@@ -122,6 +127,10 @@ void BaseScene::Draw()
 		}
 	}
 	KdShaderManager::Instance().m_StandardShader.EndUnLit();
+
+	// ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== =====
+	// Effekseer エフェクト描画（Lit 後に実行することで正しい深度ソートが得られる）
+	KdEffekseerManager::GetInstance().Draw();
 
 	// ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== =====
 	// 光源オブジェクト(自ら光るオブジェクトやエフェクト)はBeginとEndの間にまとめてDrawする

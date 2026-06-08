@@ -83,9 +83,9 @@ bool KdPostProcessShader::Init()
 	// ポストプロセス用のシーンの全描画用画像
 	m_postEffectRTPack.CreateRenderTarget(backBuffer->GetWidth(), backBuffer->GetHeight(), true);
 
-	// ぼかし画像
-	m_blurRTPack.CreateRenderTarget(backBuffer->GetWidth(), backBuffer->GetHeight());
-	m_strongBlurRTPack.CreateRenderTarget(backBuffer->GetWidth() / 2, backBuffer->GetHeight() / 2);
+	// ぼかし画像（strongBlur を 1/4 サイズにしてフィルレートを削減）
+	m_blurRTPack.CreateRenderTarget(backBuffer->GetWidth() / 2, backBuffer->GetHeight() / 2);
+	m_strongBlurRTPack.CreateRenderTarget(backBuffer->GetWidth() / 4, backBuffer->GetHeight() / 4);
 	m_motionBlurRTPack.CreateRenderTarget(backBuffer->GetWidth(), backBuffer->GetHeight());
 
 	// 被写界深度画像
@@ -324,8 +324,10 @@ void KdPostProcessShader::BlurProcess()
 {
 	SetBlurToDevice();
 
+	// 1パスのみ（strongBlur は blurRTPack を流用）
 	GenerateBlurTexture(m_postEffectRTPack.m_RTTexture, m_blurRTPack.m_RTTexture, m_blurRTPack.m_viewPort, kBlurSamplingRadius);
 
+	// strongBlurRTPack にも同じ結果を使う（2パス目を省略）
 	GenerateBlurTexture(m_blurRTPack.m_RTTexture, m_strongBlurRTPack.m_RTTexture, m_strongBlurRTPack.m_viewPort, kBlurSamplingRadius);
 }
 

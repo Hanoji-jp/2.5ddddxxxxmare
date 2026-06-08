@@ -100,6 +100,12 @@ void Application::KdPostDraw()
 	// Imguiのレンダリング
 	KdDebugGUI::Instance().GuiProcess();
 
+	// タイトルバーに FPS を表示
+	const std::string title = "3D GameProgramming  |  FPS: "
+		+ std::to_string(Application::Instance().GetNowFPS())
+		+ " / " + std::to_string(Application::Instance().GetMaxFPS());
+	SetWindowTextA(Application::Instance().GetWindowHandle(), title.c_str());
+
 	// BackBuffer -> 画面表示
 	KdDirect3D::Instance().WorkSwapChain()->Present(0, 0);
 }
@@ -205,6 +211,11 @@ bool Application::Init(int w, int h)
 	// シェーダー初期化
 	//===================================================================
 	KdShaderManager::Instance().Init();
+
+	//===================================================================
+	// Effekseer初期化
+	//===================================================================
+	KdEffekseerManager::GetInstance().Create(w, h);
 
 	//===================================================================
 	// オーディオ初期化
@@ -340,6 +351,8 @@ void Application::Execute()
 // アプリケーション終了
 void Application::Release()
 {
+	KdEffekseerManager::GetInstance().Release();
+
 	KdInputManager::Instance().Release();
 
 	KdShaderManager::Instance().Release();

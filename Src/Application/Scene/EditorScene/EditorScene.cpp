@@ -4,9 +4,9 @@
 
 void EditorScene::Init()
 {
-    auto upCamera = std::make_unique<EditorCamera>();
-    m_pCamera     = upCamera.get();
-    m_camera      = std::move(upCamera);
+    auto spCamera = std::make_shared<EditorCamera>();
+    m_pCamera     = spCamera.get();
+    m_camera      = spCamera;
 }
 
 void EditorScene::Event()
