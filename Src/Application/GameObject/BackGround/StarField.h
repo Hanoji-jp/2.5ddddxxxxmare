@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 // スカイボックス内にランダム配置する星空オブジェクト
 // DrawBright() で発光描画し、既存のブルームで光らせる
@@ -13,6 +13,8 @@ public:
 	void DrawBright() override;
 
 	bool IsVisible() const override { return true; }
+	// 星空は常時描画対象
+	bool CheckInScreen(const DirectX::BoundingFrustum&) const override { return true; }
 
 private:
 	// 1つの星の情報
@@ -31,3 +33,4 @@ private:
 	float             m_time = 0.0f; // 明滅用の経過時間
 	Math::Vector3     m_originCamPos{ 0.0f, 0.0f, 0.0f }; // 生成時のカメラ位置
 };
+

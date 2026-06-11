@@ -4,6 +4,7 @@
 #include "../../../Manager/ManualGravityZoneManager.h"
 #include "../../../Const/WarpHoleConst.h"
 #include "../../../Const/JuiceConst.h"
+#include "../../../Const/WindBoxConst.h"
 
 void Player::Init()
 {
@@ -222,15 +223,43 @@ void Player::Update()
         }
     }
 
-    // 重力スケール: 落下中（downVel>0）かつ傘を開いているときのみ適用
+    // 重力スケール: 風の中 > 傘落下 > 通常 の優先順で決定
     {
         const float downVel = m_velocity.Dot(-GetUpDir());
-        m_gravityScale = (m_isParasolOpen && downVel > 0.0f)
-            ? PlayerConst::ParasolGravityScale : 1.0f;
+        if (m_wasInWind && m_windIsHorizontal)
+        {
+            // 左右風の中：ほぼ落下しない
+            m_gravityScale = WindBoxConst::WindGravityScale;
+        }
+        else if (m_isParasolOpen && downVel > 0.0f)
+        {
+            m_gravityScale = PlayerConst::ParasolGravityScale;
+        }
+        else
+        {
+            m_gravityScale = 1.0f;
+        }
+    }
+
+    // フラグ読み取り前にローカルへコピー
+    const bool inHorizWind = m_wasInWind && m_windIsHorizontal;
+
+    // 風フラグを読み終えたのでリセット（次フレームの ApplyWind で再セットされる）
+    m_wasInWind        = false;
+    m_windIsHorizontal = false;
+
+    // 横風の中：既存の落下速度もクランプ（重力スケールだけでは入った瞬間の速度が残る）
+    if (inHorizWind)
+    {
+        const float downVel = m_velocity.Dot(-GetUpDir());
+        if (downVel > WindBoxConst::WindHorizMaxFallSpeed)
+        {
+            m_velocity += GetUpDir() * (downVel - WindBoxConst::WindHorizMaxFallSpeed);
+        }
     }
 
     // パラソル落下中は毎フレーム落下速度をクランプ（壁衝突・重力切り替え後も維持）
-    if (m_isParasolOpen)
+    if (m_isParasolOpen && !inHorizWind)
     {
         const float maxFall = PlanetConst::MaxFallSpeed * PlayerConst::ParasolGravityScale;
         const float downVel = m_velocity.Dot(-GetUpDir());
@@ -261,7 +290,7 @@ void Player::Update()
 
     // ── 着地スクワッシュ検出 ────────────────────────────────
     if (m_isGround && !m_wasGround) { m_squashTimer = JuiceConst::SquashDuration; }
-    if (m_squashTimer > 0.0f) { m_squashTimer -= 1.0f / 60.0f; }
+    if (m_squashTimer > 0.0f) { m_squashTimer -= KdFPSController::GetDt(); }
     m_wasGround = m_isGround;
 }
 
@@ -380,6 +409,44 @@ void Player::PostUpdate()
         // scaleMat（ローカル） → rot（姿勢） → trans（位置）
         m_mWorld    = scaleMat * rot * transMat;
         m_drawWorld = scaleMat * rot * transDrawMat;
+
+        // ── 風による傾き（drawWorld のみ。コリジョン用 m_mWorld は変えない）──
+        if (std::abs(m_windTiltAngle) > 0.01f)
+        {
+            // 傾き軸：プレイヤーの前後方向（Z軸 = modelFwd）に対して垂直な軸 = modelRight（= up × modelFwd）
+            // 風の左右成分が大きいほど右か左に傾く
+            // 傾き回転：drawWorld の平行移動を除いた部分を中心に回転させる
+            const Math::Vector3 drawPos = { m_drawWorld._41, m_drawWorld._42, m_drawWorld._43 };
+            const Math::Matrix  tiltRot = Math::Matrix::CreateFromAxisAngle(
+                Math::Vector3{ 0.0f, 0.0f, 1.0f },  // ワールドZ軸固定（プレイヤーの向きに依存しない）
+                -m_windTiltAngle * (3.14159265f / 180.0f));  // 負符号でRightが右傾き、Leftが左傾き
+            // 平行移動を一時除去→回転→戻す
+            Math::Matrix drawNoTrans = m_drawWorld;
+            drawNoTrans._41 = 0.0f; drawNoTrans._42 = 0.0f; drawNoTrans._43 = 0.0f;
+            drawNoTrans = drawNoTrans * tiltRot;
+            drawNoTrans._41 = drawPos.x; drawNoTrans._42 = drawPos.y; drawNoTrans._43 = drawPos.z;
+            m_drawWorld = drawNoTrans;
+        }
+
+        // 風の積算を消費してタイルトを更新し、次フレームのためにリセット
+        {
+            const float dt60 = KdFPSController::GetDt() * 60.0f;
+            // 風の右方向（tangent）成分でタイルト目標を決める
+            // Right風 (windAccum.x > 0) → 正の角度 → 右傾き
+            // Left風  (windAccum.x < 0) → 負の角度 → 左傾き
+            // プレイヤーの向きに関係なくワールドX成分で傾き方向を決定する
+            const float targetTilt = std::clamp(
+                m_windAccum.x * (WindBoxConst::MaxTiltDeg / WindBoxConst::DefaultPower),
+                -WindBoxConst::MaxTiltDeg, WindBoxConst::MaxTiltDeg);
+
+            const float lerpSpeed = (m_windAccum.LengthSquared() > 0.0f)
+                ? WindBoxConst::TiltLerpSpeed
+                : WindBoxConst::TiltResetSpeed;
+            m_windTiltAngle = m_windTiltAngle + (targetTilt - m_windTiltAngle)
+                              * std::min(lerpSpeed * dt60, 1.0f);
+
+            m_windAccum = {};  // 毎フレーム消費
+        }
     }
 
     // 消滅した矢を除去
@@ -411,6 +478,8 @@ void Player::DrawLit()
 
 void Player::Move()
 {
+    const float dt60 = KdFPSController::GetDt() * 60.0f;
+
     // ダッシュ判定（地上かつ Shift 長押し）
     m_isDashing = m_isGround && (GetAsyncKeyState(VK_SHIFT) & 0x8000);
     m_animSpeed = m_isDashing ? PlayerConst::DashAnimSpeedMul : 1.0f;
@@ -454,7 +523,7 @@ void Player::Move()
 
             const Math::Vector3 targetVel = worldInput * speed;
             m_moveVelocity = Math::Vector3::Lerp(m_moveVelocity, targetVel,
-                accel / speed);
+                std::min(accel / speed * dt60, 1.0f));
 
             // 向き更新: tangent とのドット積で左右符号を即時決定する
             // Lerp+スナップは初期値(±1)から抜け出せなくなるバグがあるため使わない
@@ -467,7 +536,7 @@ void Player::Move()
     else
     {
         m_moveVelocity = Math::Vector3::Lerp(m_moveVelocity, Math::Vector3::Zero,
-            PlayerConst::Deceleration / PlayerConst::MoveSpeed);
+            std::min(PlayerConst::Deceleration / PlayerConst::MoveSpeed * dt60, 1.0f));
         if (m_moveVelocity.LengthSquared() < 0.0001f)
         {
             m_moveVelocity = Math::Vector3::Zero;
@@ -484,7 +553,19 @@ void Player::Move()
 
     const float radialVel = m_velocity.Dot(up);
     m_velocity = surfaceVel + up * radialVel;
+
+    // 風の水平速度を加算（Move() の上書きと干渉しないよう別メンバーで管理）
+    m_velocity += m_windHorizVel;
+
     m_velocity.z = 0.0f;   // Z は常に固定
+
+    // 範囲外のとき m_windHorizVel を減衰（重力と同じ感覚で自然に止まる）
+    if (!m_wasInWind)
+    {
+        m_windHorizVel = Math::Vector3::Lerp(m_windHorizVel, Math::Vector3::Zero,
+            std::min(0.1f * dt60, 1.0f));
+        if (m_windHorizVel.LengthSquared() < 0.0001f) { m_windHorizVel = {}; }
+    }
 }
 
 void Player::Jump()
@@ -585,4 +666,57 @@ void Player::TakeDamage(int _damage)
 
     // 被ダメ赤フラッシュをトリガー
     KdShaderManager::Instance().m_postProcessShader.TriggerDamageFlash();
+}
+
+void Player::ApplyWind(const Math::Vector3& windDir, float power)
+{
+    // パラソルを開いているときだけ風を受ける
+    if (!m_isParasolOpen) { return; }
+
+    m_wasInWind = true;
+
+    // 左右風かどうかを記録（水平成分が支配的なら true）
+    const Math::Vector3 horizCheck = windDir - m_upDir * windDir.Dot(m_upDir);
+    if (horizCheck.Length() > 0.5f) { m_windIsHorizontal = true; }
+
+    // 傾きエフェクト用に加算（PostUpdate で消費・リセット）
+    m_windAccum += windDir * power;
+
+    const float dt60 = KdFPSController::GetDt() * 60.0f;
+
+    // 上向き風：m_upDir 方向に加速（MaxUpSpeed クランプ）
+    const float upComponent = windDir.Dot(m_upDir);
+    if (upComponent > 0.01f)
+    {
+        const float currentUp = m_velocity.Dot(m_upDir);
+        if (currentUp < WindBoxConst::MaxUpSpeed)
+        {
+            const float add   = upComponent * power * dt60;
+            const float newUp = std::min(currentUp + add, WindBoxConst::MaxUpSpeed);
+            m_velocity += m_upDir * (newUp - currentUp);
+        }
+    }
+
+    // 左右風：m_upDir 垂直面（水平）方向に加速（MaxSideSpeed クランプ）
+    const Math::Vector3 horizDir = windDir - m_upDir * windDir.Dot(m_upDir);
+    const float horizLen = horizDir.Length();
+    if (horizLen > 0.01f)
+    {
+        const Math::Vector3 horizNorm   = horizDir / horizLen;
+        const float         currentSide = m_windHorizVel.Dot(horizNorm);
+        if (currentSide < WindBoxConst::MaxSideSpeed)
+        {
+            const float add     = horizLen * power * dt60;
+            const float newSide = std::min(currentSide + add, WindBoxConst::MaxSideSpeed);
+            m_windHorizVel += horizNorm * (newSide - currentSide);
+        }
+    }
+}
+
+void Player::ClearWindState()
+{
+    if (!m_wasInWind) { return; }
+    m_wasInWind        = false;
+    m_windIsHorizontal = false;
+    // 水平風速は減衰に任せる（Move() 末尾で毎フレーム Lerp で縮小）
 }

@@ -312,6 +312,13 @@
     <ClInclude Include="Src\Application\GameObject\Character\Enemy\Cubun.h" />
     <ClInclude Include="Src\Application\Editor\MovingFloorEditor.h" />
     <ClInclude Include="Src\Application\GameObject\Effect\StarBurstEffect.h" />
+    <ClInclude Include="Src\Application\Const\WindBoxConst.h" />
+    <ClInclude Include="Src\Application\Editor\WindBoxEditor.h" />
+    <ClInclude Include="Src\Application\GameObject\Gimmick\WindBox.h" />
+    <ClInclude Include="Src\Application\Const\GravityCoreConst.h" />
+    <ClInclude Include="Src\Application\GameObject\Gimmick\GravityCore.h" />
+    <ClInclude Include="Src\Application\Editor\GravityCoreEditor.h" />
+    <ClInclude Include="Src\Application\GameObject\Item\ParasolItem.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Pch.cpp">
@@ -492,6 +499,11 @@
     <ClCompile Include="Src\Application\GameObject\Character\Enemy\Cubun.cpp" />
     <ClCompile Include="Src\Application\Editor\MovingFloorEditor.cpp" />
     <ClCompile Include="Src\Application\GameObject\Effect\StarBurstEffect.cpp" />
+    <ClCompile Include="Src\Application\Editor\WindBoxEditor.cpp" />
+    <ClCompile Include="Src\Application\GameObject\Gimmick\WindBox.cpp" />
+    <ClCompile Include="Src\Application\GameObject\Gimmick\GravityCore.cpp" />
+    <ClCompile Include="Src\Application\Editor\GravityCoreEditor.cpp" />
+    <ClCompile Include="Src\Application\GameObject\Item\ParasolItem.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Src\Framework\Shader\inc_KdCommon.hlsli">

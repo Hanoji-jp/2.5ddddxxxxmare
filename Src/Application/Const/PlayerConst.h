@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include <vector>
 #include <string>
 
@@ -80,3 +80,4 @@ namespace PlayerConst
     constexpr const char* ArrowPath  = "Asset/Data/Bow_Arrow.gltf";
     constexpr const char* DustPath   = "Asset/Data/Box.gltf";  // 足元煙パーティクル用
 }
+

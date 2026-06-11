@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "../../Const/CameraConst.h"
 #include "../../Const/JuiceConst.h"
 #include "RoomBounds.h"
@@ -73,3 +73,4 @@ private:
     // 現在の補間済みオフセット（ワールド空間）
     Math::Vector3 m_focusOffsetWorld    = { 0.0f, 0.0f, 0.0f };
 };
+

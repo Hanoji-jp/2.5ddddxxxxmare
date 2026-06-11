@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "../../Const/MovingFloorConst.h"
 #include "../../Const/PlanetConst.h"
 #include "../../Editor/MovingFloorEditor.h"
@@ -117,3 +117,4 @@ private:
 	std::shared_ptr<KdTexture>   m_spGrassNormalTex;
 	std::shared_ptr<KdTexture>   m_spGrassEdgeTex;
 };
+

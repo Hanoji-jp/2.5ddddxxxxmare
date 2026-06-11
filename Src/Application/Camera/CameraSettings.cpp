@@ -1,4 +1,4 @@
-﻿#include "../../Pch.h"
+#include "../../Pch.h"
 #include "CameraSettings.h"
 #include <fstream>
 #include <sstream>
@@ -134,3 +134,4 @@ void CameraSettings::Load()
         else if (key == "WallZoomSensitivity") WallZoomSensitivity= value;
     }
 }
+

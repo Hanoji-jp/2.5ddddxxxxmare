@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include <string>
 
 //==========================================================
@@ -58,3 +58,4 @@ private:
     CameraSettings()  = default;
     ~CameraSettings() = default;
 };
+

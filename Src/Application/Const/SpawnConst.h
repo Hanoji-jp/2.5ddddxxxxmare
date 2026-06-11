@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 // スポーン関連の定数
 namespace SpawnConst
@@ -11,3 +11,4 @@ namespace SpawnConst
     // スポーン設定の保存先
     constexpr const char* SavePath = "Asset/Data/spawn_settings.csv";
 }
+

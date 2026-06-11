@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 // チェックポイントに関わる定数
 namespace CheckpointConst
@@ -15,3 +15,4 @@ namespace CheckpointConst
 	constexpr float DebugColorB     = 0.0f;
 	constexpr float DebugColorA     = 1.0f;
 }
+

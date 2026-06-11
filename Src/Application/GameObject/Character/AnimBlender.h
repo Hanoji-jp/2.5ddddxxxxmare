@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 //==========================================================
 // AnimBlender
@@ -74,3 +74,4 @@ private:
     std::vector<std::string> m_upperBodyNodeNames; // 上書き対象ノード名
     bool                     m_upperBodyActive = false;
 };
+

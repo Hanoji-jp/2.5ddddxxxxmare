@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 namespace CubunConst
 {
@@ -48,3 +48,4 @@ namespace CubunConst
 	// 視覚的 upDir を固定する（true = 常にモデルを上向きで描画）
 	constexpr bool  FixVisualUp     = true;
 }
+

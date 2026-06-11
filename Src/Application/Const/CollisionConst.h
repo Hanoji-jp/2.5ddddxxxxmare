@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 namespace CollisionConst
 {
@@ -63,3 +63,4 @@ namespace CollisionConst
     // 壁レイ方向（8方向）の数
     constexpr int   WallRayDirCount     = 8;
 }
+

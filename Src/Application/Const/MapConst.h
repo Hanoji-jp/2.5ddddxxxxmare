@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 // マップエディター・マップ配置に関わる定数
 namespace MapConst
@@ -18,3 +18,4 @@ namespace MapConst
     // エディターカメラ回転速度
     constexpr float EditorCameraRotSpeed  = 0.005f;
 }
+

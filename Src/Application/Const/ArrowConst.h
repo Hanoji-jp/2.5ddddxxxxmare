@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 // 矢に関わる定数
 namespace ArrowConst
@@ -9,3 +9,4 @@ namespace ArrowConst
     // 消滅する最大飛距離
     constexpr float MaxTravelDist = 30.0f;
 }
+

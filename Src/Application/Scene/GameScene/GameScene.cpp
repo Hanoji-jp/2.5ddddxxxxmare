@@ -43,10 +43,17 @@ void GameScene::Event()
 	// 惑星のワールド行列を毎フレーム更新
 	PlanetGravityManager::Instance().PostUpdate();
 
+	// ── アイテム（コイン・パラソル）の Update は常時実行 ──────
+	// pickup 判定は下の !m_editorMode ブロックで行う
+	for (auto& item : m_itemManager.WorkParasols())
+	{
+		if (!item->IsExpired()) { item->Update(); }
+	}
+
 	// ── テレポート出現スケールポップ ─────────────────────────
 	if (m_spPlayer && m_teleportPopTimer > 0.0f)
 	{
-		constexpr float kDt  = 1.0f / 60.0f;
+		const float kDt  = KdFPSController::GetDt();
 		m_teleportPopTimer  -= kDt;
 		const float t        = std::max(0.0f, m_teleportPopTimer / JuiceConst::PopDuration); // 1→0
 		const float popScale = 1.0f + (JuiceConst::PopOvershoot - 1.0f) * t;
@@ -154,14 +161,41 @@ void GameScene::Event()
 		RebuildMovingFloors();
 		m_movingFloorEditor.ClearDirty();
 	}
+	if (m_windBoxEditor.IsDirty())
+	{
+		RebuildWindBoxes();
+		m_windBoxEditor.ClearDirty();
+	}
+	if (m_gravityCoreEditor.IsDirty())
+	{
+		RebuildGravityCores();
+		m_gravityCoreEditor.ClearDirty();
+	}
 
-	// ── ゲームモード時のみ実行 ──────────────────────────
+	// ── 風ボックス：範囲内プレイヤーに風を適用 ──────────
+	bool inAnyWind = false;
+	if (m_spPlayer && !m_spPlayer->IsExpired())
+	{
+		for (const auto& wb : m_windBoxes)
+		{
+			if (!wb || !wb->IsEnabled()) { continue; }
+			if (wb->IsInRange(m_spPlayer->GetPos()))
+			{
+				m_spPlayer->ApplyWind(wb->GetWindDir(), wb->GetPower());
+				inAnyWind = true;
+			}
+		}
+	}
+	if (m_spPlayer && !m_spPlayer->IsExpired() && !inAnyWind)
+	{
+		m_spPlayer->ClearWindState();
+	}
 	if (!m_editorMode)
 	{
 		// ── ワープホール判定 ─────────────────────────────
 		if (m_spPlayer && !m_spPlayer->IsExpired())
 		{
-			const float dt = 1.0f / 60.0f;
+			const float dt = KdFPSController::GetDt();
 
 			if (m_warpPhase == WarpPhase::Sucking)
 			{
@@ -559,13 +593,15 @@ void GameScene::Event()
 
 		// ── FootDust（足元煙パーティクル）──
 		{
-			constexpr float kDt = 1.0f / 60.0f;
+			const float kDt = KdFPSController::GetDt();
 			m_dustTimer -= kDt;
 
+			const bool  isGround = m_spPlayer->IsGround();
 			const Math::Vector3 vel   = m_spPlayer->GetVelocity();
 			const float         speed = Math::Vector3(vel.x, vel.y, 0.0f).Length();
 
-			if (speed >= JuiceConst::DustSpeedMin && m_dustTimer <= 0.0f)
+			// 地上かつ一定速度以上のときだけ FootDust を生成
+			if (isGround && speed >= JuiceConst::DustSpeedMin && m_dustTimer <= 0.0f)
 			{
 				const bool isDash = m_spPlayer->IsDashing();
 				m_dustTimer = isDash ? JuiceConst::DustIntervalDash : JuiceConst::DustIntervalWalk;
@@ -577,10 +613,8 @@ void GameScene::Event()
 				else                                  { backDir = Math::Vector3{ 1.0f, 0.0f, 0.0f }; }
 
 				const Math::Vector3 upDir = m_spPlayer->GetUpDir();
-
 				const auto dustData = ModelManager::Instance().GetModel(PlayerConst::DustPath);
 
-				// ダッシュ時は1フレームに複数個スポーン
 				const int spawnCount = isDash ? 5 : 2;
 				for (int i = 0; i < spawnCount; ++i)
 				{
@@ -589,10 +623,23 @@ void GameScene::Event()
 					AddObject(dust);
 				}
 			}
+
+			// ── 着地エッジ検出 → StarBurstEffect ──────────
+			const bool justLanded = isGround && !m_prevPlayerGround;
+			if (justLanded)
+			{
+				const auto dustData = ModelManager::Instance().GetModel(PlayerConst::DustPath);
+				auto burst = std::make_shared<StarBurstEffect>();
+				burst->Spawn(m_spPlayer->GetPos(), m_spPlayer->GetUpDir(), dustData);
+				AddObject(burst);
+			}
+			m_prevPlayerGround = isGround;
 		}
 
 		// ── アイテム更新・取得判定 ──────────────────────
-		m_itemManager.Update(m_spPlayer->GetPickupHitBox());
+		bool parasolPickedUp = false;
+		m_itemManager.Update(m_spPlayer->GetPickupHitBox(), parasolPickedUp);
+		if (parasolPickedUp) { m_spPlayer->GiveParasol(); }
 		m_itemManager.Refresh();
 
 		// ── Cubun 撃破バーストエフェクト ────────────────
@@ -643,7 +690,7 @@ void GameScene::DrawSpriteExtra()
 	// ── 画面白フラッシュ ──
 	if (m_flashAlpha > 0.0f)
 	{
-		constexpr float kDt = 1.0f / 60.0f;
+		const float kDt = KdFPSController::GetDt();
 		const Math::Color whiteOverlay(1.0f, 1.0f, 1.0f, m_flashAlpha);
 		KdShaderManager::Instance().m_spriteShader.DrawBox(
 			screenW / 2, screenH / 2,
@@ -656,45 +703,7 @@ void GameScene::DrawSpriteExtra()
 	KdShaderManager::Instance().m_postProcessShader.DrawDamageFlash();
 
 	// ── 引力コンパスUI ──
-	if (m_spPlayer && m_pCamera)
-	{
-		const GravityInfluenceResult gravResult =
-			PlanetGravityManager::Instance().ComputeGravityInfluence(m_spPlayer->GetPos());
 
-		if (gravResult.hasInfluence)
-		{
-			// 引力方向をスクリーン2D方向に投影（Z成分は無視）
-			const Math::Vector3& gDir = gravResult.totalGravityDir;
-
-			// プレイヤーのスクリーン座標を取得
-			Math::Vector3 playerScreenPos;
-			m_pCamera->ConvertWorldToScreenDetail(m_spPlayer->GetPos(), playerScreenPos);
-
-			{
-				constexpr float kCompassRadius = 28.0f;  // プレイヤーUIからの距離
-				constexpr int   kArrowW        = 8;
-				constexpr int   kArrowH        = 14;
-
-				// ワールドY軸がスクリーン上で反転するため Y を反転
-				const float sx = gDir.x;
-				const float sy = -gDir.y;
-				const float len = std::sqrtf(sx * sx + sy * sy);
-				if (len > 0.001f)
-				{
-					const float nx = sx / len;
-					const float ny = sy / len;
-
-					const int cx = static_cast<int>(playerScreenPos.x + nx * kCompassRadius);
-					const int cy = static_cast<int>(playerScreenPos.y + ny * kCompassRadius);
-
-					// 引力方向を示す小さな矩形インジケーター
-					const Math::Color compassCol(0.3f, 0.9f, 1.0f, 0.85f);
-					KdShaderManager::Instance().m_spriteShader.DrawBox(
-						cx, cy, kArrowW, kArrowH, &compassCol, true);
-				}
-			}
-		}
-	}
 }
 
 void GameScene::DrawDebugExtra()
@@ -709,6 +718,8 @@ void GameScene::DrawDebugExtra()
 		m_checkpointEditor.DrawDebugSpheres();
 		m_warpHoleEditor.DrawDebug();
 		m_movingFloorEditor.DrawDebug();
+		m_windBoxEditor.DrawDebug();
+		m_gravityCoreEditor.DrawDebug();
 		PlanetGravityManager::Instance().DrawDebugShapes();
 	}
 }
@@ -738,6 +749,8 @@ void GameScene::DrawGui()
 	m_checkpointEditor.DrawGui();
 	m_warpHoleEditor.DrawGui();
 	m_movingFloorEditor.DrawGui();
+	m_windBoxEditor.DrawGui();
+	m_gravityCoreEditor.DrawGui();
 	CameraSettings::Instance().DrawGui();
 	PlanetGravityManager::Instance().DrawGui();
 	ManualGravityZoneManager::Instance().DrawGui();
@@ -963,6 +976,44 @@ void GameScene::RebuildMovingFloors()
 	for (auto& sp : m_cubuns)   { sp->SetMovingFloorObjects(wpList); }
 }
 
+void GameScene::RebuildWindBoxes()
+{
+	for (auto& wb : m_windBoxes) { wb->Expire(); }
+	m_windBoxes.clear();
+
+	for (const auto& data : m_windBoxEditor.GetBoxes())
+	{
+		auto sp = std::make_shared<WindBox>();
+		sp->Init(data);
+		m_windBoxes.push_back(sp);
+		AddObject(sp);
+	}
+
+	// プレイヤー・敵に WindBox コライダーリストを登録
+	std::vector<std::weak_ptr<KdGameObject>> wpList;
+	wpList.reserve(m_windBoxes.size());
+	for (const auto& sp : m_windBoxes) { wpList.push_back(sp); }
+
+	if (m_spPlayer) { m_spPlayer->SetWindBoxObjects(wpList); }
+	for (auto& sp : m_enemies) { sp->SetWindBoxObjects(wpList); }
+	for (auto& sp : m_cubuns)  { sp->SetWindBoxObjects(wpList); }
+}
+
+void GameScene::RebuildGravityCores()
+{
+	for (auto& gc : m_gravityCores) { gc->Expire(); }
+	m_gravityCores.clear();
+
+	for (const auto& data : m_gravityCoreEditor.GetCores())
+	{
+		if (!data.enabled) { continue; }
+		auto sp = std::make_shared<GravityCore>();
+		sp->Init(data.pos, data.radius, data.type);
+		m_gravityCores.push_back(sp);
+		AddObject(sp);
+	}
+}
+
 void GameScene::Init()
 {
 	// カメラ（BaseSceneのm_cameraに所有権を渡し、観察用ポインタだけ保持）
@@ -1057,6 +1108,18 @@ void GameScene::Init()
 	// 移動床エディター → 移動床生成
 	RebuildMovingFloors();
 	m_movingFloorEditor.ClearDirty();
+
+	// 風ボックスエディター → 風ボックス生成
+	RebuildWindBoxes();
+	m_windBoxEditor.ClearDirty();
+
+	// 重力コアエディター → 重力コア生成
+	RebuildGravityCores();
+	m_gravityCoreEditor.ClearDirty();
+
+	// コイン・パラソルアイテム読み込み
+	m_itemManager.Load();
+	m_itemManager.LoadParasols();
 
 	}
 
@@ -1157,3 +1220,4 @@ void GameScene::UpdateCameraZFromExitDir(const Math::Vector3& exitDir)
 		m_pCamera->ClearOffsetZOverride();
 	}
 }
+

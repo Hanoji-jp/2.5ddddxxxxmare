@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 //==========================================================
 // JuiceConst.h
@@ -97,3 +97,4 @@ namespace JuiceConst
 	constexpr float StarBurstLifetimeMax = 0.7f;   // 寿命最大（秒）
 	constexpr float StarBurstEmissive    = 4.0f;   // 発光強度（青白く光る）
 }
+

@@ -1,4 +1,4 @@
-﻿#include "../../../Pch.h"
+#include "../../../Pch.h"
 #include "SideScrollCamera.h"
 #include "../../Camera/CameraSettings.h"
 
@@ -143,7 +143,7 @@ void SideScrollCamera::Update(const Math::Vector3& _targetPos, const Math::Vecto
 	}
 
 	// ── 1. ルーム遷移ステート更新（全モード共通） ──────────────
-	constexpr float kDt = 1.0f / 60.0f;
+	const float kDt = KdFPSController::GetDt();
 	if (!m_rooms.empty() && m_currentRoom + 1 < static_cast<int>(m_rooms.size()))
 	{
 		const RoomBounds& cur = m_rooms[m_currentRoom];
@@ -176,7 +176,7 @@ void SideScrollCamera::Update(const Math::Vector3& _targetPos, const Math::Vecto
 		: m_rooms[m_currentRoom].mode;
 
 	// ── 惑星到達ズームアウト→戻り（全モード共通）──────────────
-	constexpr float kDeltaTime = 1.0f / 60.0f;
+	const float kDeltaTime = KdFPSController::GetDt();
 	float planetZoomOffset = 0.0f;
 	if (m_planetZoomTimer > 0.0f)
 	{
@@ -294,8 +294,8 @@ void SideScrollCamera::Update(const Math::Vector3& _targetPos, const Math::Vecto
 			}
 			else
 			{
-				m_clampMinX = std::lerp(m_clampMinX, targetRoom.minX, CameraConst::RoomTransitionSpeed * (1.0f / 60.0f));
-				m_clampMaxX = std::lerp(m_clampMaxX, targetRoom.maxX, CameraConst::RoomTransitionSpeed * (1.0f / 60.0f));
+				m_clampMinX = std::lerp(m_clampMinX, targetRoom.minX, CameraConst::RoomTransitionSpeed * KdFPSController::GetDt());
+				m_clampMaxX = std::lerp(m_clampMaxX, targetRoom.maxX, CameraConst::RoomTransitionSpeed * KdFPSController::GetDt());
 			}
 
 			const float planeDist0 = std::abs(baseOffsetZ);
@@ -488,3 +488,4 @@ void SideScrollCamera::Update(const Math::Vector3& _targetPos, const Math::Vecto
 
 	SetCameraMatrix(mCam);
 }
+

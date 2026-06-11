@@ -1,4 +1,4 @@
-﻿#include "BaseScene.h"
+#include "BaseScene.h"
 
 void BaseScene::PreUpdate()
 {
@@ -71,6 +71,8 @@ void BaseScene::PreDraw()
 		m_camera->SetToShader();
 		// Effekseer にもカメラを渡す
 		KdEffekseerManager::GetInstance().SetCamera(m_camera);
+		// フラスタムカリング用に視錐台を更新
+		m_frustum = m_camera->GetBoundingFrustum();
 	}
 
 	for (auto& obj : m_objList)
@@ -87,6 +89,7 @@ void BaseScene::Draw()
 	{
 		for (auto& obj : m_objList)
 		{
+			if (!obj->CheckInScreen(m_frustum)) { continue; }
 			obj->GenerateDepthMapFromLight();
 		}
 		DrawLitExtra();
@@ -99,6 +102,7 @@ void BaseScene::Draw()
 	{
 		for (auto& obj : m_objList)
 		{
+			if (!obj->CheckInScreen(m_frustum)) { continue; }
 			obj->DrawUnLit();
 		}
 		DrawUnLitExtra();
@@ -111,6 +115,7 @@ void BaseScene::Draw()
 	{
 		for (auto& obj : m_objList)
 		{
+			if (!obj->CheckInScreen(m_frustum)) { continue; }
 			obj->DrawLit();
 		}
 	DrawLitExtra();
@@ -123,6 +128,7 @@ void BaseScene::Draw()
 	{
 		for (auto& obj : m_objList)
 		{
+			if (!obj->CheckInScreen(m_frustum)) { continue; }
 			obj->DrawEffect();
 		}
 	}
@@ -138,6 +144,7 @@ void BaseScene::Draw()
 	{
 		for (auto& obj : m_objList)
 		{
+			if (!obj->CheckInScreen(m_frustum)) { continue; }
 			obj->DrawBright();
 		}
 	}
@@ -183,3 +190,4 @@ void BaseScene::Init()
 {
 	// 各シーンで必要な内容を実装(オーバーライド)する
 }
+

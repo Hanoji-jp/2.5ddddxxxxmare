@@ -1,8 +1,7 @@
 ﻿#include "../../../Pch.h"
 #include "WarpHole.h"
 
-static constexpr float kTwoPi          = 6.28318530718f;
-static constexpr float kFixedDeltaTime = 1.0f / 60.0f;
+static constexpr float kTwoPi = 6.28318530718f;
 
 // トランペットのベル形状：口元が大きく広がり → 急速に絞られ → 細い管で安定
 static constexpr float kRadiusTable[] = { 1.0f, 0.55f, 0.32f, 0.27f, 0.25f, 0.25f, 0.25f, 0.25f };
@@ -161,7 +160,8 @@ void WarpHole::UpdateExitParticles()
 
 
 	// タイマーで新規スポーン
-	m_exitSpawnTimer -= kFixedDeltaTime;
+	const float dt = KdFPSController::GetDt();
+	m_exitSpawnTimer -= dt;
 	if (m_exitSpawnTimer <= 0.0f)
 	{
 		m_exitSpawnTimer = WarpHoleConst::ExitParticleSpawnInterval;
@@ -181,7 +181,7 @@ void WarpHole::UpdateExitParticles()
 	{
 		if (!p.Active) { continue; }
 
-		p.Life -= kFixedDeltaTime;
+		p.Life -= dt;
 		if (p.Life <= 0.0f)
 		{
 			p.Active = false;
@@ -191,8 +191,8 @@ void WarpHole::UpdateExitParticles()
 		// 速度減衰（空気抵抗風）
 		constexpr float kDamping = 0.97f;
 		p.Velocity *= kDamping;
-		p.Pos      += p.Velocity * kFixedDeltaTime;
-		p.RotAngle += WarpHoleConst::ParticleRotSpeed * kFixedDeltaTime;
+		p.Pos      += p.Velocity * dt;
+		p.RotAngle += WarpHoleConst::ParticleRotSpeed * dt;
 	}
 }
 
@@ -215,11 +215,12 @@ void WarpHole::UpdateParticles()
 		const float dist   = std::sqrtf(distSq);
 		const float accel  = WarpHoleConst::ParticleSuckAccel / std::max(dist, 0.5f);
 		const Math::Vector3 dir = toEntry / dist;
-		p.Velocity += dir * accel * kFixedDeltaTime;
-		p.Pos      += p.Velocity * kFixedDeltaTime;
+		const float dt = KdFPSController::GetDt();
+		p.Velocity += dir * accel * dt;
+		p.Pos      += p.Velocity * dt;
 
 		// 回転アニメ
-		p.RotAngle += WarpHoleConst::ParticleRotSpeed * kFixedDeltaTime;
+		p.RotAngle += WarpHoleConst::ParticleRotSpeed * dt;
 	}
 }
 
@@ -271,7 +272,8 @@ void WarpHole::Update()
 {
 	if (!m_data.Enabled) { return; }
 
-	m_animOffset += WarpHoleConst::AnimSpeed * kFixedDeltaTime;
+	const float dt = KdFPSController::GetDt();
+	m_animOffset += WarpHoleConst::AnimSpeed * dt;
 	if (m_animOffset > 1.0f) { m_animOffset -= 1.0f; }
 
 	UpdateParticles();
@@ -372,8 +374,9 @@ void WarpHole::DrawBright()
 									 WarpHoleConst::ExitColorB * 1.5f,
 									 0.8f };
 
-	DrawFunnelFace(m_data.EntryPos, m_data.GetEntryMouthDir(), entryBloom, m_entryJitter, m_animOffset);
-	DrawFunnelFace(m_data.ExitPos,  m_data.GetExitMouthDir(),  exitBloom,  m_exitJitter,  m_animOffset);
+	// 口元ほど明るく→奥でフェードアウトするグラデーションBloom
+	DrawFunnelFace(m_data.EntryPos, m_data.GetEntryMouthDir(), entryBloom, m_entryJitter, m_animOffset, false);
+	DrawFunnelFace(m_data.ExitPos,  m_data.GetExitMouthDir(),  exitBloom,  m_exitJitter,  m_animOffset, false);
 
 	// パーティクルも Bloom パスで描画してにじませる
 	const Math::Color particleBloom = {
@@ -411,47 +414,6 @@ void WarpHole::DrawBright()
 		shaderMgr.m_StandardShader.DrawModel(m_boxModel, world, fadeBloom, zeroEmi);
 	}
 
-	// トンネルも bloom パスへ
-	{
-		std::vector<Math::Vector3> path = BuildTunnelCenterPath();
-		if (path.size() >= 2)
-		{
-			const float fl = WarpHoleConst::FunnelLength;
-			path = TrimTunnelPath(path, fl);
-			if (path.size() >= 2)
-			{
-				path.front() = m_data.EntryPos + m_data.GetEntryMouthDir() * fl;
-				path.back()  = m_data.ExitPos  + m_data.GetExitMouthDir()  * fl;
-			}
-		}
-		DrawTunnelFace(path, entryBloom, exitBloom, m_tunnelJitter, m_animOffset);
-
-		if (path.size() >= 2)
-		{
-			{
-				Math::Vector3 fwd = path[1] - path[0];
-				if (fwd.LengthSquared() < 1e-8f) fwd = m_data.GetEntryMouthDir();
-				else fwd.Normalize();
-				Math::Vector3 tTang, tBitan;
-				MakeBasis(fwd, tTang, tBitan);
-				DrawFunnelTunnelBridge(
-					m_data.EntryPos, m_data.GetEntryMouthDir(),
-					path.front(), tTang, tBitan, entryBloom);
-			}
-			{
-				const int n = static_cast<int>(path.size());
-				Math::Vector3 fwd = path[n - 1] - path[n - 2];
-				if (fwd.LengthSquared() < 1e-8f) fwd = m_data.GetExitMouthDir();
-				else fwd.Normalize();
-				Math::Vector3 tTang, tBitan;
-				MakeBasis(fwd, tTang, tBitan);
-				DrawFunnelTunnelBridge(
-					m_data.ExitPos, m_data.GetExitMouthDir(),
-					path.back(), tTang, tBitan, exitBloom);
-			}
-		}
-	}
-
 	shaderMgr.UndoBlendState();
 	shaderMgr.UndoDepthStencilState();
 }
@@ -485,7 +447,8 @@ void WarpHole::DrawFunnelFace(const Math::Vector3& center,
 							  const Math::Vector3& mouthDir,
 							  const Math::Color&   col,
 							  const std::vector<float>& jitterOffsets,
-							  float animTime) const
+							  float animTime,
+							  bool invertGradient) const
 {
 	const int   rings     = WarpHoleConst::FunnelRings;
 	const int   segs      = WarpHoleConst::FunnelSegments;
@@ -536,14 +499,24 @@ void WarpHole::DrawFunnelFace(const Math::Vector3& center,
 	};
 
 	// 奥になるほど暗く・薄くする係数
+	// invertGradient=true（Bloomパス）のときは逆：奥ほど明るく、口元でゼロ
 	auto RingAlpha = [&](int ring) -> float
 	{
 		const float t = static_cast<float>(ring) / static_cast<float>(rings - 1);
+		if (invertGradient)
+		{
+			// 口元(t=0)=0、奥(t=1)=faceAlpha のイーズイン曲線
+			return faceAlpha * t * t;
+		}
 		return faceAlpha * (1.0f - t * 0.6f);
 	};
 	auto RingBright = [&](int ring) -> float
 	{
 		const float t = static_cast<float>(ring) / static_cast<float>(rings - 1);
+		if (invertGradient)
+		{
+			return t;  // 口元=0、奥=1
+		}
 		return 1.0f - t * 0.65f;
 	};
 
@@ -570,8 +543,8 @@ void WarpHole::DrawFunnelFace(const Math::Vector3& center,
 	};
 
 	// ─── 三角ポリゴン面 ───
-	std::vector<KdPolygon::Vertex> tris;
-	tris.reserve(static_cast<size_t>(rings - 1) * segs * 6);
+	m_vtxBuf.clear();
+	m_vtxBuf.reserve(static_cast<size_t>(rings - 1) * segs * 6);
 
 	for (int ring = 0; ring < rings - 1; ++ring)
 	{
@@ -591,36 +564,40 @@ void WarpHole::DrawFunnelFace(const Math::Vector3& center,
 			v0.pos = p00; v0.color = fc;
 			v1.pos = p01; v1.color = fc;
 			v2.pos = p10; v2.color = fc;
-			tris.push_back(v0); tris.push_back(v1); tris.push_back(v2);
+			m_vtxBuf.push_back(v0); m_vtxBuf.push_back(v1); m_vtxBuf.push_back(v2);
 
 			v3.pos = p01; v3.color = fc;
 			v4.pos = p11; v4.color = fc;
 			v5.pos = p10; v5.color = fc;
-			tris.push_back(v3); tris.push_back(v4); tris.push_back(v5);
+			m_vtxBuf.push_back(v3); m_vtxBuf.push_back(v4); m_vtxBuf.push_back(v5);
 		}
 	}
 
-	if (!tris.empty())
+	if (!m_vtxBuf.empty())
 	{
 		KdShaderManager::Instance().m_StandardShader.DrawVertices(
-			tris, Math::Matrix::Identity,
+			m_vtxBuf, Math::Matrix::Identity,
 			Math::Color(1, 1, 1, 1), KdDepthStencilState::ZWriteDisable,
 			D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	}
 
 	// ─── ワイヤー：面エッジに沿ったリング輪郭＋スポーク（どちらもGetVertex=ジッターあり）───
-	std::vector<KdPolygon::Vertex> wires;
-	wires.reserve(static_cast<size_t>(rings) * segs * 2
+	m_vtxBuf.clear();
+	m_vtxBuf.reserve(static_cast<size_t>(rings) * segs * 2
 				+ static_cast<size_t>(segs) * (rings - 1) * 2);
 
 	auto WireCol = [&](int ring) -> unsigned int
 	{
 		const float b = RingBright(ring);
+		// invertGradient 時は口元ワイヤーを完全に消す（口元 wireAlpha=0）
+		const float wa = invertGradient
+			? wireAlpha * RingBright(ring)
+			: wireAlpha;
 		return ColorToUint({
 			std::min(col.R() * b + 0.5f * b, 1.0f),
 			std::min(col.G() * b + 0.25f * b, 1.0f),
 			std::min(col.B() * b + 0.1f * b, 1.0f),
-			wireAlpha });
+			wa });
 	};
 
 	// リング輪郭（面のseg頂点＝ジッターあり・面エッジそのまま）
@@ -633,7 +610,7 @@ void WarpHole::DrawFunnelFace(const Math::Vector3& center,
 			KdPolygon::Vertex v0{}, v1{};
 			v0.pos = GetVertex(ring, seg);  v0.color = wc;
 			v1.pos = GetVertex(ring, next); v1.color = wc;
-			wires.push_back(v0); wires.push_back(v1);
+			m_vtxBuf.push_back(v0); m_vtxBuf.push_back(v1);
 		}
 	}
 
@@ -645,14 +622,14 @@ void WarpHole::DrawFunnelFace(const Math::Vector3& center,
 			KdPolygon::Vertex v0{}, v1{};
 			v0.pos = GetVertex(ring,     seg); v0.color = WireCol(ring);
 			v1.pos = GetVertex(ring + 1, seg); v1.color = WireCol(ring + 1);
-			wires.push_back(v0); wires.push_back(v1);
+			m_vtxBuf.push_back(v0); m_vtxBuf.push_back(v1);
 		}
 	}
 
-	if (!wires.empty())
+	if (!m_vtxBuf.empty())
 	{
 		KdShaderManager::Instance().m_StandardShader.DrawVertices(
-			wires, Math::Matrix::Identity,
+			m_vtxBuf, Math::Matrix::Identity,
 			Math::Color(1, 1, 1, 1), KdDepthStencilState::ZWriteDisable);
 	}
 }
@@ -831,8 +808,8 @@ void WarpHole::DrawTunnelFace(const std::vector<Math::Vector3>& path,
 	};
 
 	// ─── 三角面 ───
-	std::vector<KdPolygon::Vertex> tris;
-	tris.reserve(static_cast<size_t>(pathCount - 1) * segs * 6);
+	m_vtxBuf.clear();
+	m_vtxBuf.reserve(static_cast<size_t>(pathCount - 1) * segs * 6);
 
 	for (int i = 0; i < pathCount - 1; ++i)
 	{
@@ -852,25 +829,25 @@ void WarpHole::DrawTunnelFace(const std::vector<Math::Vector3>& path,
 			v0.pos = p00; v0.color = fc;
 			v1.pos = p01; v1.color = fc;
 			v2.pos = p10; v2.color = fc;
-			tris.push_back(v0); tris.push_back(v1); tris.push_back(v2);
+			m_vtxBuf.push_back(v0); m_vtxBuf.push_back(v1); m_vtxBuf.push_back(v2);
 			v3.pos = p01; v3.color = fc;
 			v4.pos = p11; v4.color = fc;
 			v5.pos = p10; v5.color = fc;
-			tris.push_back(v3); tris.push_back(v4); tris.push_back(v5);
+			m_vtxBuf.push_back(v3); m_vtxBuf.push_back(v4); m_vtxBuf.push_back(v5);
 		}
 	}
 
-	if (!tris.empty())
+	if (!m_vtxBuf.empty())
 	{
 		KdShaderManager::Instance().m_StandardShader.DrawVertices(
-			tris, Math::Matrix::Identity,
+			m_vtxBuf, Math::Matrix::Identity,
 			Math::Color(1, 1, 1, 1), KdDepthStencilState::ZWriteDisable,
 			D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	}
 
 	// ─── ワイヤー（面エッジ）───
-	std::vector<KdPolygon::Vertex> wires;
-	wires.reserve(static_cast<size_t>(pathCount) * segs * 2
+	m_vtxBuf.clear();
+	m_vtxBuf.reserve(static_cast<size_t>(pathCount) * segs * 2
 				+ static_cast<size_t>(segs) * (pathCount - 1) * 2);
 
 	auto WireC = [&](int i) -> unsigned int
@@ -894,7 +871,7 @@ void WarpHole::DrawTunnelFace(const std::vector<Math::Vector3>& path,
 			KdPolygon::Vertex v0{}, v1{};
 			v0.pos = GetVert(i, seg);  v0.color = wc;
 			v1.pos = GetVert(i, next); v1.color = wc;
-			wires.push_back(v0); wires.push_back(v1);
+			m_vtxBuf.push_back(v0); m_vtxBuf.push_back(v1);
 		}
 	}
 	for (int seg = 0; seg < segs; ++seg)
@@ -904,14 +881,14 @@ void WarpHole::DrawTunnelFace(const std::vector<Math::Vector3>& path,
 			KdPolygon::Vertex v0{}, v1{};
 			v0.pos = GetVert(i,     seg); v0.color = WireC(i);
 			v1.pos = GetVert(i + 1, seg); v1.color = WireC(i + 1);
-			wires.push_back(v0); wires.push_back(v1);
+			m_vtxBuf.push_back(v0); m_vtxBuf.push_back(v1);
 		}
 	}
 
-	if (!wires.empty())
+	if (!m_vtxBuf.empty())
 	{
 		KdShaderManager::Instance().m_StandardShader.DrawVertices(
-			wires, Math::Matrix::Identity,
+			m_vtxBuf, Math::Matrix::Identity,
 			Math::Color(1, 1, 1, 1), KdDepthStencilState::ZWriteDisable);
 	}
 }
@@ -1381,3 +1358,4 @@ std::vector<Math::Vector3> WarpHole::ResamplePath(
 	out.push_back(src[n - 1]);
 	return out;
 }
+

@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 // 敵に関わる定数
 namespace EnemyConst
@@ -91,3 +91,4 @@ namespace EnemyConst
     // 前方壁チェックレイの高さオフセット（体中心付近）
     constexpr float WallCheckRayUpOffset = 0.6f;
 }
+

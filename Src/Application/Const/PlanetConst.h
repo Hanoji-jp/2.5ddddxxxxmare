@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 // 惑星重力システムに関わる定数
 namespace PlanetConst
@@ -115,3 +115,4 @@ namespace PlanetConst
 	// 値が大きいほどコーナーで面が切り替わりにくくなる（0.3〜1.0 推奨）
 	constexpr float BoxFaceHysteresis   = 0.8f;
 }
+

@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 //==========================================================
 // GravityRingConst.h
@@ -66,3 +66,4 @@ namespace GravityRingConst
 	inline const Math::Color ColorLeft    = { 0.8f, 0.3f, 1.0f, 0.85f }; // 左：紫
 	inline const Math::Color ColorRight   = { 0.3f, 1.0f, 0.9f, 0.85f }; // 右：シアン
 }
+

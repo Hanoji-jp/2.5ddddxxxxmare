@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 namespace MovingFloorConst
 {
@@ -19,3 +19,4 @@ namespace MovingFloorConst
 	// 折り返し地点でのデフォルト一時停止時間（秒）
 	constexpr float DefaultWaitTime = 1.0f;
 }
+

@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "../../Const/GravityRingConst.h"
 #include "../../Manager/PlanetGravityManager.h"
 #include "../../Manager/ModelManager.h"
@@ -118,3 +118,4 @@ private:
 	std::vector<Particle> m_particles;
 	float                 m_spawnTimer = 0.0f;
 };
+

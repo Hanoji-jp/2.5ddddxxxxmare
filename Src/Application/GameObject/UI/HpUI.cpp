@@ -1,4 +1,4 @@
-﻿#include "../../../Pch.h"
+#include "../../../Pch.h"
 #include "HpUI.h"
 #include "../Character/Character.h"
 
@@ -14,7 +14,7 @@ void HpUI::DrawGui()
 	const int maxHp = 3;
 
 	// ── HP シェイクオフセット計算 ──
-	constexpr float kDt = 1.0f / 60.0f;
+	const float kDt = KdFPSController::GetDt();
 	float shakeOffsetX = 0.0f;
 	if (m_shakeTimer > 0.0f)
 	{
@@ -48,4 +48,5 @@ void HpUI::DrawGui()
 
 	ImGui::End();
 }
+
 

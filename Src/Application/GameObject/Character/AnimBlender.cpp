@@ -1,4 +1,4 @@
-﻿#include "../../../Pch.h"
+#include "../../../Pch.h"
 #include "AnimBlender.h"
 
 bool AnimBlender::ChangeAnimation(const std::string& _animName,
@@ -158,3 +158,4 @@ void AnimBlender::ClearUpperBodyAnim()
     m_upperBodyActive = false;
     m_upperBodyNodeNames.clear();
 }
+

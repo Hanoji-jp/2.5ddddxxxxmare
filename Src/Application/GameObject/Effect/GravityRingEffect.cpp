@@ -8,7 +8,7 @@ void GravityRingEffect::Update()
 {
 	if (!m_pPlanet) { return; }
 
-	constexpr float kDt    = 1.0f / 60.0f;
+	const float kDt    = KdFPSController::GetDt();
 	constexpr float kTwoPi = 6.28318530f;
 
 	if (m_pPlanet->Shape == PlanetShape::Sphere)
@@ -233,7 +233,7 @@ void GravityRingEffect::UpdateDebris()
 	if (!m_spBoxData) { return; }
 	if (!m_pPlanet)   { return; }
 
-	constexpr float kDt    = 1.0f / 60.0f;
+	const float kDt    = KdFPSController::GetDt();
 	constexpr float kTwoPi = 6.28318530f;
 
 	const float r = (m_pPlanet->Shape == PlanetShape::Sphere)
@@ -290,7 +290,7 @@ void GravityRingEffect::UpdateParticles()
 	if (!m_spBoxData) { return; }
 	if (!m_pPlanet)   { return; }
 
-	constexpr float kDt    = 1.0f / 60.0f;
+	const float kDt    = KdFPSController::GetDt();
 	constexpr float kTwoPi = 6.28318530f;
 
 	// スポーン
@@ -359,3 +359,4 @@ void GravityRingEffect::DrawParticles()
 		KdShaderManager::Instance().m_StandardShader.DrawModel(p.work, mat);
 	}
 }
+

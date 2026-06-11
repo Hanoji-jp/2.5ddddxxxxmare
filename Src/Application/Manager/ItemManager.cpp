@@ -11,8 +11,9 @@ void ItemManager::SpawnCoin(const Math::Vector3& _pos)
 	m_coins.push_back(std::move(coin));
 }
 
-int ItemManager::Update(HitBox& _playerHitBox)
+int ItemManager::Update(HitBox& _playerHitBox, bool& outParasolPickedUp)
 {
+	outParasolPickedUp = false;
 	int collected = 0;
 
 	const KdCollider::SphereInfo hitSphere = _playerHitBox.GetSphereInfo();
@@ -31,6 +32,18 @@ int ItemManager::Update(HitBox& _playerHitBox)
 		}
 	}
 
+	// ── パラソルアイテム取得判定のみ（Update は GameScene から直接呼ぶ）
+	for (const auto& p : m_parasols)
+	{
+		if (p->IsExpired()) { continue; }
+
+		if (p->Intersects(hitSphere, nullptr))
+		{
+			p->MarkPickedUp();
+			outParasolPickedUp = true;
+		}
+	}
+
 	return collected;
 }
 
@@ -40,11 +53,16 @@ void ItemManager::DrawLit()
 	{
 		if (!coin->IsExpired()) { coin->DrawLit(); }
 	}
+	for (const auto& p : m_parasols)
+	{
+		if (!p->IsExpired()) { p->DrawLit(); }
+	}
 }
 
 void ItemManager::Refresh()
 {
 	m_coins.remove_if([](const std::shared_ptr<Coin>& c) { return c->IsExpired(); });
+	m_parasols.remove_if([](const std::shared_ptr<ParasolItem>& p) { return p->IsExpired(); });
 }
 
 void ItemManager::SpawnCoinLine(const Math::Vector3& _start, const Math::Vector3& _end, int _count)
@@ -151,6 +169,58 @@ void ItemManager::DrawGui()
 	ImGui::SameLine();
 	if (ImGui::Button("Load"))  { ClearCoins(); Load(); }
 
+	// ── Parasol セクション ────────────────────────────────────
+	ImGui::Separator();
+	ImGui::Text("--- Parasol Items (%d) ---", static_cast<int>(m_parasols.size()));
+
+	// 新規追加：プレイヤーがいる場所などに手動で座標入力
+	static Math::Vector3 s_parasolPos = { 0.0f, 2.0f, 0.0f };
+	ImGui::SetNextItemWidth(210.0f);
+	ImGui::DragFloat3("##newppos", &s_parasolPos.x, 0.1f);
+	ImGui::SameLine();
+	if (ImGui::Button("Add##parasol"))
+	{
+		SpawnParasol(s_parasolPos);
+	}
+
+	if (ImGui::Button("Clear##parasols")) { ClearParasols(); }
+	ImGui::SameLine();
+	if (ImGui::Button("Save##parasols"))  { SaveParasols(); }
+	ImGui::SameLine();
+	if (ImGui::Button("Reload##parasols")) { ClearParasols(); LoadParasols(); }
+
+	// リスト：各アイテムの pos を編集 → Set で spawnPos に反映
+	if (ImGui::BeginChild("ParasolList", ImVec2(0.0f, 200.0f), true))
+	{
+		int idx = 0;
+		for (auto& item : m_parasols)
+		{
+			if (item->IsExpired()) { ++idx; continue; }
+
+			ImGui::PushID(idx);
+
+			ImGui::Text("[%d]", idx);
+			ImGui::SameLine();
+
+			// DragFloat3 で直接 spawnPos を編集
+			Math::Vector3 editPos = item->GetSpawnPos();
+			ImGui::SetNextItemWidth(195.0f);
+			if (ImGui::DragFloat3("##ppos", &editPos.x, 0.1f))
+			{
+				item->SetSpawnPos(editPos);
+			}
+			ImGui::SameLine();
+			if (ImGui::SmallButton("Del"))
+			{
+				item->Expire();
+			}
+
+			ImGui::PopID();
+			++idx;
+		}
+	}
+	ImGui::EndChild();
+
 	ImGui::End();
 }
 
@@ -189,4 +259,69 @@ void ItemManager::Load()
 		p.z = std::stof(tokens[2]);
 		SpawnCoin(p);
 	}
+}
+
+void ItemManager::SpawnParasol(const Math::Vector3& pos)
+{
+	auto item = std::make_shared<ParasolItem>();
+	item->SetSpawnPos(pos);
+	item->Init();
+	m_parasols.push_back(std::move(item));
+}
+
+void ItemManager::ClearParasols()
+{
+	for (auto& p : m_parasols) { p->Expire(); }
+	m_parasols.remove_if([](const std::shared_ptr<ParasolItem>& p) { return p->IsExpired(); });
+}
+
+void ItemManager::SaveParasols() const
+{
+	std::ofstream ofs(ItemConst::ParasolSavePath);
+	if (!ofs)
+	{
+		OutputDebugStringA("[ItemManager] SaveParasols: failed to open file\n");
+		return;
+	}
+
+	int count = 0;
+	for (const auto& item : m_parasols)
+	{
+		if (item->IsExpired()) { continue; }
+		const Math::Vector3& p = item->GetSpawnPos();
+		ofs << p.x << "," << p.y << "," << p.z << "\n";
+		++count;
+	}
+	OutputDebugStringA(("[ItemManager] SaveParasols: saved " + std::to_string(count) + " items\n").c_str());
+}
+
+void ItemManager::LoadParasols()
+{
+	std::ifstream ifs(ItemConst::ParasolSavePath);
+	if (!ifs)
+	{
+		OutputDebugStringA("[ItemManager] LoadParasols: file not found\n");
+		return;
+	}
+
+	int count = 0;
+	std::string line;
+	while (std::getline(ifs, line))
+	{
+		if (line.empty()) { continue; }
+
+		std::istringstream ss(line);
+		std::string token;
+		std::vector<std::string> tokens;
+		while (std::getline(ss, token, ',')) { tokens.push_back(token); }
+		if (tokens.size() < 3) { continue; }
+
+		Math::Vector3 p;
+		p.x = std::stof(tokens[0]);
+		p.y = std::stof(tokens[1]);
+		p.z = std::stof(tokens[2]);
+		SpawnParasol(p);
+		++count;
+	}
+	OutputDebugStringA(("[ItemManager] LoadParasols: loaded " + std::to_string(count) + " items\n").c_str());
 }

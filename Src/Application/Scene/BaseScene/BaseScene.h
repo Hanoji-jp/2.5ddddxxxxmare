@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "Framework/Utility/ThreadPool/KdThreadPool.h"
 
 class BaseScene
@@ -44,6 +44,10 @@ protected :
 
 	std::shared_ptr<KdCamera> m_camera = nullptr;
 
+	// フラスタムカリング用・PreDraw で毎フレーム更新
+	DirectX::BoundingFrustum m_frustum;
+
 	// 全オブジェクトのアドレスをリストで管理
 	std::list<std::shared_ptr<KdGameObject>> m_objList;
 };
+

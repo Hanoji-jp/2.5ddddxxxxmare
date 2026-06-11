@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 // スカイボックス背景オブジェクト
 class BackGround : public KdGameObject
@@ -12,7 +12,10 @@ public:
     void DrawUnLit() override;
 
     bool IsVisible() const override { return true; }
+    // スカイボックスは常時描画対象
+    bool CheckInScreen(const DirectX::BoundingFrustum&) const override { return true; }
 
 private:
     KdModelWork m_modelWork;
 };
+

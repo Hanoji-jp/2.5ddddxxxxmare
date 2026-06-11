@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "../../Const/JuiceConst.h"
 
 //==========================================================
@@ -38,3 +38,4 @@ private:
 
 	std::vector<Particle> m_particles;
 };
+

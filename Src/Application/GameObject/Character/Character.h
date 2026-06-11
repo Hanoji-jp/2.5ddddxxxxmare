@@ -101,6 +101,12 @@ public:
         m_movingFloors = floors;
     }
 
+    // 風ボックスリストをセット（地面着地判定に使用）
+    void SetWindBoxObjects(const std::vector<std::weak_ptr<KdGameObject>>& windBoxes)
+    {
+        m_windBoxColliders = windBoxes;
+    }
+
     // コリジョンデバッグUI（ImGui）
     void DrawCollisionDebugGui();
 
@@ -203,6 +209,9 @@ protected:
 
     // 移動床リスト（床・壁・天井判定に使用）
     std::vector<std::weak_ptr<MovingFloor>> m_movingFloors;
+
+    // 風ボックスリスト（上面に乗れる床として判定）
+    std::vector<std::weak_ptr<KdGameObject>> m_windBoxColliders;
 
     // CheckGround の移動床 XZ 判定用：ApplyVelocityHorizontal 前の位置
     Math::Vector3 m_preMovePos = {};

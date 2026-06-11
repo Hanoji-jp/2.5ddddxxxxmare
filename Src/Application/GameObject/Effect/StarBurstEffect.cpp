@@ -1,4 +1,4 @@
-﻿#include "../../../Pch.h"
+#include "../../../Pch.h"
 #include "StarBurstEffect.h"
 
 // 0.0〜1.0 の一様乱数
@@ -55,7 +55,7 @@ void StarBurstEffect::Spawn(const Math::Vector3&              pos,
 
 void StarBurstEffect::Update()
 {
-	constexpr float kDt = 1.0f / 60.0f;
+	const float kDt = KdFPSController::GetDt();
 
 	for (auto& p : m_particles)
 	{
@@ -97,3 +97,4 @@ void StarBurstEffect::DrawEffect()
 			p.modelWork, world, colRate, emissive);
 	}
 }
+

@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 // 星空（スカイボックス内にランダム配置する星）に関わる定数
 namespace StarFieldConst
@@ -40,3 +40,4 @@ namespace StarFieldConst
 	constexpr float NearParallax = 0.30f;  // 近い星：カメラ移動の20%動いて見える
 	constexpr float FarParallax  = 0.985f; // 遠い星：ほぼ追従（わずかに動く）
 }
+

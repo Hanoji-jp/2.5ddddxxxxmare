@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 // UI に関わる定数
 namespace UIConst
@@ -16,3 +16,4 @@ namespace UIConst
     // フェードアルファの変化量（1フレームあたり）
     constexpr float FadeSpeed      = 0.02f;
 }
+

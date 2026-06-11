@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "../../Const/JuiceConst.h"
 
 //==========================================================
@@ -34,3 +34,4 @@ private:
 	float         m_lifetime    = JuiceConst::DustLifetimeMax;
 	float         m_gray        = 1.0f;
 };
+

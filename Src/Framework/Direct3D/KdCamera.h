@@ -36,6 +36,9 @@ public:
 	// 射影行列取得
 	inline const DirectX::SimpleMath::Matrix& GetProjMatrix() const { return m_mProj; }
 
+	// 現在のカメラ行列と射影行列からワールド空間の視錐台を生成
+	DirectX::BoundingFrustum GetBoundingFrustum() const;
+
 	// クライアント座標（2D）から3Dワールド座標を求める用のレイ情報を生成
 	void GenerateRayInfoFromClientPos(const POINT& clientPos, Math::Vector3& rayPos, Math::Vector3& rayDir, float& rayRange);
 	

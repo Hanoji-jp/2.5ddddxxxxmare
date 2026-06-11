@@ -1,6 +1,7 @@
 ﻿#include "../../../Pch.h"
 #include "Character.h"
 #include "../Gimmick/MovingFloor.h"
+#include "../Gimmick/WindBox.h"
 
 void Character::Update()
 {
@@ -16,7 +17,7 @@ void Character::PostUpdate()
     if (m_ejectRemaining.LengthSquared() > 0.0001f)
     {
         isEjecting = true;
-        constexpr float kEjectLerp = 0.3f;
+        const float kEjectLerp = std::min(0.3f * KdFPSController::GetDt() * 60.0f, 1.0f);
         const Math::Vector3 step = m_ejectRemaining * kEjectLerp;
         SetPos(GetPos() + step);
         m_ejectRemaining -= step;
@@ -90,6 +91,7 @@ void Character::ApplyGravity()
         m_gravCacheDirty = false;
     }
     const GravityInfluenceResult gravResult = m_gravCache;
+    const float dt60 = KdFPSController::GetDt() * 60.0f;
     m_prevPlanetIndex = m_currentPlanetIndex;
     // 着地中は現在の惑星を固定。空中のときだけ支配惑星に乗り換える
     if (!m_isGround)
@@ -130,7 +132,7 @@ void Character::ApplyGravity()
         if (m_isGround) { return; }  // velocity 加算のみスキップ、Slerp は上で完了済み
 
         const float radialVel = m_velocity.Dot(gravDir);
-        const float newRadial = std::min(radialVel + PlanetConst::GravityAccel * m_gravityScale, PlanetConst::MaxFallSpeed * m_gravityScale);
+        const float newRadial = std::min(radialVel + PlanetConst::GravityAccel * m_gravityScale * dt60, PlanetConst::MaxFallSpeed * m_gravityScale);
         if (newRadial > radialVel) { m_velocity += gravDir * (newRadial - radialVel); }
         return;
     }
@@ -182,12 +184,12 @@ void Character::ApplyGravity()
         }
 
         const float radialVel = m_velocity.Dot(gravDir);
-        const float newRadial = std::min(radialVel + PlanetConst::GravityAccel, PlanetConst::MaxFallSpeed);
+        const float newRadial = std::min(radialVel + PlanetConst::GravityAccel * dt60, PlanetConst::MaxFallSpeed);
         if (newRadial > radialVel) { m_velocity += gravDir * (newRadial - radialVel); }
         return;
     }
 
-    // ── ケース⑤ NormalGravityゾーン ──
+    // ── ケース⑤
     if (inNormalZone)
     {
         const Math::Vector3 targetUp = -zoneGravDir;
@@ -204,12 +206,12 @@ void Character::ApplyGravity()
 
         if (m_isGround) { return; }  // velocity 加算のみスキップ、Slerp は上で完了済み
         const float radialVel = m_velocity.Dot(zoneGravDir);
-        const float newRadial = std::min(radialVel + PlanetConst::GravityAccel * m_gravityScale, PlanetConst::MaxFallSpeed * m_gravityScale);
+        const float newRadial = std::min(radialVel + PlanetConst::GravityAccel * m_gravityScale * dt60, PlanetConst::MaxFallSpeed * m_gravityScale);
         if (newRadial > radialVel) { m_velocity += zoneGravDir * (newRadial - radialVel); }
         return;
     }
 
-    // ── ケース⑥ ManualGravityゾーン内で手動入力なし → 通常下向き重力 ──
+    // ── ケース⑥
     if (inManualZone)
     {
         constexpr Math::Vector3 kDefaultGravDir = { 0.0f, -1.0f, 0.0f };
@@ -222,12 +224,12 @@ void Character::ApplyGravity()
         m_upDirVisual.Normalize();
         if (m_isGround) { return; }  // velocity 加算のみスキップ、Slerp は上で完了済み
         const float radialVel = m_velocity.Dot(kDefaultGravDir);
-        const float newRadial = std::min(radialVel + PlanetConst::GravityAccel * m_gravityScale, PlanetConst::MaxFallSpeed * m_gravityScale);
+        const float newRadial = std::min(radialVel + PlanetConst::GravityAccel * m_gravityScale * dt60, PlanetConst::MaxFallSpeed * m_gravityScale);
         if (newRadial > radialVel) { m_velocity += kDefaultGravDir * (newRadial - radialVel); }
         return;
     }
 
-    // ── ケース⑦ 無重力 ──
+    // ── ケース⑦
 }
 
 void Character::ApplyVelocity()
@@ -239,20 +241,22 @@ void Character::ApplyVelocity()
 
 void Character::ApplyVelocityHorizontal()
 {
+    const float dt60 = KdFPSController::GetDt() * 60.0f;
     // m_upDir軸垂直面への投影（水平成分のみ適用）
     const Math::Vector3 vertComponent = m_upDir * m_velocity.Dot(m_upDir);
     const Math::Vector3 horizVelocity = m_velocity - vertComponent;
     Math::Vector3 pos = GetPos();
-    pos += horizVelocity;
+    pos += horizVelocity * dt60;
     SetPos(pos);
 }
 
 void Character::ApplyVelocityVertical()
 {
+    const float dt60 = KdFPSController::GetDt() * 60.0f;
     // m_upDir軸方向の成分のみ適用
     const Math::Vector3 vertVelocity = m_upDir * m_velocity.Dot(m_upDir);
     Math::Vector3 pos = GetPos();
-    pos += vertVelocity;
+    pos += vertVelocity * dt60;
     SetPos(pos);
 }
 
@@ -304,25 +308,57 @@ void Character::CheckCeiling()
 
     // ---- 通常マップ
     const auto spMap = m_wpMap.lock();
-    if (!spMap) { return; }
-
-    std::list<KdCollider::CollisionResult> results;
-    if (!spMap->Intersects(ray, &results)) { return; }
-
-    for (const auto& r : results)
+    if (spMap)
     {
-        if (r.m_hitNDir.Dot(m_upDir) > -0.7f) { continue; }
+        std::list<KdCollider::CollisionResult> results;
+        if (spMap->Intersects(ray, &results))
+        {
+            for (const auto& r : results)
+            {
+                if (r.m_hitNDir.Dot(m_upDir) > -0.7f) { continue; }
 
-        const float hitDist     = rayLen - r.m_overlapDistance;
-        const float penetration = CollisionConst::CeilingRayOffset - hitDist;
-        if (penetration > 0.0f)
-            SetPos(GetPos() - m_upDir * penetration);
+                const float hitDist     = rayLen - r.m_overlapDistance;
+                const float penetration = CollisionConst::CeilingRayOffset - hitDist;
+                if (penetration > 0.0f)
+                    SetPos(GetPos() - m_upDir * penetration);
 
-        const float velUp = m_velocity.Dot(m_upDir);
-        if (velUp > 0.0f)
-            m_velocity -= m_upDir * velUp;
+                const float velUp = m_velocity.Dot(m_upDir);
+                if (velUp > 0.0f)
+                    m_velocity -= m_upDir * velUp;
 
-        return;
+                return;
+            }
+        }
+    }
+
+    // ---- WindBox 底面判定（下から飛び込んだ時の天井扱い）
+    for (auto& wpWB : m_windBoxColliders)
+    {
+        const auto spWB = wpWB.lock();
+        if (!spWB) { continue; }
+        const auto spWBBox = std::dynamic_pointer_cast<WindBox>(spWB);
+        if (!spWBBox || !spWBBox->IsEnabled()) { continue; }
+        const KdCollider* col = spWBBox->GetCollider();
+        if (!col) { continue; }
+
+        std::list<KdCollider::CollisionResult> wbResults;
+        if (!col->Intersects(ray, spWBBox->GetWorldMatrix(), &wbResults)) { continue; }
+
+        for (const auto& r : wbResults)
+        {
+            if (r.m_hitNDir.Dot(m_upDir) > -0.7f) { continue; }
+
+            const float hitDist     = rayLen - r.m_overlapDistance;
+            const float penetration = CollisionConst::CeilingRayOffset - hitDist;
+            if (penetration > 0.0f)
+                SetPos(GetPos() - m_upDir * penetration);
+
+            const float velUp = m_velocity.Dot(m_upDir);
+            if (velUp > 0.0f)
+                m_velocity -= m_upDir * velUp;
+
+            return;
+        }
     }
 }
 
@@ -376,6 +412,56 @@ void Character::CheckGround()
             m_airGravitySwitchCount = 0;
             m_pRidingFloor = &wpMF;
             return;
+        }
+    }
+
+    // ---- ★ 風ボックス上面（TypeGround レイキャスト）----
+    if (m_velocity.Dot(m_upDir) <= 0.1f)
+    {
+        const Math::Vector3 rayStart = pos + m_upDir * CollisionConst::GroundRayOffset;
+        const KdCollider::RayInfo ray(
+            KdCollider::TypeGround,
+            rayStart,
+            -m_upDir,
+            CollisionConst::GroundRayLength);
+
+        for (auto& wpWB : m_windBoxColliders)
+        {
+            const auto spWB = wpWB.lock();
+            if (!spWB) { continue; }
+
+            // WindBox 固有の Collider / WorldMatrix を使って判定
+            const auto spWBBox = std::dynamic_pointer_cast<WindBox>(spWB);
+            if (!spWBBox || !spWBBox->IsEnabled()) { continue; }
+            const KdCollider* col = spWBBox->GetCollider();
+            if (!col) { continue; }
+
+            std::list<KdCollider::CollisionResult> results;
+            if (!col->Intersects(ray, spWBBox->GetWorldMatrix(), &results)) { continue; }
+
+            const KdCollider::CollisionResult* pBest = nullptr;
+            for (const auto& r : results)
+            {
+                if (!pBest || r.m_overlapDistance > pBest->m_overlapDistance)
+                    pBest = &r;
+            }
+            if (!pBest) { continue; }
+
+            // 上面にスナップ
+            const float penetration = pBest->m_hitPos.Dot(m_upDir) - pos.Dot(m_upDir);
+            if (penetration > -CollisionConst::GroundSnapDist && penetration <= CollisionConst::GroundRayOffset)
+            {
+                Math::Vector3 corrected = GetPos();
+                corrected += m_upDir * penetration;
+                SetPos(corrected);
+
+                const float downComp = m_velocity.Dot(-m_upDir);
+                if (downComp > 0.0f) { m_velocity += m_upDir * downComp; }
+
+                m_isGround = true;
+                m_airGravitySwitchCount = 0;
+                return;
+            }
         }
     }
 
@@ -594,9 +680,10 @@ void Character::CheckWall()
         CollisionConst::WallRayOffsetY2_Normal,
     };
 
-    // 高速移動時のトンネリング防止：水平速度分レイ長を延ばす
+    // 高速移動時のトンネリング防止：このフレームの実移動量分だけレイ長を延ばす
+    const float         dt60_wall = KdFPSController::GetDt() * 60.0f;
     const Math::Vector3 horizVel  = m_velocity - m_upDir * m_velocity.Dot(m_upDir);
-    const float         velExtra  = horizVel.Length();
+    const float         velExtra  = horizVel.Length() * dt60_wall;
 
     auto doPlanetRayPush = [&](const KdCollider& collider, const Math::Matrix& mat, bool isNormal)
     {
@@ -605,7 +692,8 @@ void Character::CheckWall()
 
         const float* useHeights   = isNormal ? heights_Normal : heights;
         const int    useHeightCnt = isNormal ? 4 : 4;
-        const float  useRayLength = (isNormal ? CollisionConst::WallRayLength_Normal : CollisionConst::WallRayLength) + velExtra;
+        const float  baseRayLen   = isNormal ? CollisionConst::WallRayLength_Normal : CollisionConst::WallRayLength;
+        const float  useRayLength = baseRayLen + velExtra;
 
         for (int hi = 0; hi < useHeightCnt; ++hi)
         {
@@ -624,8 +712,10 @@ void Character::CheckWall()
                     if (r.m_hitNDir.Dot(rayDir) > 0.0f) { continue; }
                     // 上下方向成分が大きい面（床・天面）を壁として誤判定しないようにスキップ
                     if (std::abs(r.m_hitNDir.Dot(m_upDir)) > CollisionConst::WallNormalUpThreshold) { continue; }
-                    if (std::isfinite(r.m_overlapDistance) && r.m_overlapDistance > maxOverlap)
-                        maxOverlap = r.m_overlapDistance;
+                    // velExtra は検出用のわたしなので押し出し量はベースレイ長以内にクランプ
+                    const float clampedOverlap = std::min(r.m_overlapDistance, baseRayLen);
+                    if (std::isfinite(clampedOverlap) && clampedOverlap > maxOverlap)
+                        maxOverlap = clampedOverlap;
                 }
                 if (maxOverlap <= 0.0f) { continue; }
 
@@ -662,6 +752,7 @@ void Character::CheckWall()
     {
         float pushRightMax = 0.0f, pushRightMin = 0.0f;
         float pushFwdMax   = 0.0f, pushFwdMin   = 0.0f;
+        constexpr float baseRayLen = CollisionConst::WallRayLength;
 
         for (int hi = 0; hi < 4; ++hi)
         {
@@ -669,7 +760,7 @@ void Character::CheckWall()
             for (const Math::Vector2& d : dirs)
             {
                 const Math::Vector3 rayDir = rightAxis * d.x + fwdAxis * d.y;
-                const KdCollider::RayInfo ray(KdCollider::TypeBump, rayOrigin, rayDir, CollisionConst::WallRayLength + velExtra);
+                const KdCollider::RayInfo ray(KdCollider::TypeBump, rayOrigin, rayDir, baseRayLen + velExtra);
 
                 std::list<KdCollider::CollisionResult> results;
                 if (!mapObj->Intersects(ray, &results)) { continue; }
@@ -679,8 +770,9 @@ void Character::CheckWall()
                 {
                     if (r.m_hitNDir.Dot(rayDir) > 0.0f) { continue; }
                     if (std::abs(r.m_hitNDir.Dot(m_upDir)) > CollisionConst::WallNormalUpThreshold) { continue; }
-                    if (std::isfinite(r.m_overlapDistance) && r.m_overlapDistance > maxOverlap)
-                        maxOverlap = r.m_overlapDistance;
+                    const float clampedOverlap = std::min(r.m_overlapDistance, baseRayLen);
+                    if (std::isfinite(clampedOverlap) && clampedOverlap > maxOverlap)
+                        maxOverlap = clampedOverlap;
                 }
                 if (maxOverlap <= 0.0f) { continue; }
 
@@ -812,6 +904,19 @@ void Character::CheckWall()
         const KdCollider* col = spMF->GetCollider();
         if (!col) { continue; }
         doPlanetRayPush(*col, spMF->GetWorldMatrix(), true);
+    }
+
+    // ---- WindBox 側面・底面押し出し（レイキャスト方式）
+    for (auto& wpWB : m_windBoxColliders)
+    {
+        const auto spWB = wpWB.lock();
+        if (!spWB) { continue; }
+        // KdGameObject 経由で WindBox にダウンキャスト
+        const auto spWBBox = std::dynamic_pointer_cast<WindBox>(spWB);
+        if (!spWBBox || !spWBBox->IsEnabled()) { continue; }
+        const KdCollider* col = spWBBox->GetCollider();
+        if (!col) { continue; }
+        doPlanetRayPush(*col, spWBBox->GetWorldMatrix(), true);
     }
 
     SetPos(pos);

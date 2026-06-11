@@ -1,5 +1,8 @@
 ﻿#include "KdFPSController.h"
 
+// 静的メンバー定義
+float KdFPSController::s_deltaTime = 1.0f / 60.0f;
+
 // ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### #####
 // FPSの制御コントローラー
 // ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### #####
@@ -17,9 +20,11 @@ void KdFPSController::Update()
 {
 	Control();
 
-	// デルタ時間の計算
+	// デルタ時間の計算（秒単位・上限クランプで極端なフレームスキップを防ぐ）
 	DWORD _currentTime = timeGetTime();
-	m_DeltaTime = (_currentTime - m_frameStartTime) / static_cast<float>(kSecond) * 60.f;
+	constexpr float kMaxDeltaTime = 1.0f / 20.0f;
+	m_DeltaTime = std::min((_currentTime - m_frameStartTime) / static_cast<float>(kSecond), kMaxDeltaTime);
+	s_deltaTime = m_DeltaTime;
 
 	Monitoring();
 }

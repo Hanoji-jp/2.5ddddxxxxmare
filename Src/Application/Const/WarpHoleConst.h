@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 namespace WarpHoleConst
 {
@@ -239,3 +239,4 @@ namespace WarpHoleConst
 	// Exit 近くに出てもすぐに吸い込まれないようにする
 	constexpr float WarpCooldownTime    = 2.5f;
 }
+

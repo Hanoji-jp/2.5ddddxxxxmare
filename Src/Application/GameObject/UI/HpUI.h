@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "../../Const/UIConst.h"
 #include "../../Const/JuiceConst.h"
 
@@ -28,3 +28,4 @@ private:
 	// HP ゲージヒットシェイク
 	float m_shakeTimer = 0.0f;  // 残り時間
 };
+

@@ -16,7 +16,7 @@ void MovingFloor::Update()
 {
 const Math::Vector3 prevPos = m_pos;
 
-constexpr float kDt = 1.0f / 60.0f;
+const float kDt = KdFPSController::GetDt();
 
 // 折り返し地点での一時停止中
 if (m_waitTimer > 0.0f)
@@ -211,3 +211,4 @@ m_grassCapWorld[3] = Math::Matrix::CreateScale(capScale) * Math::Matrix::CreateT
 m_grassCapWork[3]->CalcNodeMatrices();
 }
 }
+

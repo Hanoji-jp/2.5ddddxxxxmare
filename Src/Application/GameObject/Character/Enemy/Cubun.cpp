@@ -1,4 +1,4 @@
-﻿#include "../../../../Pch.h"
+#include "../../../../Pch.h"
 #include "Cubun.h"
 #include "../Character.h"
 
@@ -147,7 +147,7 @@ bool Cubun::Intersects(const KdCollider::RayInfo& ray,
 //==========================================================
 void Cubun::TryJump()
 {
-	constexpr float kDt = 1.0f / 60.0f;
+	const float kDt = KdFPSController::GetDt();
 
 	if (m_isGround)
 	{
@@ -182,3 +182,4 @@ Math::Matrix Cubun::CalcVisualMatrix() const
 			   pos.y + CubunConst::ModelOffsetY,
 			   pos.z);
 }
+

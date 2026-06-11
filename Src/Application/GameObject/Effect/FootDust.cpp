@@ -56,10 +56,13 @@ void FootDust::Spawn(const Math::Vector3&              pos,
 
 void FootDust::Update()
 {
-	constexpr float kDt = 1.0f / 60.0f;
+	const float kDt = KdFPSController::GetDt();
 
 	// 速度で移動
 	m_pos += m_vel;
+
+	// CheckInScreen が m_mWorld.Translation() を参照するため同期させる
+	m_mWorld = Math::Matrix::CreateTranslation(m_pos);
 
 	// 徐々に縮む（粒ごとの速度）
 	m_scale *= (1.0f - kDt * m_scaleShrink);
@@ -83,3 +86,4 @@ void FootDust::DrawEffect()
 	const Math::Vector3 emissive{ m_gray, m_gray, m_gray };
 	KdShaderManager::Instance().m_StandardShader.DrawModel(m_modelWork, world, colRate, emissive);
 }
+

@@ -1,12 +1,11 @@
-﻿#include "../../../Pch.h"
+#include "../../../Pch.h"
 #include "StarField.h"
 #include "../../Manager/ModelManager.h"
 #include "../../Const/StarFieldConst.h"
 
 #include <random>
 
-// このプロジェクトは固定フレーム（60FPS）想定
-static constexpr float kFixedDeltaTime = 1.0f / 60.0f;
+// kFixedDeltaTime は削除 → KdFPSController::GetDt() を使用
 
 void StarField::Init()
 {
@@ -70,7 +69,7 @@ void StarField::Init()
 
 void StarField::Update()
 {
-	m_time += kFixedDeltaTime;
+	m_time += KdFPSController::GetDt();
 }
 
 void StarField::DrawBright()
@@ -113,3 +112,4 @@ void StarField::DrawBright()
 	shaderMgr.UndoRasterizerState();
 	shaderMgr.UndoDepthStencilState();
 }
+

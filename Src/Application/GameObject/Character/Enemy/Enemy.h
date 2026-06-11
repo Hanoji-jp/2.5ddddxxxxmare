@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "../Character.h"
 #include "../AnimBlender.h"
 #include "../../../Const/EnemyConst.h"
@@ -95,3 +95,4 @@ public:
     // 撃破エフェクトスポーンフラグ（GameScene 側が1フレームだけ読んで AddObject する）
     bool  m_requestBurstEffect = false;
 };
+

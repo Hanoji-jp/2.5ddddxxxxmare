@@ -152,7 +152,9 @@ void EnemyPlacementEditor::Save() const
 		const int typeInt = (p.type == EnemyType::Cubun) ? 0 : 1;
 		const int faceInt = (p.cubunFaceDir == CubunFaceDir::Up) ? 0 : 1;
 		int gravInt = 0;
+
 		if      (p.initGravDir == Character::ManualGravityDir::Down) { gravInt = 1; }
+
 		else if (p.initGravDir == Character::ManualGravityDir::Up)   { gravInt = 2; }
 
 		ofs << typeInt << ","

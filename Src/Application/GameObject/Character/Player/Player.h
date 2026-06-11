@@ -2,6 +2,7 @@
 #include "../Character.h"
 #include "../AnimBlender.h"
 #include "../../../Const/PlayerConst.h"
+#include "../../../Const/WindBoxConst.h"
 #include "../../Weapon/Sword.h"
 #include "../../Weapon/Bow.h"
 #include "../../Weapon/Arrow.h"
@@ -41,6 +42,9 @@ public:
     // 今フレームに惑星が切り替わったか（GameScene→カメラへのズームトリガー用）
     bool IsPlanetChanged() const { return m_planetChangedThisFrame; }
     void ResetPlanetChangedFlag()  { m_planetChangedThisFrame = false; }
+
+    // パラソルアイテム取得
+    void GiveParasol() { m_hasParasol = true; }
 
 private:
     void Move();
@@ -105,5 +109,29 @@ private:
 
     // アニメーション再生速度倍率（通常=1.0、ダッシュ時は DashAnimSpeedMul）
     float m_animSpeed = 1.0f;
+
+    // ──── 風ギミック ──────────────────────────────────────────
+    // 今フレームの風ベクトル（GameScene から ApplyWind() で積算、PostUpdate で消費）
+    Math::Vector3 m_windAccum     = {};
+
+    // 風による見た目の傾き角度（度）：正=右へ傾く
+    float         m_windTiltAngle = 0.0f;
+
+    // 風ボックス範囲内かどうかのフラグ（前フレーム）
+    bool          m_wasInWind        = false;
+
+    // 今フレームの風が左右方向かどうか
+    bool          m_windIsHorizontal = false;
+
+    // 水平方向の風速（Move() に上書きされないよう別管理）
+    Math::Vector3 m_windHorizVel  = {};
+
+public:
+    // 風ボックスから毎フレーム呼ぶ（複数ボックスが重なっても加算で対応）
+    void ApplyWind(const Math::Vector3& windDir, float power);
+
+    // 風ボックス範囲外に出たときに呼ぶ（傾きと上昇フラグをリセット）
+    void ClearWindState();
 };
+
 

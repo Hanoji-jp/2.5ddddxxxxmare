@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 // ゲーム全体に関わる定数
 namespace GameConst
@@ -19,3 +19,4 @@ namespace GameConst
     constexpr float CameraOffsetY   = 3.0f;
     constexpr float CameraOffsetZ   = -15.0f;
 }
+

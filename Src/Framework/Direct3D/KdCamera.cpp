@@ -125,3 +125,17 @@ void KdCamera::ConvertWorldToScreenDetail(const Math::Vector3& pos, Math::Vector
 	result.y = localPos.y * (vp.height * 0.5f);
 	result.z = wvp._44;
 }
+
+// 現在のカメラ行列と射影行列からワールド空間の視錐台を生成
+DirectX::BoundingFrustum KdCamera::GetBoundingFrustum() const
+{
+	// 射影行列からビュー空間のフラスタムを生成
+	DirectX::BoundingFrustum frustumLocal;
+	DirectX::BoundingFrustum::CreateFromMatrix(frustumLocal, m_mProj);
+
+	// カメラ行列（ワールド変換）でワールド空間に変換
+	DirectX::BoundingFrustum frustumWorld;
+	frustumLocal.Transform(frustumWorld, m_mCam);
+
+	return frustumWorld;
+}

@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "../../Const/WarpHoleConst.h"
 #include "../../Editor/WarpHoleEditor.h"
 
@@ -19,6 +19,14 @@ public:
 	void DrawEffect()  override;   // 加算ブレンドで3Dリング描画
 	void DrawBright()  override;   // Bloomパス：ファネルをにじませる
 	void DrawDebug()   override;   // エディタ用ワイヤーフレーム
+
+	// Entry/Exit 両端を包む球でカリング
+	bool CheckInScreen(const DirectX::BoundingFrustum& frustum) const override
+	{
+		const Math::Vector3 center = (m_data.EntryPos + m_data.ExitPos) * 0.5f;
+		const float radius = (m_data.EntryPos - m_data.ExitPos).Length() * 0.5f + WarpHoleConst::FunnelLength + WarpHoleConst::FunnelOuterRadius;
+		return frustum.Intersects(DirectX::BoundingSphere(center, radius));
+	}
 
 	// プレイヤーが吸い込み範囲に入ったか判定
 	bool CheckWarpTrigger(const Math::Vector3& pPos) const;
@@ -74,11 +82,13 @@ private:
 		const Math::Color&   col) const;
 
 	// ローポリファネル（正面向きロート形状）描画
+	// invertGradient=true のとき奥ほど明るく・口元でフェードアウト（Bloomパス用）
 	void DrawFunnelFace(const Math::Vector3& center,
 						const Math::Vector3& mouthDir,
 						const Math::Color&   col,
 						const std::vector<float>& jitterOffsets,
-						float animTime) const;
+						float animTime,
+						bool invertGradient = false) const;
 
 	// パス上を面＋ワイヤーで繋ぐチューブ描画（ファネルと同じ面スタイル）
 	void DrawTunnelFace(const std::vector<Math::Vector3>& path,
@@ -124,4 +134,8 @@ private:
 
 	mutable std::vector<Math::Vector3> m_centerPathCache;
 	mutable bool                       m_centerPathDirty = true;
+
+	// 頂点バッファ再利用（毎フレームの動的確保を回避）
+	mutable std::vector<KdPolygon::Vertex> m_vtxBuf;
 };
+

@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "Enemy.h"
 #include "../../../Const/CubunConst.h"
 #include "../../../Editor/EnemyPlacementData.h"
@@ -55,3 +55,4 @@ private:
 	// 棘コライダー用（体の下面オフセット）
 	std::unique_ptr<KdCollider> m_pSpikeCollider = nullptr;
 };
+

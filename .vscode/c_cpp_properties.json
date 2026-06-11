@@ -1,0 +1,30 @@
+{
+    "configurations": [
+        {
+            "name": "Win32 (MSVC)",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/../Library/**",
+                "${workspaceFolder}/../Library/DirectXTK/Inc",
+                "${workspaceFolder}/../Library/DirectXTex/DirectXTex",
+                "${workspaceFolder}/../Library/tinygltf",
+                "${workspaceFolder}/../Library/imgui",
+                "${workspaceFolder}/../Library/Effekseer/Inc"
+            ],
+            "defines": [
+                "WIN32",
+                "_DEBUG",
+                "_WINDOWS"
+            ],
+            "windowsSdkVersion": "10.0.0.0",
+            "compilerPath": "C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.40.33807/bin/Hostx64/x64/cl.exe",
+            "cStandard": "c17",
+            "cppStandard": "c++20",
+            "intelliSenseMode": "windows-msvc-x64",
+            "forcedInclude": [
+                "${workspaceFolder}/Src/Pch.h"
+            ]
+        }
+    ],
+    "version": 4
+}

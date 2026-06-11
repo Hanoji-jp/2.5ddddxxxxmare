@@ -58,8 +58,12 @@ public:
 	virtual bool IsVisible()	const { return false; }
 	virtual bool IsRideable()	const { return false; }
 
-	// 視錐台範囲内に入っているかどうか
-	virtual bool CheckInScreen(const DirectX::BoundingFrustum&) const { return false; }
+	// 視錐台範囲内に入っているかどうか（デフォルト: ワールド位置を中心に m_cullingRadius の球体で判定）
+	virtual bool CheckInScreen(const DirectX::BoundingFrustum& frustum) const
+	{
+		const DirectX::BoundingSphere sphere(m_mWorld.Translation(), m_cullingRadius);
+		return frustum.Intersects(sphere);
+	}
 
 	// カメラからの距離を計算
 	virtual void CalcDistSqrFromCamera(const Math::Vector3& camPos);
@@ -78,6 +82,9 @@ protected:
 
 	// 描画タイプ・何の描画を行うのかを決める / 最適な描画リスト作成用
 	UINT m_drawType = 0;
+
+	// フラスタムカリング用バウンディング球体の半径（各クラスの Init 内で適宜設定）
+	float m_cullingRadius = 5.0f;
 
 	// カメラからの距離
 	float m_distSqrFromCamera = 0;

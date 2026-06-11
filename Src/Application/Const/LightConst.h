@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 // ライト・環境光に関わる定数
 namespace LightConst
@@ -25,3 +25,4 @@ namespace LightConst
     // ライト設定の保存先
     constexpr const char* SavePath = "Asset/Data/sun_light.csv";
 }
+

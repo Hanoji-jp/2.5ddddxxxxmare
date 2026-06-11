@@ -29,6 +29,10 @@
 #include"../../GameObject/Gimmick/MovingFloor.h"
 #include"../../GameObject/Character/Enemy/Cubun.h"
 #include"../../GameObject/Effect/StarBurstEffect.h"
+#include"../../Editor/WindBoxEditor.h"
+#include"../../GameObject/Gimmick/WindBox.h"
+#include"../../Editor/GravityCoreEditor.h"
+#include"../../GameObject/Gimmick/GravityCore.h"
 class GameScene : public BaseScene
 {
 public :
@@ -59,6 +63,8 @@ private:
 	bool  m_efkViewerLoop      = false;
 
 	void RebuildMovingFloors();
+	void RebuildWindBoxes();
+	void RebuildGravityCores();
 
 	// 画面フラッシュをトリガー（強さ 0〜1）
 	void TriggerFlash(float alpha) { m_flashAlpha = std::max(m_flashAlpha, alpha); }
@@ -128,6 +134,9 @@ private:
 	// FootDust 生成タイマー
 	float           m_dustTimer            = 0.0f;
 
+	// 着地エッジ検出用（前フレームの着地状態）
+	bool            m_prevPlayerGround     = false;
+
 	// ワープ完了後の再トリガー防止クールダウン（秒）
 	float           m_warpCooldown         = 0.0f;
 
@@ -142,6 +151,14 @@ private:
 
 	// 移動する床リスト
 	std::vector<std::shared_ptr<MovingFloor>> m_movingFloors;
+
+	// 風ボックスエディタ・オブジェクトリスト
+	WindBoxEditor                             m_windBoxEditor;
+	std::vector<std::shared_ptr<WindBox>>     m_windBoxes;
+
+	// 重力コアエディタ・オブジェクトリスト
+	GravityCoreEditor                            m_gravityCoreEditor;
+	std::vector<std::shared_ptr<GravityCore>>    m_gravityCores;
 
 	// Cubun 敵リスト
 	std::vector<std::shared_ptr<Cubun>> m_cubuns;
@@ -177,3 +194,4 @@ private:
 	// WarpHole通過完了時にカメラZ基準を ExitDir から更新する
 	void UpdateCameraZFromExitDir(const Math::Vector3& exitDir);
 };
+

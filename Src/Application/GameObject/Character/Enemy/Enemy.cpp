@@ -1,4 +1,4 @@
-﻿#include "../../../../Pch.h"
+#include "../../../../Pch.h"
 #include "Enemy.h"
 #include "../../../../Application/Manager/ModelManager.h"
 #include "../../../../Application/Manager/PlanetGravityManager.h"
@@ -104,7 +104,7 @@ void Enemy::Update()
     // バウンス中の位置・フェード更新
     if (m_deathBounceActive)
     {
-        constexpr float kDt      = 1.0f / 60.0f;
+        const float kDt      = KdFPSController::GetDt();
         constexpr float kGravity = 14.0f;  // バウンス用擬似重力
         m_deathBounceVelY -= kGravity * kDt;
         Math::Vector3 pos = GetPos();
@@ -324,3 +324,4 @@ void Enemy::Chase()
 
     ChangeAnim("Walk");
 }
+
