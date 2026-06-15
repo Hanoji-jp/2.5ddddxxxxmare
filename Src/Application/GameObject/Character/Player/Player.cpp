@@ -40,66 +40,94 @@ void Player::Init()
 
 void Player::Update()
 {
-    // アイテム取得ヒットボックスをプレイヤー座標に合わせて更新
-    m_pickupHitBox.Update(GetPos());
+	// 死亡中は通常の入力・移動・状態遷移を止める。
+	// （Move() が毎フレーム m_state を上書きするため、放置すると Dead アニメが
+	//   他アニメと毎フレーム切り替わってガクガクする）
+	if (IsDead())
+	{
+		m_state    = State::Dead;
+		m_animSpeed = 1.0f;
+		ChangeAnim("Dead", false);
+		m_velocity     = Math::Vector3::Zero;   // その場で停止
+		m_moveVelocity = Math::Vector3::Zero;
+		m_animBlender.Update(m_modelWork, m_animSpeed);
+		return;
+	}
 
-    // 手動重力ゾーンチェック
-    const bool canUseManualGravity = ManualGravityZoneManager::Instance().CanUseManualGravity(GetPos());
+	// アイテム取得ヒットボックスをプレイヤー座標に合わせて更新
+	m_pickupHitBox.Update(GetPos());
 
-    // 重力切り替え（矢印キー）- ゾーン内でのみ有効、空中では1回まで
-    if (canUseManualGravity)
+	// 手動重力ゾーンチェック
+	const bool canUseManualGravity = ManualGravityZoneManager::Instance().CanUseManualGravity(GetPos());
+
+	// 重力切り替え（矢印キー）- ゾーン内でのみ有効、空中では1回まで
+	if (canUseManualGravity)
+	{
+		// 空中制限チェック：地上 or 空中1回まで
+		const bool canSwitch = m_isGround || CanSwitchGravityInAir();
+
+		if (canSwitch && (GetAsyncKeyState(VK_DOWN) & 0x8000))  // ↓キー
+		{
+			if (GetManualGravity() != ManualGravityDir::Down)
+			{
+				SetManualGravity(ManualGravityDir::Down);
+				if (!m_isGround) { ConsumeAirGravitySwitch(); }
+			}
+		}
+		else if (canSwitch && (GetAsyncKeyState(VK_UP) & 0x8000))  // ↑キー
+		{
+			if (GetManualGravity() != ManualGravityDir::Up)
+			{
+				SetManualGravity(ManualGravityDir::Up);
+				if (!m_isGround) { ConsumeAirGravitySwitch(); }
+			}
+		}
+		// Rキーで自動モードに戻す（空中制限なし）
+		else if (GetAsyncKeyState('R') & 0x8000)
+		{
+			SetManualGravity(ManualGravityDir::None);
+		}
+	}
+	// ゾーン外でも手動重力はそのまま維持（ミスってゾーンを出たらふわーっと飛んでいく）
+
+	Move();
+	Jump();
+	AttackMelee();
+	AttackRanged();
+	Character::Update();
+
+	// プレイヤー座標をログ出力
+	const Math::Vector3 pos = GetPos();
+	//KdDebugGUI::Instance().AddLog("Player: x=%.2f  y=%.2f  z=%.2f\n", pos.x, pos.y, pos.z);
+
+	// クールダウン更新
+	if (m_meleeCooldown > 0) { --m_meleeCooldown; }
+	if (m_rangedCooldown > 0) { --m_rangedCooldown; }
+	if (m_invincibleTimer > 0) { --m_invincibleTimer; }
+
+	// Jump 状態で下降局面に入ったら Fall に自動遷移してパラソルを開けるようにする
+	if (m_state == State::Jump && !m_isGround)
+	{
+		const float upVel = m_velocity.Dot(GetUpDir());
+		if (upVel <= 0.0f) { m_state = State::Fall; }
+	}
+
+	// ---- 僘入力受付（空中かつ僘所持中なら常に受付） ----
+	if (!m_isGround && m_hasParasol)// 空中で傘所持中、または風の中にいる場合は常に僘入力を受け付ける
     {
-        // 空中制限チェック：地上 or 空中1回まで
-        const bool canSwitch = m_isGround || CanSwitchGravityInAir();
-
-        if (canSwitch && (GetAsyncKeyState(VK_DOWN) & 0x8000))  // ↓キー
-        {
-            if (GetManualGravity() != ManualGravityDir::Down)
-            {
-                SetManualGravity(ManualGravityDir::Down);
-                if (!m_isGround) { ConsumeAirGravitySwitch(); }
-            }
-        }
-        else if (canSwitch && (GetAsyncKeyState(VK_UP) & 0x8000))  // ↑キー
-        {
-            if (GetManualGravity() != ManualGravityDir::Up)
-            {
-                SetManualGravity(ManualGravityDir::Up);
-                if (!m_isGround) { ConsumeAirGravitySwitch(); }
-            }
-        }
-        // Rキーで自動モードに戻す（空中制限なし）
-        else if (GetAsyncKeyState('R') & 0x8000)
-        {
-            SetManualGravity(ManualGravityDir::None);
-        }
-    }
-    // ゾーン外でも手動重力はそのまま維持（ミスってゾーンを出たらふわーっと飛んでいく）
-
-    Move();
-    Jump();
-    AttackMelee();
-    AttackRanged();
-    Character::Update();
-
-    // プレイヤー座標をログ出力
-    const Math::Vector3 pos = GetPos();
-    KdDebugGUI::Instance().AddLog("Player: x=%.2f  y=%.2f  z=%.2f\n", pos.x, pos.y, pos.z);
-
-    // クールダウン更新
-    if (m_meleeCooldown  > 0) { --m_meleeCooldown; }
-    if (m_rangedCooldown > 0) { --m_rangedCooldown; }
-
-    // Jump 状態で下降局面に入ったら Fall に自動遷移してパラソルを開けるようにする
-    if (m_state == State::Jump && !m_isGround)
-    {
-        const float upVel = m_velocity.Dot(GetUpDir());
-        if (upVel <= 0.0f) { m_state = State::Fall; }
-    }
-
-    // ---- 僘入力受付（空中かつ僘所持中なら常に受付） ----
-    if (!m_isGround && m_hasParasol)
-    {
+		//ジャンプ系の捜査はすべてspaceで行うことにする
+		//const bool wantOpen = (GetAsyncKeyState(VK_SPACE) & 0x8000) != 0;
+		//if (wantOpen && !m_isParasolOpen)
+		//{
+		//	const float maxFall = PlanetConst::MaxFallSpeed * PlayerConst::ParasolGravityScale;
+		//	const float downVel = m_velocity.Dot(-GetUpDir());
+		//	if (downVel > maxFall)
+		//	{
+		//		m_velocity += GetUpDir() * (downVel - maxFall);
+		//	}
+		//	m_isParasolOpen = wantOpen;
+		//}
+		
         if (GetAsyncKeyState('E') & 0x8000)
         {
             m_isParasolOpen = true;
@@ -301,18 +329,23 @@ void Player::PostUpdate()
     const bool prevGround = m_isGround;
     const int  prevPlanet = m_currentPlanetIndex;
 
-    // 親クラスのPostUpdate（位置反映）を先に実行
-    Character::PostUpdate();
-
-    // ① 空中→着地 かつ 惑星上
-    const bool justLanded     = (!prevGround && m_isGround && m_currentPlanetIndex >= 0);
-    // ② 空中で別惑星圏へ移動
-    const bool planetSwitched = (m_currentPlanetIndex != prevPlanet
-                                 && m_currentPlanetIndex >= 0
-                                 && prevPlanet >= 0);
-    if (justLanded || planetSwitched)
+    // 死亡中は物理・当たり判定（CheckWall の敵押し出し含む）をスキップして位置を固定。
+    // これをしないと、踏みつぶし時に Cubun 本体のめり込み防止押し出しで死体が外へ滑り出る。
+    if (!IsDead())
     {
-        m_planetChangedThisFrame = true;
+        // 親クラスのPostUpdate（位置反映）を先に実行
+        Character::PostUpdate();
+
+        // ① 空中→着地 かつ 惑星上
+        const bool justLanded     = (!prevGround && m_isGround && m_currentPlanetIndex >= 0);
+        // ② 空中で別惑星圏へ移動
+        const bool planetSwitched = (m_currentPlanetIndex != prevPlanet
+                                     && m_currentPlanetIndex >= 0
+                                     && prevPlanet >= 0);
+        if (justLanded || planetSwitched)
+        {
+            m_planetChangedThisFrame = true;
+        }
     }
 
     // 位置確定後にワールド行列を再構築
@@ -570,6 +603,8 @@ void Player::Move()
 
 void Player::Jump()
 {
+	//連打防止を追加
+
     if (m_isGround && (GetAsyncKeyState(VK_SPACE) & 0x8000))
     {
         // 惑星上なら法線方向（上方向）へジャンプ
@@ -661,11 +696,59 @@ bool Player::ChangeAnimIfExist(const std::string& _animName, bool _isLoop)
 
 void Player::TakeDamage(int _damage)
 {
-    // 基底クラスのダメージ処理
+    if (IsDead())              { return; }   // 死体は被ダメージしない
+    if (m_invincibleTimer > 0) { return; }
     Character::TakeDamage(_damage);
-
-    // 被ダメ赤フラッシュをトリガー
+    m_invincibleTimer = PlayerConst::InvincibleFrame;
     KdShaderManager::Instance().m_postProcessShader.TriggerDamageFlash();
+}
+
+void Player::InstantDeath()
+{
+    if (IsDead()) { return; }
+    // 即死：無敵を無視して HP を 0 に落とす
+    Character::TakeDamage(PlayerConst::MaxHp);
+    m_invincibleTimer = PlayerConst::InvincibleFrame;
+    KdShaderManager::Instance().m_postProcessShader.TriggerDamageFlash();
+
+    // 直前に他のダメージ源から付いたノックバック速度を消して、その場で停止させる
+    m_velocity     = Math::Vector3::Zero;
+    m_moveVelocity = Math::Vector3::Zero;
+}
+
+void Player::TakeDamageFrom(int _damage, const Math::Vector3& sourcePos)
+{
+    if (IsDead())              { return; }   // 死体はノックバック・被ダメージしない
+    if (m_invincibleTimer > 0) { return; }
+    Character::TakeDamage(_damage);
+    m_invincibleTimer = PlayerConst::InvincibleFrame;
+    KdShaderManager::Instance().m_postProcessShader.TriggerDamageFlash();
+
+    // ── マリオギャラクシー風ノックバック ──────────────────
+    const Math::Vector3 up = GetUpDir();
+
+    // ソースからプレイヤーへのベクトルを上方向成分を除いて水平化
+    Math::Vector3 knockDir = GetPos() - sourcePos;
+    knockDir -= up * knockDir.Dot(up);
+
+    if (knockDir.LengthSquared() > 1e-6f)
+    {
+        knockDir.Normalize();
+    }
+    else
+    {
+        // 同一位置の場合は現在の向きの逆方向（X軸ベース）
+        knockDir = Math::Vector3{ -m_facingSign, 0.0f, 0.0f };
+    }
+
+    // m_velocity を直接置き換え（PostUpdate が同フレームで使うので即効く）
+    m_velocity = knockDir * PlayerConst::KnockbackSpeed
+               + up      * PlayerConst::KnockbackUpSpeed;
+    m_velocity.z = 0.0f;
+
+    // m_moveVelocity にも入れて次フレーム以降も自然に減衰させる
+    m_moveVelocity   = knockDir * PlayerConst::KnockbackSpeed;
+    m_moveVelocity.z = 0.0f;
 }
 
 void Player::ApplyWind(const Math::Vector3& windDir, float power)

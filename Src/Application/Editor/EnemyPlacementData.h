@@ -8,20 +8,10 @@ enum class EnemyType
 	Cubun,    // ジャンプ棘付き敵
 };
 
-// Cubun の出現向き
-enum class CubunFaceDir
-{
-	Up,    // 体の上が +Y（通常向き）
-	Down,  // 体の上が -Y（逆さ）
-};
-
 // 敵1体分の配置データ
 struct EnemyPlacementData
 {
-	EnemyType                    type          = EnemyType::Cubun;
-	Math::Vector3                position      = { 0.0f, 0.0f, 0.0f };
-
-	// Cubun 専用
-	CubunFaceDir                 cubunFaceDir  = CubunFaceDir::Up;
-	Character::ManualGravityDir  initGravDir   = Character::ManualGravityDir::None;
+	EnemyType                    type        = EnemyType::Cubun;
+	Math::Vector3                position    = { 0.0f, 0.0f, 0.0f };
+	Character::ManualGravityDir  initGravDir = Character::ManualGravityDir::None;
 };

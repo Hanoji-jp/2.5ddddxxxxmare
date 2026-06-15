@@ -121,7 +121,7 @@ void GameScene::Event()
 			if (m_spPlayer->IsPlanetChanged())
 			{
 				m_pCamera->TriggerPlanetZoom();
-				KdDebugGUI::Instance().AddLog("[ZOOM] TriggerPlanetZoom fired!\n");
+				//KdDebugGUI::Instance().AddLog("[ZOOM] TriggerPlanetZoom fired!\n");
 			}
 			// フラグを読み終えたのでここでリセット
 			m_spPlayer->ResetPlanetChangedFlag();
@@ -642,6 +642,45 @@ void GameScene::Event()
 		if (parasolPickedUp) { m_spPlayer->GiveParasol(); }
 		m_itemManager.Refresh();
 
+		// ── Cubun 踏みつけ・棘ダメージ判定 ────────────────
+		// 頭側(+m_upDir)＝安全面：上から踏むと 1 回で撃破＋プレイヤー跳ね返り
+		// 足側(-m_upDir)＝棘面　：触れるとプレイヤー被ダメージ
+		if (m_spPlayer && !m_spPlayer->IsExpired() && !m_spPlayer->IsDead())
+		{
+			const Math::Vector3 ppos = m_spPlayer->GetPos();
+			const Math::Vector3 pvel = m_spPlayer->GetVelocity();
+			for (auto& sp : m_cubuns)
+			{
+				if (!sp || sp->IsDead()) { continue; }
+
+				if (sp->CheckStomp(ppos, pvel) && !sp->IsSquashing())
+				{
+					// ぺちゃんこ演出開始（即死ではなく 0.35 秒後に消える）
+					sp->StartStomp();
+
+					// プレイヤーは演出を待たず即座に跳ね返す
+					const Math::Vector3 up = sp->GetPhysicsUpDir();
+					Math::Vector3 v = pvel;
+					v -= up * v.Dot(up);                    // up 方向成分を除去
+					v += up * CubunConst::StompBounceVel;   // 跳ね
+					m_spPlayer->SetVelocity(v);
+				}
+				else if (!sp->IsSquashing() && sp->IsSpikeHit(ppos))
+				{
+					if (sp->IsSpikeFacingUp())
+					{
+						// 重力反転：棘がワールド上を向く → 棘ダメージ（ノックバック付き）
+						m_spPlayer->TakeDamageFrom(CubunConst::SpikeDamage, sp->GetPos());
+					}
+					else
+					{
+						// 通常重力：叩きつけ(COL_Attack)はスラム中＝空中のみダメージ（座っている Cubun の横では当たらない）
+						if (!sp->IsGround()) { m_spPlayer->TakeDamageFrom(CubunConst::CrushDamage, sp->GetPos()); }
+					}
+				}
+			}
+		}
+
 		// ── Cubun 撃破バーストエフェクト ────────────────
 		{
 			const auto dustData = ModelManager::Instance().GetModel(PlayerConst::DustPath);
@@ -733,6 +772,12 @@ void GameScene::DrawLitExtra()
 {
 	PlanetGravityManager::Instance().DrawLit();
 	m_itemManager.DrawLit();
+}
+
+void GameScene::DrawEffectExtra()
+{
+	// アイテム周りの星きらめき（半透明・発光のためエフェクトパスで描画）
+	m_itemManager.DrawEffect();
 }
 
 void GameScene::DrawGui()
@@ -903,7 +948,6 @@ void GameScene::RebuildEnemies()
 		{
 			auto sp = std::make_shared<Cubun>();
 			sp->SetPos(data.position);
-			sp->SetFaceDir(data.cubunFaceDir);
 			sp->SetInitGravDir(data.initGravDir);
 			sp->Init();
 			if (m_spPlayer) { sp->SetTarget(m_spPlayer); }
@@ -919,6 +963,15 @@ void GameScene::RebuildEnemies()
 			m_enemies.push_back(sp);
 			AddObject(sp);
 		}
+	}
+
+	// プレイヤーに Cubun 障害物リストを登録（めり込み防止押し出し用）
+	if (m_spPlayer)
+	{
+		std::vector<std::weak_ptr<KdGameObject>> obstList;
+		obstList.reserve(m_cubuns.size());
+		for (auto& sp : m_cubuns) { obstList.push_back(sp); }
+		m_spPlayer->SetEnemyObstacles(obstList);
 	}
 }
 

@@ -1,5 +1,6 @@
 ﻿#pragma once
 #include "../../Const/ItemConst.h"
+#include "../Effect/ItemEffect.h"
 
 //==========================================================
 // ParasolItem
@@ -19,6 +20,7 @@ public:
 	void Init()    override;
 	void Update()  override;
 	void DrawLit() override;
+	void DrawEffect() override;   // 星きらめき
 
 	void SetSpawnPos(const Math::Vector3& pos) { m_spawnPos = pos; SetPos(pos); }
 	const Math::Vector3& GetSpawnPos() const   { return m_spawnPos; }
@@ -37,6 +39,6 @@ private:
 	float         m_rotAngle  = 0.0f;
 	bool          m_pickedUp  = false;
 
-	// ループエフェクトのハンドル
-	std::weak_ptr<KdEffekseerObject> m_wpEffect;
+	// 星きらめき＋Effekseerループを統合管理
+	ItemEffect    m_effect;
 };

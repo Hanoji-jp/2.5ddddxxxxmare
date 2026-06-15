@@ -75,27 +75,16 @@ void EnemyPlacementEditor::DrawGui()
 			m_dirty    = true;
 		}
 
-		// Cubun 専用設定
+		// 初期重力方向
 		if (p.type == EnemyType::Cubun)
 		{
 			ImGui::Separator();
 			ImGui::TextColored({ 1.0f, 0.8f, 0.2f, 1.0f }, "-- Cubun Settings --");
 
-			// 出現向き
-			int faceIdx = (p.cubunFaceDir == CubunFaceDir::Up) ? 0 : 1;
-			const char* faceNames[] = { "Up (通常)", "Down (逆さ)" };
-			if (ImGui::Combo("Face Dir", &faceIdx, faceNames, 2))
-			{
-				p.cubunFaceDir = (faceIdx == 0) ? CubunFaceDir::Up : CubunFaceDir::Down;
-				m_dirty = true;
-			}
-
-			// 初期手動重力方向
 			int gravIdx = 0;
-			if      (p.initGravDir == Character::ManualGravityDir::None) { gravIdx = 0; }
-			else if (p.initGravDir == Character::ManualGravityDir::Down) { gravIdx = 1; }
+			if      (p.initGravDir == Character::ManualGravityDir::Down) { gravIdx = 1; }
 			else if (p.initGravDir == Character::ManualGravityDir::Up)   { gravIdx = 2; }
-			const char* gravNames[] = { "None (自動)", "Down (下)", "Up (上)" };
+			const char* gravNames[] = { "None (惑星に従う)", "Down (床歩き)", "Up (天井歩き)" };
 			if (ImGui::Combo("Init Gravity", &gravIdx, gravNames, 3))
 			{
 				switch (gravIdx)
@@ -148,18 +137,13 @@ void EnemyPlacementEditor::Save() const
 
 	for (const auto& p : m_placements)
 	{
-		// type, x, y, z, faceDir, initGravDir
 		const int typeInt = (p.type == EnemyType::Cubun) ? 0 : 1;
-		const int faceInt = (p.cubunFaceDir == CubunFaceDir::Up) ? 0 : 1;
 		int gravInt = 0;
-
 		if      (p.initGravDir == Character::ManualGravityDir::Down) { gravInt = 1; }
-
 		else if (p.initGravDir == Character::ManualGravityDir::Up)   { gravInt = 2; }
-
 		ofs << typeInt << ","
 			<< p.position.x << "," << p.position.y << "," << p.position.z << ","
-			<< faceInt << "," << gravInt
+			<< gravInt
 			<< "\n";
 	}
 }
@@ -190,15 +174,9 @@ void EnemyPlacementEditor::Load()
 		d.position.x = std::stof(tokens[1]);
 		d.position.y = std::stof(tokens[2]);
 		d.position.z = std::stof(tokens[3]);
-
-		// 旧フォーマット（4列）との互換性を保ちつつ新列を読む
 		if (tokens.size() >= 5)
 		{
-			d.cubunFaceDir = (std::stoi(tokens[4]) == 0) ? CubunFaceDir::Up : CubunFaceDir::Down;
-		}
-		if (tokens.size() >= 6)
-		{
-			const int g = std::stoi(tokens[5]);
+			const int g = std::stoi(tokens[4]);
 			if      (g == 1) { d.initGravDir = Character::ManualGravityDir::Down; }
 			else if (g == 2) { d.initGravDir = Character::ManualGravityDir::Up;   }
 			else             { d.initGravDir = Character::ManualGravityDir::None;  }

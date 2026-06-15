@@ -11,6 +11,8 @@ void StarBurstEffect::Spawn(const Math::Vector3&              pos,
 							const Math::Vector3&              upDir,
 							const std::shared_ptr<KdModelData>& modelData)
 {
+	SetPos(pos);  // CheckInScreen がオブジェクト位置を m_mWorld から取るため必須
+
 	m_particles.reserve(JuiceConst::StarBurstCount);
 
 	// upDir に直交する右・前ベクトルを作る

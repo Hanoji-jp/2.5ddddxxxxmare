@@ -105,6 +105,24 @@ void KdEffekseerManager::StopEffect(const Effekseer::Handle& handle)
 	m_efkManager->StopEffect(handle);
 }
 
+void KdEffekseerManager::StopEffectsByFileName(const std::string& filename)
+{
+	auto masterItr = m_effectMap.find(filename);
+	if (masterItr != m_effectMap.end())
+	{
+		masterItr->second->SetLoop(false);
+	}
+
+	for (const auto& spObj : m_nowEffectPlayList)
+	{
+		if (spObj && spObj->GetPlayEfkInfo().FileName == filename)
+		{
+			spObj->SetLoop(false);
+			m_efkManager->StopEffect(spObj->GetHandle());
+		}
+	}
+}
+
 void KdEffekseerManager::Release()
 {
 	Reset();
@@ -265,7 +283,13 @@ void KdEffekseerManager::UpdateEffekseerEffect()
 					if (isLoop)
 					{
 						const PlayEfkInfo& info = effObj->GetPlayEfkInfo();
-						replayList.push_back(info);
+						// マスター（effectMap）のループフラグが false になっていたら再生しない
+						auto masterItr = m_effectMap.find(info.FileName);
+						bool masterIsLoop = (masterItr == m_effectMap.end()) || masterItr->second->IsLoop();
+						if (masterIsLoop)
+						{
+							replayList.push_back(info);
+						}
 					}
 
 					// ハンドル値が変わるので今の再生リストから除外する

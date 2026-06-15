@@ -52,6 +52,9 @@ public:
 
 	virtual bool IsExpired() const { return m_isExpired; }
 
+	// コリジョン形状を公開（押し出し判定などで外部から参照するために使用）
+	virtual const KdCollider* GetCollider() const { return m_pCollider.get(); }
+
 	// オブジェクトを消滅させる（次フレームで除去される）
 	void Expire() { m_isExpired = true; }
 

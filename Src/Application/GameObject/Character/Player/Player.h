@@ -28,6 +28,10 @@ public:
     bool IsVisible() const override { return true; }
 
     void TakeDamage(int _damage) override;
+    void TakeDamageFrom(int _damage, const Math::Vector3& sourcePos) override;
+
+    // 即死（無敵を無視して HP を 0 にする。ドッスンの叩きつけ等）
+    void InstantDeath();
 
     // GhostTrail 用：描画ワールド行列を公開
     const Math::Matrix& GetDrawWorld() const { return m_drawWorld; }
@@ -78,7 +82,10 @@ private:
     float m_facingSign = 1.0f;
 
     // XZ移動の慣性速度（加減速に使用）
-    Math::Vector3 m_moveVelocity = { 0.0f, 0.0f, 0.0f };
+    Math::Vector3 m_moveVelocity  = {};
+
+    // 被ダメージ後の無敵タイマー（フレーム。> 0 の間は再被弾しない）
+    int m_invincibleTimer = 0;
 
     // 近接攻撃クールダウン
     int m_meleeCooldown = 0;

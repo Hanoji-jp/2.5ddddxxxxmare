@@ -39,6 +39,7 @@ void Character::PostUpdate()
 
         // 分軸処理：横→壁判定→縦→床・天井判定
         m_preMovePos = GetPos();  // 水平移動前の位置を記録（移動床 XZ 判定に使う）
+
         ApplyVelocityHorizontal();
         CheckWall();
         ApplyVelocityVertical();
@@ -100,11 +101,13 @@ void Character::ApplyGravity()
         m_pCurrentPlanet     = PlanetGravityManager::Instance().GetPlanet(m_currentPlanetIndex);
     }
 
-    const bool inManualZone = ManualGravityZoneManager::Instance().CanUseManualGravity(GetPos());
+    const bool inManualZone = !m_ignoreGravityZones
+        && ManualGravityZoneManager::Instance().CanUseManualGravity(GetPos());
     const bool hasManual    = (m_manualGravityDir != ManualGravityDir::None);
 
     // ── ケース① ゾーン外 + 手動あり + 惑星圏内 → 惑星に捕まる、手動リセット ──
-    if (!inManualZone && hasManual && gravResult.hasInfluence)
+    // ただし m_ignoreGravityZones（Enemy）の場合はリセットしない
+    if (!m_ignoreGravityZones && !inManualZone && hasManual && gravResult.hasInfluence)
     {
         m_manualGravityDir = ManualGravityDir::None;
         // fall through → 惑星重力ブロックで処理
@@ -137,7 +140,8 @@ void Character::ApplyGravity()
         return;
     }
     Math::Vector3 zoneGravDir;
-    const bool inNormalZone = ManualGravityZoneManager::Instance().IsInNormalGravityZone(GetPos(), zoneGravDir);
+    const bool inNormalZone = !m_ignoreGravityZones
+        && ManualGravityZoneManager::Instance().IsInNormalGravityZone(GetPos(), zoneGravDir);
     // 惑星引力を無効にするのはどちらのゾーン内でも常にオフ
     const bool suppressPlanet = inNormalZone || inManualZone;
 
@@ -369,9 +373,19 @@ void Character::CheckGround()
 
     const Math::Vector3 pos = GetPos();
 
+    // 手動重力 Up（天井歩き）の場合、ワールド下向き固定の地面スナップ
+    // （移動床の上面 Y 判定 / 球 NormalGravity の下向きレイ / 通常マップの下向きレイ）は
+    // キャラを下の床に毎フレーム張り付けて上昇を妨げてしまう。
+    // 天井（Box 下面）への着地は下の Box 惑星セクションが m_upDir 基準で正しく処理するため、
+    // 下向き固定スナップ経路はスキップする。
+    // Player はキック付き SetManualGravity で即スナップ範囲を脱出するので影響を受けないが、
+    // 念のため敵（m_ignoreGravityZones）専用に限定して Player の挙動を保護する。
+    const bool skipDownwardSnap =
+        (m_manualGravityDir == ManualGravityDir::Up) && m_ignoreGravityZones;
+
     // ---- ★ 移動床（Planet NormalGravity Box と同一の幾何距離方式）----
     // 早期 return より前に判定することで惑星上でも必ず拾う
-    if (m_velocity.Dot(m_upDir) <= 0.1f)
+    if (!skipDownwardSnap && m_velocity.Dot(m_upDir) <= 0.1f)
     {
         for (auto& wpMF : m_movingFloors)
         {
@@ -416,7 +430,8 @@ void Character::CheckGround()
     }
 
     // ---- ★ 風ボックス上面（TypeGround レイキャスト）----
-    if (m_velocity.Dot(m_upDir) <= 0.1f)
+    // 天井歩き（ManualUp）は上面に張り付いてしまうのでスキップ
+    if (!skipDownwardSnap && m_velocity.Dot(m_upDir) <= 0.1f)
     {
         const Math::Vector3 rayStart = pos + m_upDir * CollisionConst::GroundRayOffset;
         const KdCollider::RayInfo ray(
@@ -504,12 +519,10 @@ void Character::CheckGround()
 
         for (int fi = 0; fi < 4; ++fi)
         {
-            // NormalBox は上面(fi==0)のみ
-            if (p.bNormalGravity && fi != 0) { continue; }
-
             const auto& f = faces[fi];
 
-            // 現在の m_upDir がこの面の法線方向と揃っているか
+            // m_upDir と揃っていない面はスキップ
+            // NormalBox は通常 上面のみ通過、天井歩き（m_upDir 反転）なら下面が通過する
             if (f.normal.Dot(m_upDir) < 0.7f) { continue; }
 
             // ---- この面の有効矩形範囲チェック ----
@@ -546,11 +559,14 @@ void Character::CheckGround()
             m_airGravitySwitchCount = 0;
             return;
         }
-        return; // Box惑星担当なのでSphere/マップには落ちない
+        // 通常は Box 惑星が担当するので Sphere/マップには落ちない
+        // 天井歩き（skipDownwardSnap）の場合は、マップ天井検出のために落ちる
+        if (!skipDownwardSnap) { return; }
     }
 
     // ---- ② Sphere等の惑星 ─ レイキャスト方式 ----
-    if (m_pCurrentPlanet && m_pCurrentPlanet->pCollider)
+    // 天井歩き（手動 Up）は下向きレイで床に張り付くためスキップ
+    if (!skipDownwardSnap && m_pCurrentPlanet && m_pCurrentPlanet->pCollider)
     {
         // ジャンプ直後はスキップ
         if (m_velocity.Dot(m_upDir) > 0.001f) { return; }
@@ -603,6 +619,95 @@ void Character::CheckGround()
             }
             m_isGround = true;
             m_airGravitySwitchCount = 0;
+        }
+        return;
+    }
+
+    // ---- ★ 天井歩き専用（ManualUp + m_ignoreGravityZones）----
+    // m_pCurrentPlanet 以外のすべての Box 惑星底面 + マップ天井を検出
+    if (skipDownwardSnap && !m_isGround)
+    {
+        // 天井から離れる方向（ジャンプ直後）はスキップ
+        if (m_velocity.Dot(m_upDir) <= 0.1f)
+        {
+            // ---- Box 惑星の底面を全走査 ----
+            const auto& planets = PlanetGravityManager::Instance().GetPlanets();
+            for (const auto& p : planets)
+            {
+                if (p.Shape != PlanetShape::Box) { continue; }
+
+                const Math::Vector3 lp   = pos - p.Position;
+                const Math::Vector3 half = p.BoxHalfExtents;
+
+                // XZ 範囲チェック
+                if (std::abs(lp.x) > half.x) { continue; }
+
+                // 底面：dist = -lp.y - half.y（正=底面より下=外側）
+                const float capExt   = 0.0f;  // NormalBox 底面にキャップなし
+                const float dist     = -lp.y - half.y;
+                const float dToSurf  = dist - capExt;
+
+                if (dToSurf >  CollisionConst::GroundSnapDist) { continue; }
+                if (dToSurf < -CollisionConst::GroundSnapDist) { continue; }
+
+                // 底面にスナップ（f.normal={0,-1,0} → corrected.y += dToSurf）
+                Math::Vector3 corrected = pos;
+                corrected.y += dToSurf;
+                SetPos(corrected);
+
+                // 底面に向かう速度成分（+Y）を除去
+                if (m_velocity.y > 0.0f)
+                {
+                    m_velocity.y *= GameConst::LandingDamping;
+                    if (std::abs(m_velocity.y) < 0.001f) { m_velocity.y = 0.0f; }
+                }
+
+                m_isGround = true;
+                m_airGravitySwitchCount = 0;
+                return;
+            }
+
+            // ---- マップ天井（上方向レイ、下向き法線面のみ）----
+            const auto spMap = m_wpMap.lock();
+            if (spMap)
+            {
+                const Math::Vector3 rayStart = pos;
+                const KdCollider::RayInfo ray(KdCollider::TypeGround, rayStart,
+                    Math::Vector3(0.0f, 1.0f, 0.0f), CollisionConst::GroundRayLength);
+
+                std::list<KdCollider::CollisionResult> results;
+                if (spMap->Intersects(ray, &results))
+                {
+                    const KdCollider::CollisionResult* pBest = nullptr;
+                    for (auto& r : results)
+                    {
+                        // 下向き法線（天井面）のみ受け付ける
+                        if (r.m_hitNDir.y > -0.7f) { continue; }
+                        // 自分より上にある面のみ
+                        if (r.m_hitPos.y < pos.y - 0.01f) { continue; }
+                        if (!pBest || r.m_overlapDistance > pBest->m_overlapDistance) { pBest = &r; }
+                    }
+
+                    if (pBest)
+                    {
+                        const float dist = pBest->m_hitPos.y - pos.y;  // 正=天井は上
+                        if (dist >= 0.0f && dist < CollisionConst::GroundSnapDist)
+                        {
+                            Math::Vector3 corrected = GetPos();
+                            corrected.y = pBest->m_hitPos.y;
+                            SetPos(corrected);
+
+                            if (m_velocity.y > 0.0f)
+                            {
+                                m_velocity.y *= GameConst::LandingDamping;
+                                if (std::abs(m_velocity.y) < 0.001f) { m_velocity.y = 0.0f; }
+                            }
+                            m_isGround = true;
+                            m_airGravitySwitchCount = 0;
+                        }
+                    }
+                }
+            }
         }
         return;
     }
@@ -917,6 +1022,18 @@ void Character::CheckWall()
         const KdCollider* col = spWBBox->GetCollider();
         if (!col) { continue; }
         doPlanetRayPush(*col, spWBBox->GetWorldMatrix(), true);
+    }
+
+    // ---- 敵障害物 押し出し（TypeBump レイキャスト）
+    // 敵の m_mWorld はモデルスケール込みなので、GetPos() で平行移動のみの行列を組む
+    for (auto& wpEnemy : m_enemyObstacles)
+    {
+        const auto spEnemy = wpEnemy.lock();
+        if (!spEnemy || spEnemy->IsExpired()) { continue; }
+        const KdCollider* col = spEnemy->GetCollider();
+        if (!col) { continue; }
+        const Math::Matrix colMat = Math::Matrix::CreateTranslation(spEnemy->GetPos());
+        doPlanetRayPush(*col, colMat, true);
     }
 
     SetPos(pos);

@@ -48,6 +48,7 @@ private:
 	void DrawDebugExtra()     override;
 	void DrawUnLitExtra()     override;  // 背景Box描画
 	void DrawLitExtra()       override;  // 惑星モデル描画
+	void DrawEffectExtra()    override;  // アイテム星きらめき描画
 	void DrawSpriteExtra() override;  // フェードオーバーレイ描画
 
 	void RebuildEnemies();

@@ -15,13 +15,14 @@ void ParasolItem::Init()
 		ItemConst::ParasolHitRadius,
 		KdCollider::TypeEvent);
 
-	// ループエフェクト開始（EffekseerPath はマネージャー内部で自動付加される）
-	m_wpEffect = KdEffekseerManager::GetInstance().Play(
-		ItemConst::ParasolEffectPath,
-		m_spawnPos,
-		ItemConst::ParasolEffectScale,
-		1.0f,
-		true);
+	// 星きらめき＋Effekseerループを統合エフェクトで開始（青系・色幅ランダム）
+	ItemEffect::Params fxp;
+	fxp.starSize    = SparkleConst::ParasolStarSize;
+	fxp.orbitRadius = SparkleConst::ParasolStarRadius;
+	fxp.color       = { SparkleConst::ParasolColorR, SparkleConst::ParasolColorG,
+						SparkleConst::ParasolColorB, SparkleConst::ParasolColorA };
+	fxp.colorShift  = SparkleConst::ParasolColorShift;
+	m_effect.Init(m_spawnPos, fxp, ItemConst::ParasolEffectPath, ItemConst::ParasolEffectScale);
 }
 
 void ParasolItem::Update()
@@ -39,11 +40,14 @@ void ParasolItem::Update()
 	pos.y += bobOffset;
 	SetPos(pos);
 
-	// エフェクト位置を追従
-	if (const auto spEfk = m_wpEffect.lock())
-	{
-		spEfk->SetPos(pos);
-	}
+	// 星きらめき更新＋Effekseer位置追従
+	m_effect.Update(pos, dt);
+}
+
+void ParasolItem::DrawEffect()
+{
+	if (m_pickedUp) { return; }
+	m_effect.DrawEffect(GetPos());
 }
 
 void ParasolItem::DrawLit()
@@ -64,12 +68,8 @@ void ParasolItem::MarkPickedUp()
 	if (m_pickedUp) { return; }
 	m_pickedUp = true;
 
-	// ループエフェクトを即時停止
-	if (const auto spEfk = m_wpEffect.lock())
-	{
-		spEfk->SetLoop(false);
-		KdEffekseerManager::GetInstance().StopEffect(spEfk->GetHandle());
-	}
+	// 統合エフェクトの Effekseer ループを停止
+	m_effect.Stop();
 
 	Expire();
 }

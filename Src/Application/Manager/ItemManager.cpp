@@ -59,6 +59,19 @@ void ItemManager::DrawLit()
 	}
 }
 
+void ItemManager::DrawEffect()
+{
+	// 各アイテムが自分の統合エフェクト（星きらめき）を描画する
+	for (const auto& coin : m_coins)
+	{
+		if (!coin->IsExpired()) { coin->DrawEffect(); }
+	}
+	for (const auto& p : m_parasols)
+	{
+		if (!p->IsExpired()) { p->DrawEffect(); }
+	}
+}
+
 void ItemManager::Refresh()
 {
 	m_coins.remove_if([](const std::shared_ptr<Coin>& c) { return c->IsExpired(); });

@@ -35,6 +35,7 @@ public:
 	int  Update(HitBox& _playerHitBox, bool& outParasolPickedUp);
 
 	void DrawLit();
+	void DrawEffect();   // アイテム周りの星きらめき（エフェクトパスで呼ぶ）
 	void DrawGui();   // ImGui によるアイテム配置エディター
 
 	// 取得済みアイテムを除去

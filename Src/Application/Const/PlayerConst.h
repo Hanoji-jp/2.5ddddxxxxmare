@@ -26,6 +26,10 @@ namespace PlayerConst
     // 無敵時間（フレーム数）
     constexpr int   InvincibleFrame  = 60;
 
+    // ノックバック（マリオギャラクシー風：水平に吹き飛び＋少し上）
+    constexpr float KnockbackSpeed   = 0.28f;  // 水平方向速度
+    constexpr float KnockbackUpSpeed = 0.22f;  // 上方向速度（m_upDir 方向）
+
     // モデルの拡大率
     constexpr float ModelScale       = 0.3f;
 

@@ -91,6 +91,12 @@ public:
     int  GetCurrentPlanetIndex() const { return m_currentPlanetIndex; }
 
     virtual void TakeDamage(int _damage);
+    // ダメージ＋ノックバック（sourcePos = ダメージ源の位置）
+    // 基底は TakeDamage を呼ぶだけ。Player が override してノックバックを加える。
+    virtual void TakeDamageFrom(int _damage, const Math::Vector3& sourcePos)
+    {
+        TakeDamage(_damage);
+    }
 
     // マップオブジェクトをセット（コリジョン判定に使用）
     void SetMapObject(const std::weak_ptr<KdGameObject>& _wpMap) { m_wpMap = _wpMap; }
@@ -105,6 +111,12 @@ public:
     void SetWindBoxObjects(const std::vector<std::weak_ptr<KdGameObject>>& windBoxes)
     {
         m_windBoxColliders = windBoxes;
+    }
+
+    // 敵障害物リストをセット（めり込み防止の押し出し判定に使用）
+    void SetEnemyObstacles(const std::vector<std::weak_ptr<KdGameObject>>& obstacles)
+    {
+        m_enemyObstacles = obstacles;
     }
 
     // コリジョンデバッグUI（ImGui）
@@ -213,6 +225,9 @@ protected:
     // 風ボックスリスト（上面に乗れる床として判定）
     std::vector<std::weak_ptr<KdGameObject>> m_windBoxColliders;
 
+    // 敵障害物リスト（めり込み防止押し出し）
+    std::vector<std::weak_ptr<KdGameObject>> m_enemyObstacles;
+
     // CheckGround の移動床 XZ 判定用：ApplyVelocityHorizontal 前の位置
     Math::Vector3 m_preMovePos = {};
 
@@ -221,6 +236,21 @@ protected:
     const std::weak_ptr<MovingFloor>* m_pRidingFloor = nullptr;
 
     std::unique_ptr<KdDebugWireFrame> m_pDebugWire;
+
+    // true にすると重力ゾーンの影響を受けない（Enemy用）
+    // ManualGravity は保持したまま、ゾーンによるリセット・上書きをスキップする
+    bool m_ignoreGravityZones = false;
+
+    // 初期配置専用：キック・速度操作なしで重力方向だけをスナップセットする
+    void SetInitialGravityDir(ManualGravityDir dir)
+    {
+        m_manualGravityDir = dir;
+        if (dir == ManualGravityDir::None) { return; }
+        m_upDir = (dir == ManualGravityDir::Up)
+            ? Math::Vector3{ 0.0f, -1.0f, 0.0f }
+            : Math::Vector3{ 0.0f,  1.0f, 0.0f };
+        m_upDirVisual = m_upDir;
+    }
 
     // 手動重力方向の設定（重力パズル用）
     // 方向が変わった瞬間に速度をリセット＋押し出し目標をセットして壁埋まりを防ぐ

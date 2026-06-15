@@ -1,6 +1,7 @@
 ﻿#pragma once
 #include "../../../Framework/GameObject/KdGameObject.h"
 #include "../../Const/ItemConst.h"
+#include "../Effect/ItemEffect.h"
 
 //==========================================================
 // Coin
@@ -19,6 +20,7 @@ public:
 	void Init()   override;
 	void Update() override;
 	void DrawLit() override;
+	void DrawEffect() override;   // 星きらめき
 
 	void SetSpawnPos(const Math::Vector3& _pos) { m_spawnPos = _pos; SetPos(_pos); }
 	const Math::Vector3& GetSpawnPos() const    { return m_spawnPos; }
@@ -31,4 +33,5 @@ private:
 	Math::Vector3 m_spawnPos    = { 0.0f, 0.0f, 0.0f };
 	float         m_bobTimer    = 0.0f;
 	float         m_rotAngle    = 0.0f;
+	ItemEffect    m_effect;       // 星きらめき（コインは Effekseer なし）
 };

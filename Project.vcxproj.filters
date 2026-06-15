@@ -319,6 +319,7 @@
     <ClInclude Include="Src\Application\GameObject\Gimmick\GravityCore.h" />
     <ClInclude Include="Src\Application\Editor\GravityCoreEditor.h" />
     <ClInclude Include="Src\Application\GameObject\Item\ParasolItem.h" />
+    <ClInclude Include="Src\Application\Input\Input.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Pch.cpp">
@@ -504,6 +505,7 @@
     <ClCompile Include="Src\Application\GameObject\Gimmick\GravityCore.cpp" />
     <ClCompile Include="Src\Application\Editor\GravityCoreEditor.cpp" />
     <ClCompile Include="Src\Application\GameObject\Item\ParasolItem.cpp" />
+    <ClCompile Include="Src\Application\Input\Input.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Src\Framework\Shader\inc_KdCommon.hlsli">

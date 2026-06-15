@@ -131,6 +131,7 @@ void BaseScene::Draw()
 			if (!obj->CheckInScreen(m_frustum)) { continue; }
 			obj->DrawEffect();
 		}
+		DrawEffectExtra();
 	}
 	KdShaderManager::Instance().m_StandardShader.EndUnLit();
 

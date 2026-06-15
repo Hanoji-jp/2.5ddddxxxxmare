@@ -336,6 +336,7 @@
     <ClInclude Include="Src\Application\GameObject\Weapon\Arrow.h" />
     <ClInclude Include="Src\Application\GameObject\Weapon\Bow.h" />
     <ClInclude Include="Src\Application\GameObject\Weapon\Sword.h" />
+    <ClInclude Include="Src\Application\Input\Input.h" />
     <ClInclude Include="Src\Application\main.h" />
     <ClInclude Include="Src\Application\Manager\CollisionManager.h" />
     <ClInclude Include="Src\Application\Manager\ItemManager.h" />
@@ -432,6 +433,7 @@
     <ClCompile Include="Src\Application\GameObject\Weapon\Arrow.cpp" />
     <ClCompile Include="Src\Application\GameObject\Weapon\Bow.cpp" />
     <ClCompile Include="Src\Application\GameObject\Weapon\Sword.cpp" />
+    <ClCompile Include="Src\Application\Input\Input.cpp" />
     <ClCompile Include="Src\Application\main.cpp" />
     <ClCompile Include="Src\Application\Manager\ItemManager.cpp" />
     <ClCompile Include="Src\Application\Manager\ManualGravityZoneManager.cpp" />

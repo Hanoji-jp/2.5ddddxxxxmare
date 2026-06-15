@@ -24,6 +24,16 @@ void Coin::Init()
 		Math::Vector3::Zero,
 		ItemConst::CoinHitRadius,
 		KdCollider::TypeEvent);
+
+	// 星きらめきエフェクト（コインは Effekseer ループなし＝星だけ）
+	// 大きめ・金色・色幅ランダム
+	ItemEffect::Params fxp;
+	fxp.starSize    = SparkleConst::CoinStarSize;
+	fxp.orbitRadius = SparkleConst::CoinStarRadius;
+	fxp.color       = { SparkleConst::CoinColorR, SparkleConst::CoinColorG,
+						SparkleConst::CoinColorB, SparkleConst::CoinColorA };
+	fxp.colorShift  = SparkleConst::CoinColorShift;
+	m_effect.Init(m_spawnPos, fxp);
 }
 
 void Coin::Update()
@@ -36,6 +46,13 @@ void Coin::Update()
 	Math::Vector3 pos = m_spawnPos;
 	pos.y += bobOffset;
 	SetPos(pos);
+
+	m_effect.Update(pos, KdFPSController::GetDt());
+}
+
+void Coin::DrawEffect()
+{
+	m_effect.DrawEffect(GetPos());
 }
 
 void Coin::DrawLit()
