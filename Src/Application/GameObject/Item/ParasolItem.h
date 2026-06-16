@@ -39,6 +39,8 @@ private:
 	float         m_rotAngle  = 0.0f;
 	bool          m_pickedUp  = false;
 
-	// 星きらめき＋Effekseerループを統合管理
+	// 星きらめき＋
+	// 
+	// ループを統合管理
 	ItemEffect    m_effect;
 };

@@ -44,7 +44,9 @@ public:
         m_efkPath = efkPath;
         if (!m_efkPath.empty())
         {
-            m_wpEfk = KdEffekseerManager::GetInstance().Play(m_efkPath, pos, efkScale, efkSpeed, true);
+            // loop Effekseer uses this ItemEffect's color, same as the star/pickup
+            m_wpEfk = KdEffekseerManager::GetInstance().Play(
+                m_efkPath, pos, m_params.color, efkScale, efkSpeed, true);
         }
     }
 
@@ -59,6 +61,11 @@ public:
     {
         const Assets& a = GetAssets();
         if (!a.ready) { return; }
+
+        // additive blend so the stars glow
+        KdShaderManager::Instance().ChangeBlendState(KdBlendState::Add);
+        KdShaderManager::Instance().ChangeDepthStencilState(KdDepthStencilState::ZWriteDisable);
+        KdShaderManager::Instance().m_StandardShader.SetDissolve(0.0f);
 
         const Math::Vector3 base = center
             + Math::Vector3{ 0.0f, SparkleConst::CenterOffsetY, 0.0f };
@@ -100,6 +107,9 @@ public:
 
             EffectBase::DrawBillboard(a.poly, pos, size, spin, col, emissive);
         }
+
+        KdShaderManager::Instance().UndoDepthStencilState();
+        KdShaderManager::Instance().UndoBlendState();
     }
 
     // Stop the looping Effekseer effect (safe when none)
@@ -110,6 +120,7 @@ public:
             KdEffekseerManager::GetInstance().StopEffectsByFileName(m_efkPath);
         }
     }
+
 
 private:
     // Star texture / quad shared by every item (loaded once)

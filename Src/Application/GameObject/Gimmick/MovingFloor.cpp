@@ -127,7 +127,7 @@ m_pCollider = std::make_unique<KdCollider>();
 DirectX::BoundingBox localBox;
 localBox.Center  = { 0.0f, 0.0f, 0.0f };
 localBox.Extents = { 1.0f, 1.0f, 1.0f };
-m_pCollider->RegisterCollisionShape("Body", localBox, KdCollider::TypeBump);
+m_pCollider->RegisterCollisionShape("Body", localBox, KdCollider::TypeGround | KdCollider::TypeBump);
 }
 
 // キャップモデルを Inward な面の数だけ生成

@@ -2,6 +2,7 @@
 #include "../GameObject/Item/Coin.h"
 #include "../GameObject/Item/HitBox.h"
 #include "../GameObject/Item/ParasolItem.h"
+#include "../GameObject/Effect/PickupBurst.h"
 
 //==========================================================
 // ItemManager
@@ -36,6 +37,7 @@ public:
 
 	void DrawLit();
 	void DrawEffect();   // アイテム周りの星きらめき（エフェクトパスで呼ぶ）
+	void UpdatePickupEffects();   // 取得バーストのみ更新（ヒットストップ中も呼ぶ）
 	void DrawGui();   // ImGui によるアイテム配置エディター
 
 	// 取得済みアイテムを除去
@@ -55,6 +57,10 @@ public:
 	static constexpr const char* SavePath = "Asset/Data/coins.csv";
 
 private:
+	// 取得時の演出：自前CPU星バースト（アイテム色＋星ごと微ランダム色）
+	void PlayPickupEffect(const Math::Vector3& pos, const Math::Color& baseColor);
+
 	std::list<std::shared_ptr<Coin>>        m_coins;
 	std::list<std::shared_ptr<ParasolItem>> m_parasols;
+	std::list<std::shared_ptr<PickupBurst>> m_bursts;
 };

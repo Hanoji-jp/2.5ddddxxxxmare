@@ -1,4 +1,4 @@
-#include "../../../Pch.h"
+﻿#include "../../../Pch.h"
 #include "AnimBlender.h"
 
 bool AnimBlender::ChangeAnimation(const std::string& _animName,
@@ -66,7 +66,7 @@ void AnimBlender::Update(KdModelWork& _modelWork, float speed)
 		std::vector<KdModelWork::Node> fromNodes = nodes;
 		m_prevAnimator.AdvanceTime(fromNodes, speed);
 
-		// 新アニメのノード状態をコピーして進める
+		// 新アニメのノード状態をコピーして進めるｄ
 		std::vector<KdModelWork::Node> toNodes = nodes;
 		m_currentAnimator.AdvanceTime(toNodes, speed);
 

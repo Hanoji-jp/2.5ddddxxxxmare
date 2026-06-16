@@ -53,6 +53,10 @@ namespace CollisionConst
     // 着地時のスナップ許容距離
     constexpr float GroundSnapDist          = 0.5f;
 
+    // 床判定：プレイヤー中心だけでなく体の幅ぶん外側にもレイを撒くサンプル半径。
+    // 端で中心レイが外れても、体が床にかかっていれば接地できる（端めり込み防止）。
+    constexpr float GroundSampleRadius      = 0.4f;
+
     // Box床判定：hitDist がこれ未満（レイ起点のすぐ直下）はBox内部誤検出として除外
     // GroundRayOffset - GroundSnapDist より小さければ内側からのヒット
     constexpr float GroundHitDistMin        = 0.2f;

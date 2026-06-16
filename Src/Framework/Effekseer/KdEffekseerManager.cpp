@@ -67,6 +67,23 @@ std::weak_ptr<KdEffekseerObject> KdEffekseerManager::Play(
 	return Play(info);
 }
 
+// Play with color (multiplies the whole effect by the given color)
+std::weak_ptr<KdEffekseerObject> KdEffekseerManager::Play(
+	const std::string& effName, const DirectX::SimpleMath::Vector3& pos, const Math::Color& color,
+	const float size, const float speed, bool isLoop)
+{
+	PlayEfkInfo info;
+
+	info.FileName	= effName;
+	info.Pos		= pos;
+	info.Size		= Math::Vector3(size);
+	info.Speed		= speed;
+	info.IsLoop		= isLoop;
+	info.Color		= color;
+
+	return Play(info);
+}
+
 void KdEffekseerManager::StopAllEffect()
 {
 	if (m_efkManager == nullptr) { return; }
@@ -241,6 +258,21 @@ std::weak_ptr<KdEffekseerObject> KdEffekseerManager::Play(const PlayEfkInfo& inf
 	m_efkManager->SetSpeed(handle, info.Speed);
 	Math::Vector3 rotate = ConvertToRadian(info.Rotate);
 	m_efkManager->SetRotation(handle, rotate.x, rotate.y, rotate.z);
+
+	// color (0..1 float -> 0..255). Multiplies the whole effect.
+	// only when a non-white color is requested and the handle is valid.
+	if (handle >= 0 &&
+		(info.Color.x < 1.0f || info.Color.y < 1.0f || info.Color.z < 1.0f || info.Color.w < 1.0f))
+	{
+		auto toU8 = [](float v) -> uint8_t
+		{
+			const float c = v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v);
+			return static_cast<uint8_t>(c * 255.0f);
+		};
+		m_efkManager->SetAllColor(handle,
+			Effekseer::Color(toU8(info.Color.x), toU8(info.Color.y), toU8(info.Color.z), toU8(info.Color.w)));
+	}
+
 	spEfkObject->SetParentManager(m_efkManager);
 	spEfkObject->SetHandle(handle);
 	spEfkObject->SetPlayEfkInfo(info);

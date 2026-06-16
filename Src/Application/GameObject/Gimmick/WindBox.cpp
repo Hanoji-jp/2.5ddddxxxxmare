@@ -44,6 +44,9 @@ void WindBox::Init(const WindBoxData& data)
 	m_boxModel = std::make_shared<KdModelWork>();
 	m_boxModel->SetModelData(WindBoxConst::BoxModelPath);
 
+	// 影生成パス(GenerateDepthMapFromLight)で DrawLit を描かせる
+	m_drawType = eDrawTypeLit;
+
 	// COL ノードベースのコライダーを初期化（床＋壁両方として登録）
 	m_pCollider = std::make_unique<KdCollider>();
 	m_pCollider->RegisterCollisionShape(WindBoxConst::ColNodeName, m_boxModel,

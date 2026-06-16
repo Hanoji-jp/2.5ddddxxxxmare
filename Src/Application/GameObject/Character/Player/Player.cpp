@@ -5,6 +5,7 @@
 #include "../../../Const/WarpHoleConst.h"
 #include "../../../Const/JuiceConst.h"
 #include "../../../Const/WindBoxConst.h"
+#include "../../../Const/SparkleConst.h"
 
 void Player::Init()
 {
@@ -53,6 +54,9 @@ void Player::Update()
 		m_animBlender.Update(m_modelWork, m_animSpeed);
 		return;
 	}
+
+	// 取得演出の発光を進める（ヒットストップ解除後はここで継続）
+	UpdatePickupGlow(KdFPSController::GetDt());
 
 	// アイテム取得ヒットボックスをプレイヤー座標に合わせて更新
 	m_pickupHitBox.Update(GetPos());
@@ -507,6 +511,48 @@ void Player::DrawLit()
     {
         arrow->DrawLit();
     }
+}
+
+// 取得演出中：プレイヤーを加算ブルームバッファへ再描画して光らせる
+void Player::DrawBright()
+{
+    if (m_pickupGlowTimer <= 0.0f) { return; }
+    if (!m_modelWork.IsEnable())   { return; }
+
+    // 残量 1->0 でフェード、+ 細かいシマー
+    const float t       = m_pickupGlowTimer / SparkleConst::PickupGlowDuration;
+    const float shimmer = 1.0f + SparkleConst::PickupGlowShimmerAmp
+        * std::sinf(m_pickupGlowTimer * SparkleConst::PickupGlowShimmer);
+    const float k = SparkleConst::PickupGlowIntensity * t * shimmer;
+
+    // BeginBright 側で加算合成 + ZWrite 無効は設定済み。
+    // Effekseer 描画後なので s0 サンプラとシェーダを張り直す。
+    auto& shader = KdShaderManager::Instance().m_StandardShader;
+    KdShaderManager::Instance().ChangeSamplerState(KdSamplerState::Anisotropic_Wrap, 0);
+    shader.BeginUnLit();
+    shader.SetDissolve(0.0f);
+
+    // colRate(=g_BaseColor) を発光色で増幅 -> 加算で明るいシルエット -> ブルーム
+    const Math::Color glow{ m_pickupGlowColor.x * k, m_pickupGlowColor.y * k,
+                            m_pickupGlowColor.z * k, 1.0f };
+    shader.DrawModel(m_modelWork, m_drawWorld, glow, Math::Vector3::Zero);
+
+    KdShaderManager::Instance().UndoSamplerState(0);
+}
+
+// 取得演出の発光を開始（色指定）
+void Player::TriggerPickupGlow(const Math::Color& color)
+{
+    m_pickupGlowColor = color;
+    m_pickupGlowTimer = SparkleConst::PickupGlowDuration;
+}
+
+// 発光残り時間を進める（ヒットストップ中はシーン側から呼ばれる）
+void Player::UpdatePickupGlow(float dt)
+{
+    if (m_pickupGlowTimer <= 0.0f) { return; }
+    m_pickupGlowTimer -= dt;
+    if (m_pickupGlowTimer < 0.0f) { m_pickupGlowTimer = 0.0f; }
 }
 
 void Player::Move()

@@ -29,6 +29,15 @@ void BaseScene::PreUpdate()
 
 void BaseScene::Update()
 {
+	// ヒットストップ中はゲーム更新を止める（一瞬フリーズ）
+	// ただし取得演出などは動かし続ける
+	if (m_hitStopTimer > 0.0f)
+	{
+		m_hitStopTimer -= KdFPSController::GetDt();
+		UpdateDuringHitStop();
+		return;
+	}
+
 	// シーン毎のイベント処理
 	Event();
 
@@ -54,6 +63,9 @@ void BaseScene::Update()
 
 void BaseScene::PostUpdate()
 {
+	// ヒットストップ中は物理・エフェクト更新も止める
+	if (m_hitStopTimer > 0.0f) { return; }
+
 	for (auto& obj : m_objList)
 	{
 		obj->PostUpdate();

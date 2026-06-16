@@ -29,6 +29,10 @@ public :
 		m_objList.push_back(_obj);
 	}
 
+	// ヒットストップ：一瞬だけ更新を止める（秒）
+	void TriggerHitStop(float sec) { if (sec > m_hitStopTimer) { m_hitStopTimer = sec; } }
+	bool IsHitStopped() const { return m_hitStopTimer > 0.0f; }
+
 protected:
 	virtual void DrawGui()        {}
 	virtual void DrawDebugExtra() {}
@@ -42,6 +46,8 @@ protected :
 	// 継承先シーンで必要ならオーバーライドする
 	virtual void Event();
 	virtual void Init();
+	// ヒットストップ中でも動かしたい演出の更新（取得バースト等）
+	virtual void UpdateDuringHitStop() {}
 
 	std::shared_ptr<KdCamera> m_camera = nullptr;
 
@@ -50,5 +56,8 @@ protected :
 
 	// 全オブジェクトのアドレスをリストで管理
 	std::list<std::shared_ptr<KdGameObject>> m_objList;
+
+	// ヒットストップ残り時間（秒）。> 0 の間は Update / PostUpdate を止める
+	float m_hitStopTimer = 0.0f;
 };
 

@@ -9,6 +9,7 @@ void Enemy::InitModel(const char* _path)
     m_hp                  = EnemyConst::MaxHp;
     m_state               = State::Idle;
     m_ignoreGravityZones  = true;
+    m_drawType            = eDrawTypeLit;   // GenerateDepthMapFromLight pass casts shadow
 
     const auto spData = ModelManager::Instance().GetModel(_path);
     if (spData)

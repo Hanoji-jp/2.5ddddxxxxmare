@@ -49,6 +49,7 @@ private:
 	void DrawUnLitExtra()     override;  // 背景Box描画
 	void DrawLitExtra()       override;  // 惑星モデル描画
 	void DrawEffectExtra()    override;  // アイテム星きらめき描画
+	void UpdateDuringHitStop() override; // ヒットストップ中も取得演出を更新
 	void DrawSpriteExtra() override;  // フェードオーバーレイ描画
 
 	void RebuildEnemies();

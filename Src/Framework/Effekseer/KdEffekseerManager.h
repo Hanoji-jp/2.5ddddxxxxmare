@@ -19,10 +19,14 @@ public:
 		Math::Vector3 Rotate = Math::Vector3::One;
 		float Speed = 1.0f;
 		bool IsLoop = false;
+		Math::Color Color = { 1.0f, 1.0f, 1.0f, 1.0f };   // 全体に乗算する色
 	};
 
 	// Effekseerエフェクト再生
 	std::weak_ptr<KdEffekseerObject> Play(const std::string& effName, const DirectX::SimpleMath::Vector3& pos, const float size = 1, const float speed = 1, const bool isLoop = false);
+
+	// 色指定つき再生（エフェクト全体に色を乗算）
+	std::weak_ptr<KdEffekseerObject> Play(const std::string& effName, const DirectX::SimpleMath::Vector3& pos, const Math::Color& color, const float size = 1, const float speed = 1, const bool isLoop = false);
 
 	void StopAllEffect();
 	void StopEffect(const std::string& name);

@@ -17,6 +17,9 @@ int ItemManager::Update(HitBox& _playerHitBox, bool& outParasolPickedUp)
 	int collected = 0;
 
 	const KdCollider::SphereInfo hitSphere = _playerHitBox.GetSphereInfo();
+	// 取得演出はプレイヤーの体の中心で再生（足元寄りの中心から少し上げる）
+	const Math::Vector3 playerPos = _playerHitBox.GetCenter()
+		+ Math::Vector3{ 0.0f, SparkleConst::PickupSpawnOffsetY, 0.0f };
 
 	for (const auto& coin : m_coins)
 	{
@@ -27,6 +30,10 @@ int ItemManager::Update(HitBox& _playerHitBox, bool& outParasolPickedUp)
 		// コインの KdCollider に対して HitBox の球を当てる
 		if (coin->Intersects(hitSphere, nullptr))
 		{
+			// 取得演出（プレイヤー体中心・コインの色）。コインはヒットストップ無し
+			PlayPickupEffect(playerPos,
+				{ SparkleConst::CoinColorR, SparkleConst::CoinColorG,
+				  SparkleConst::CoinColorB, SparkleConst::CoinColorA });
 			coin->Expire();
 			++collected;
 		}
@@ -39,12 +46,33 @@ int ItemManager::Update(HitBox& _playerHitBox, bool& outParasolPickedUp)
 
 		if (p->Intersects(hitSphere, nullptr))
 		{
+			// 取得演出（プレイヤー体中心・パラソルの色）。ヒットストップは GameScene 側で発火
+			PlayPickupEffect(playerPos,
+				{ SparkleConst::ParasolColorR, SparkleConst::ParasolColorG,
+				  SparkleConst::ParasolColorB, SparkleConst::ParasolColorA });
 			p->MarkPickedUp();
 			outParasolPickedUp = true;
 		}
 	}
 
+	UpdatePickupEffects();
+
 	return collected;
+}
+
+void ItemManager::UpdatePickupEffects()
+{
+	// 取得バーストの更新＋寿命切れ掃除（ヒットストップ中も呼ばれる）
+	for (const auto& b : m_bursts) { b->Update(); }
+	m_bursts.remove_if([](const std::shared_ptr<PickupBurst>& b) { return b->IsExpired(); });
+}
+
+void ItemManager::PlayPickupEffect(const Math::Vector3& pos, const Math::Color& baseColor)
+{
+	// 自前CPU星バーストを生成（星ごとの微ランダム色シフトは PickupBurst 内で付与）
+	auto b = std::make_shared<PickupBurst>();
+	b->Spawn(pos, baseColor);
+	m_bursts.push_back(std::move(b));
 }
 
 void ItemManager::DrawLit()
@@ -69,6 +97,11 @@ void ItemManager::DrawEffect()
 	for (const auto& p : m_parasols)
 	{
 		if (!p->IsExpired()) { p->DrawEffect(); }
+	}
+	// 取得バースト
+	for (const auto& b : m_bursts)
+	{
+		if (!b->IsExpired()) { b->DrawEffect(); }
 	}
 }
 

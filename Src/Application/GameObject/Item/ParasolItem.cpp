@@ -68,7 +68,7 @@ void ParasolItem::MarkPickedUp()
 	if (m_pickedUp) { return; }
 	m_pickedUp = true;
 
-	// 統合エフェクトの Effekseer ループを停止
+	// 取得バーストは ItemManager 側で再生。ここではループを停止するだけ。
 	m_effect.Stop();
 
 	Expire();

@@ -37,16 +37,11 @@ void Character::PostUpdate()
         m_currentFrameLog.velocity  = m_velocity;
         m_currentFrameLog.upDir     = m_upDir;
 
-        // 分軸処理：横→壁判定→縦→床・天井判定
-        m_preMovePos = GetPos();  // 水平移動前の位置を記録（移動床 XZ 判定に使う）
-
-        ApplyVelocityHorizontal();
-        CheckWall();
-        ApplyVelocityVertical();
-        CheckCeiling();
-        CheckGround();
-
-        // ---- 乗り床追従：CheckGround で今フレーム乗っていると判定された床のみ追従 ----
+        // ---- 乗り床追従：前フレームに乗っていた床の移動分を「先に」反映する ----
+        // 運んでから当たり判定を行うことで、床の移動で生じためり込みを
+        // 同フレームの CheckWall / CheckGround の押し出しで解消できる。
+        // （以前は判定後に運んでいたため、端で運ばれた分のめり込みが翌フレームまで残り、
+        //   端ちょうどで止まるとめり込んで見えていた）
         if (m_pRidingFloor)
         {
             const auto spMF = m_pRidingFloor->lock();
@@ -59,6 +54,15 @@ void Character::PostUpdate()
                 m_pRidingFloor = nullptr;
             }
         }
+
+        // 分軸処理：横→壁判定→縦→床・天井判定
+        m_preMovePos = GetPos();  // 水平移動前の位置を記録（移動床 XZ 判定に使う）
+
+        ApplyVelocityHorizontal();
+        CheckWall();
+        ApplyVelocityVertical();
+        CheckCeiling();
+        CheckGround();   // ここで m_pRidingFloor を更新（次フレームの追従に使う）
 
         m_currentFrameLog.isGround = m_isGround;
 
@@ -383,49 +387,68 @@ void Character::CheckGround()
     const bool skipDownwardSnap =
         (m_manualGravityDir == ManualGravityDir::Up) && m_ignoreGravityZones;
 
-    // ---- ★ 移動床（Planet NormalGravity Box と同一の幾何距離方式）----
-    // 早期 return より前に判定することで惑星上でも必ず拾う
+    // ---- ★ 移動床（Box惑星と同じレイキャスト方式）----
+    // AABB式の範囲チェックは使わず、-m_upDir 方向へ TypeGround レイを撃って上面へスナップ。
+    // 早期 return より前に判定することで惑星上でも必ず拾う。
     if (!skipDownwardSnap && m_velocity.Dot(m_upDir) <= 0.1f)
     {
+        // 体の幅ぶん外側にもレイを撒く（端で中心レイが外れて沈むのを防ぐ）
+        const Math::Vector3 worldFwdMF = (std::abs(m_upDir.z) < 0.9f)
+            ? Math::Vector3{ 0.0f, 0.0f, 1.0f } : Math::Vector3{ 1.0f, 0.0f, 0.0f };
+        Math::Vector3 rightAxisMF; m_upDir.Cross(worldFwdMF, rightAxisMF); rightAxisMF.Normalize();
+        Math::Vector3 fwdAxisMF;   rightAxisMF.Cross(m_upDir, fwdAxisMF);  fwdAxisMF.Normalize();
+
+        const float srMF = CollisionConst::GroundSampleRadius;
+        const Math::Vector3 sampleOffsetsMF[5] = {
+            { 0.0f, 0.0f, 0.0f },
+            rightAxisMF * srMF, rightAxisMF * -srMF,
+            fwdAxisMF   * srMF, fwdAxisMF   * -srMF,
+        };
+
         for (auto& wpMF : m_movingFloors)
         {
             const auto spMF = wpMF.lock();
             if (!spMF) { continue; }
 
-            const Math::Vector3  mfPos  = spMF->GetPos();
-            const Math::Vector3& half   = spMF->GetHalfExtents();
-            const Math::Vector3  lp     = pos - mfPos;
+            const KdCollider* col = spMF->GetCollider();
+            if (!col) { continue; }
 
-            // XZ 範囲チェックは「水平移動前の位置」で行う
-            // CheckWall で押し返されて範囲内に戻った場合を弾くため
-            const Math::Vector3  lpPre  = m_preMovePos - mfPos;
-            if (std::abs(lpPre.x) > half.x) { continue; }
-            if (std::abs(lpPre.z) > half.z) { continue; }
+            for (const Math::Vector3& off : sampleOffsetsMF)
+            {
+                const Math::Vector3 rayStart = pos + off + m_upDir * CollisionConst::GroundRayOffset;
+                const KdCollider::RayInfo ray(
+                    KdCollider::TypeGround, rayStart, -m_upDir, CollisionConst::GroundRayLength);
 
-            // 上面 + キャップ外面からの Y 距離
-            const float capSurface = PlanetConst::GrassCapThickness * 2.0f;
-            const float surfaceY   = mfPos.y + half.y + capSurface;  // 絶対Y座標
-            const float distToSurf = pos.y - surfaceY;               // 正=上方, 負=めり込み
+                std::list<KdCollider::CollisionResult> results;
+                if (!col->Intersects(ray, spMF->GetWorldMatrix(), &results)) { continue; }
 
-            // 上すぎ → スキップ
-            if (distToSurf >  CollisionConst::GroundSnapDist) { continue; }
-            // 下すぎ → スキップ（側面から押し返されて床下に入った場合を弾く）
-            // 上方向からの着地のみを意図しているため、食い込みは極小値のみ許容
-            if (distToSurf < -CollisionConst::GroundHitDistMin) { continue; }
+                // 立っている面（法線が m_upDir と揃う面）の最も手前のヒットを採用
+                const KdCollider::CollisionResult* pBest = nullptr;
+                for (const auto& r : results)
+                {
+                    if (r.m_hitNDir.Dot(m_upDir) < 0.7f) { continue; }
+                    if (!pBest || r.m_overlapDistance > pBest->m_overlapDistance) { pBest = &r; }
+                }
+                if (!pBest) { continue; }
 
-            // 上面にスナップ（Y のみ補正）
-            Math::Vector3 corrected = GetPos();
-            corrected.y -= distToSurf;
-            SetPos(corrected);
+                // 上面はキャップ外面（Box面 + capThickness*2）を着地面とする
+                const float capSurface    = PlanetConst::GrassCapThickness * 2.0f;
+                const float distToSurface = (pos - pBest->m_hitPos).Dot(m_upDir) - capSurface;
 
-            // 下方向速度をカット
-            const float normalComp = m_velocity.Dot(m_upDir);
-            if (normalComp < 0.0f) { m_velocity -= m_upDir * normalComp; }
+                if (distToSurface >  CollisionConst::GroundSnapDist) { continue; }
+                if (distToSurface < -CollisionConst::GroundSnapDist) { continue; }
 
-            m_isGround = true;
-            m_airGravitySwitchCount = 0;
-            m_pRidingFloor = &wpMF;
-            return;
+                SetPos(pos - m_upDir * distToSurface);
+
+                // 沈み込み方向の速度成分を除去
+                const float normalComp = m_velocity.Dot(m_upDir);
+                if (normalComp < 0.0f) { m_velocity -= m_upDir * normalComp; }
+
+                m_isGround = true;
+                m_airGravitySwitchCount = 0;
+                m_pRidingFloor = &wpMF;
+                return;
+            }
         }
     }
 
@@ -480,85 +503,80 @@ void Character::CheckGround()
         }
     }
 
-    // ---- ① Box惑星（Normal・非Normal共通）── 外側距離方式 ----
+    // ---- ① Box惑星（Normal・非Normal共通）── レイキャスト方式 ----
+    // AABB式の範囲チェック（abs(lp.x) > half など）は使わない。立っている面の
+    // 法線方向(-m_upDir)へ TypeGround レイを撃ち、ヒット面へスナップする。
+    // これにより地面と壁(CheckWall)が同じ箱コライダーの縁を共有するため、
+    // 端での「持ち上げ⇄押し出し」の食い違い（端めり込み）が起きない。
     if (m_pCurrentPlanet
-        && m_pCurrentPlanet->Shape == PlanetShape::Box)
+        && m_pCurrentPlanet->Shape == PlanetShape::Box
+        && m_pCurrentPlanet->pCollider)
     {
         // ジャンプ直後（m_upDir方向に速度あり）はスキップ
         if (m_velocity.Dot(m_upDir) > 0.1f) { return; }
 
-        const PlanetData& p    = *m_pCurrentPlanet;
-        const Math::Vector3 lp = pos - p.Position;
-        const Math::Vector3& half = p.BoxHalfExtents;
+        const PlanetData& p = *m_pCurrentPlanet;
 
-        // NormalBox は Top面(Y+)のみ、非NormalBox は 4面すべて判定
-        // キャップがある面はキャップ厚み分だけ外側距離を拡張する
-        const float capExt = PlanetConst::GrassCapThickness * 2.0f;
+        // 体の幅ぶん外側にもレイを撒く（中心1本だと端で外れて沈むため）
+        const Math::Vector3 worldFwd = (std::abs(m_upDir.z) < 0.9f)
+            ? Math::Vector3{ 0.0f, 0.0f, 1.0f } : Math::Vector3{ 1.0f, 0.0f, 0.0f };
+        Math::Vector3 rightAxis; m_upDir.Cross(worldFwd, rightAxis); rightAxis.Normalize();
+        Math::Vector3 fwdAxis;   rightAxis.Cross(m_upDir, fwdAxis);  fwdAxis.Normalize();
 
-        struct FaceInfo { float dist; Math::Vector3 normal; bool hasCap; };
-        const FaceInfo faces[4] = {
-            // 上面：常にキャップあり
-            {  lp.y - half.y, { 0.0f,  1.0f, 0.0f }, true  },
-            // 下面
-            { -lp.y - half.y, { 0.0f, -1.0f, 0.0f },
-              !p.bNormalGravity && p.BoxFaceGravityBottom == BoxFaceGravityMode::Inward },
-            // 右面
-            {  lp.x - half.x, {  1.0f, 0.0f, 0.0f },
-              !p.bNormalGravity && p.BoxFaceGravityRight == BoxFaceGravityMode::Inward },
-            // 左面
-            { -lp.x - half.x, { -1.0f, 0.0f, 0.0f },
-              !p.bNormalGravity && p.BoxFaceGravityLeft  == BoxFaceGravityMode::Inward },
+        const float sr = CollisionConst::GroundSampleRadius;
+        const Math::Vector3 sampleOffsets[5] = {
+            { 0.0f, 0.0f, 0.0f },
+            rightAxis * sr, rightAxis * -sr,
+            fwdAxis   * sr, fwdAxis   * -sr,
         };
 
-        // Left/Right にキャップがある場合、Top の X 判定範囲を広げる（描画側と同じ計算）
-        const bool leftHasCap  = !p.bNormalGravity && p.BoxFaceGravityLeft  == BoxFaceGravityMode::Inward;
-        const bool rightHasCap = !p.bNormalGravity && p.BoxFaceGravityRight == BoxFaceGravityMode::Inward;
-        const float topCapExtX = PlanetConst::GrassCapMinOverhang
-                               + (leftHasCap  ? PlanetConst::GrassCapThickness : 0.0f)
-                               + (rightHasCap ? PlanetConst::GrassCapThickness : 0.0f);
-
-        for (int fi = 0; fi < 4; ++fi)
+        for (const Math::Vector3& off : sampleOffsets)
         {
-            const auto& f = faces[fi];
+            const Math::Vector3 rayStart = pos + off + m_upDir * CollisionConst::GroundRayOffset;
+            const KdCollider::RayInfo ray(
+                KdCollider::TypeGround, rayStart, -m_upDir, CollisionConst::GroundRayLength);
 
-            // m_upDir と揃っていない面はスキップ
-            // NormalBox は通常 上面のみ通過、天井歩き（m_upDir 反転）なら下面が通過する
-            if (f.normal.Dot(m_upDir) < 0.7f) { continue; }
+            std::list<KdCollider::CollisionResult> results;
+            if (!p.pCollider->Intersects(ray, p.mWorld, &results)) { continue; }
 
-            // ---- この面の有効矩形範囲チェック ----
-            if (std::abs(f.normal.y) > 0.5f) // 上面 or 下面
+            // 立っている面（法線が m_upDir と揃う面）の最も手前のヒットを採用。
+            // レイの m_overlapDistance は (rayLen - hitDist) なので大きいほど手前。
+            const KdCollider::CollisionResult* pBest = nullptr;
+            for (const auto& r : results)
             {
-                // Top面はLeft/Rightキャップがある分だけX範囲を拡張
-                const float xLimit = (fi == 0) ? half.x + topCapExtX : half.x;
-                if (std::abs(lp.x) > xLimit) { continue; }
+                if (r.m_hitNDir.Dot(m_upDir) < 0.7f) { continue; }
+                if (!pBest || r.m_overlapDistance > pBest->m_overlapDistance) { pBest = &r; }
             }
-            else // 左面 or 右面
+            if (!pBest) { continue; }
+
+            // ヒット面の種別（±X / ±Y）からキャップ有無を判定（旧ロジックと一致）
+            const Math::Vector3& n = pBest->m_hitNDir;
+            bool hasCap = false;
+            if      (n.y >  0.5f) { hasCap = true; }  // 上面：常にキャップ
+            else if (n.y < -0.5f) { hasCap = !p.bNormalGravity && p.BoxFaceGravityBottom == BoxFaceGravityMode::Inward; }
+            else if (n.x >  0.5f) { hasCap = !p.bNormalGravity && p.BoxFaceGravityRight  == BoxFaceGravityMode::Inward; }
+            else if (n.x < -0.5f) { hasCap = !p.bNormalGravity && p.BoxFaceGravityLeft   == BoxFaceGravityMode::Inward; }
+
+            const float capSurface = hasCap ? (PlanetConst::GrassCapThickness * 2.0f) : 0.0f;
+            // キャップ外面からの符号付き距離：正=外側に浮き、負=めり込み
+            // 上面は m_upDir に垂直な平面なので、横オフセットしても距離は中心と同じ。
+            const float distToSurface = (pos - pBest->m_hitPos).Dot(m_upDir) - capSurface;
+
+            if (distToSurface <=  CollisionConst::GroundSnapDist &&
+                distToSurface >= -CollisionConst::GroundSnapDist)
             {
-                if (std::abs(lp.y) > half.y) { continue; }
+                SetPos(pos - m_upDir * distToSurface);
+
+                // 面法線（沈み込み）方向の速度成分を除去
+                const float normalComp = m_velocity.Dot(m_upDir);
+                if (normalComp < 0.0f) { m_velocity -= m_upDir * normalComp; }
+
+                m_isGround = true;
+                m_airGravitySwitchCount = 0;
+                return;
             }
-
-            // キャップがある面はキャップ外面（Box面 + capThickness*2）を着地面とする
-            const float capSurface = f.hasCap ? (PlanetConst::GrassCapThickness * 2.0f) : 0.0f;
-            // dist to cap surface: 正=まだ外側、負=めり込み
-            const float distToSurface = f.dist - capSurface;
-
-            if (distToSurface >  CollisionConst::GroundSnapDist) { continue; }
-            if (distToSurface < -CollisionConst::GroundSnapDist) { continue; }
-
-            // キャップ外面にスナップ
-            Math::Vector3 corrected = pos;
-            corrected.x -= f.normal.x * distToSurface;
-            corrected.y -= f.normal.y * distToSurface;
-            SetPos(corrected);
-
-            // 面法線方向の速度成分を除去
-            const float normalComp = m_velocity.Dot(f.normal);
-            if (normalComp < 0.0f) { m_velocity -= f.normal * normalComp; }
-
-            m_isGround = true;
-            m_airGravitySwitchCount = 0;
-            return;
         }
+
         // 通常は Box 惑星が担当するので Sphere/マップには落ちない
         // 天井歩き（skipDownwardSnap）の場合は、マップ天井検出のために落ちる
         if (!skipDownwardSnap) { return; }

@@ -639,7 +639,16 @@ void GameScene::Event()
 		// ── アイテム更新・取得判定 ──────────────────────
 		bool parasolPickedUp = false;
 		m_itemManager.Update(m_spPlayer->GetPickupHitBox(), parasolPickedUp);
-		if (parasolPickedUp) { m_spPlayer->GiveParasol(); }
+		if (parasolPickedUp)
+		{
+			m_spPlayer->GiveParasol();
+			// ユニーク取得時のみ：メインバーストが終わるまで停止（その後に余韻が流れる）
+			TriggerHitStop(SparkleConst::PickupBurstLife);
+			// プレイヤー本体を加算ブルームで光らせる（アイテム色）
+			m_spPlayer->TriggerPickupGlow(Math::Color{
+				SparkleConst::ParasolColorR, SparkleConst::ParasolColorG,
+				SparkleConst::ParasolColorB, 1.0f });
+		}
 		m_itemManager.Refresh();
 
 		// ── Cubun 踏みつけ・棘ダメージ判定 ────────────────
@@ -780,6 +789,15 @@ void GameScene::DrawEffectExtra()
 	m_itemManager.DrawEffect();
 }
 
+void GameScene::UpdateDuringHitStop()
+{
+	// 世界は止めたまま、取得バースト（吸い込み→放射ビーム）だけ動かす
+	m_itemManager.UpdatePickupEffects();
+
+	// プレイヤー本体の発光もヒットストップ中に進める
+	if (m_spPlayer) { m_spPlayer->UpdatePickupGlow(KdFPSController::GetDt()); }
+}
+
 void GameScene::DrawGui()
 {
 	// HP UI は常時表示（エディターモード問わず）
@@ -902,7 +920,13 @@ void GameScene::DrawGui()
 	}
 	ImGui::End();
 
-	// ─── Effekseer Viewer ─────────────────────────────────────────
+	// ─── 
+	// 
+	// 
+	// 
+	// 
+	// 
+	// Viewer ─────────────────────────────────────────
 	if (ImGui::Begin("Effekseer Viewer"))
 	{
 		ImGui::InputText("Effect File", m_efkViewerPath, sizeof(m_efkViewerPath));

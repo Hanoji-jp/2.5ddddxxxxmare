@@ -24,6 +24,7 @@ public:
     void Update()     override;
     void PostUpdate() override;
     void DrawLit()    override;
+    void DrawBright() override;   // 取得演出中の加算ブルーム発光
 
     bool IsVisible() const override { return true; }
 
@@ -50,6 +51,10 @@ public:
     // パラソルアイテム取得
     void GiveParasol() { m_hasParasol = true; }
 
+    // 取得演出の発光を開始（色指定）／ヒットストップ中も進める更新
+    void TriggerPickupGlow(const Math::Color& color);
+    void UpdatePickupGlow(float dt);
+
 private:
     void Move();
     void Jump();
@@ -67,6 +72,10 @@ private:
 
     // 描画専用ワールド行列（ピボット補正オフセットを含む。コリジョンには使わない）
     Math::Matrix m_drawWorld;
+
+    // 取得演出の発光（加算ブルーム）残り時間と色
+    float        m_pickupGlowTimer = 0.0f;
+    Math::Color  m_pickupGlowColor{ 1.0f, 1.0f, 1.0f, 1.0f };
 
     // 現在再生中のアニメーション名（同アニメの再セット防止）
     std::string  m_currentAnimName;
