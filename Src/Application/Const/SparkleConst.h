@@ -77,6 +77,41 @@ namespace SparkleConst
     constexpr float PickupFlickerFreq  = 34.0f;   // blink speed (rad/sec)
     constexpr float PickupFlickerLow   = 0.15f;   // dim level during the off-phase
 
+    // ---- Calm pickup (落ち着いた取得演出：岩石など) ----
+    // ビーム/フラッシュ/虹なし。やわらかいグロー＋小さな星がふわっと上昇して消える。
+    constexpr float CalmPickupLife   = 0.6f;   // 全体の寿命（秒）
+    constexpr float CalmGlowStart    = 0.5f;   // グロー開始サイズ
+    constexpr float CalmGlowEnd      = 2.0f;   // グロー終了サイズ（ゆるく広がる）
+    constexpr float CalmGlowAlpha    = 0.7f;   // グロー初期アルファ（明るめ）
+    constexpr float CalmGlowSpin     = 0.6f;   // グローのゆっくり回転
+    constexpr int   CalmStarCount    = 12;     // 小さな星の数（キラキラ多め）
+    constexpr float CalmStarSize     = 0.6f;   // 星サイズ
+    constexpr float CalmStarSpread   = 0.85f;  // 横の散らばり
+    constexpr float CalmStarRise     = 1.5f;   // 上昇量
+    constexpr float CalmStarTwinkle  = 18.0f;  // またたき速度（速め＝チカチカ感）
+    constexpr float CalmStarWhiten   = 0.5f;   // 星を白寄りにブレンド（0=元色, 1=白）
+    // 立ち上がりの白いポップ（元気さ用）
+    constexpr float CalmCoreSize     = 2.2f;   // 中心の白フラッシュのサイズ
+    constexpr float CalmPopFrac      = 0.35f;  // 寿命の前半この割合だけポップが出る
+
+    // ---- Ring pickup (Object_Ring_Glow 風：中央からリング状に広がる＋星が放物線で落ちる) ----
+    inline constexpr const char* RingTexPath = "Asset/Effect/Particle02.png"; // リング画像
+    constexpr float RingPickupLife   = 0.9f;   // 全体の寿命（秒）
+    constexpr float RingGlowStart    = 0.4f;   // リング開始サイズ
+    constexpr float RingGlowEnd      = 5.5f;   // リング終了サイズ（まぁまぁな速度で広がる）
+    constexpr float RingGlowAlpha    = 0.5f;   // リング初期アルファ（0.5 から減衰）
+    constexpr float RingGlowSpin     = 1.0f;   // リングの回転
+    constexpr float RingFadeFrac     = 0.4f;   // 寿命のこの割合でリングは消える（速く消す）
+    constexpr float RingCoreSize     = 2.6f;   // 中央の初期フラッシュ
+    constexpr float RingCoreFrac     = 0.3f;   // 寿命の前半この割合だけ中央が光る
+    constexpr int   RingStarCount    = 11;     // 飛び散る星の数
+    constexpr float RingStarSize     = 0.55f;  // 星サイズ
+    constexpr float RingStarOut      = 2.8f;   // 横の飛び出し速度
+    constexpr float RingStarUp       = 5.5f;   // 上方向の初速
+    constexpr float RingStarGravity  = 9.0f;   // 落下加速度（上に飛んで徐々に落ちる）
+    constexpr float RingStarSat      = 0.45f;  // 星の彩度（0=白, 1=ビビッド）→ 淡いパステル
+    constexpr float RingStarTwinkle  = 14.0f;  // またたき速度
+
     // Number of stars per item
     constexpr int   Count         = 4;
 

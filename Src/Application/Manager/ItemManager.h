@@ -2,6 +2,7 @@
 #include "../GameObject/Item/Coin.h"
 #include "../GameObject/Item/HitBox.h"
 #include "../GameObject/Item/ParasolItem.h"
+#include "../GameObject/Item/RockDrop.h"
 #include "../GameObject/Effect/PickupBurst.h"
 
 //==========================================================
@@ -29,6 +30,11 @@ public:
 	// パラソルアイテムをスポーン座標に追加
 	void SpawnParasol(const Math::Vector3& pos);
 	void ClearParasols();
+
+	// 敵撃破時：spawnPos から up 基準で岩石を 6〜10 個ドロップ
+	void SpawnRockBurst(const Math::Vector3& spawnPos, const Math::Vector3& upDir);
+	void ClearRocks();
+	int  GetRockCount() const { return m_rockCount; }
 
 	// 全アイテム更新 + プレイヤーの HitBox との取得判定
 	// 戻り値: 取得コイン数
@@ -58,9 +64,13 @@ public:
 
 private:
 	// 取得時の演出：自前CPU星バースト（アイテム色＋星ごと微ランダム色）
-	void PlayPickupEffect(const Math::Vector3& pos, const Math::Color& baseColor);
+	// style でスタイル切替（Full=通常 / Calm=控えめ / Ring=リング拡散＋星放物線）
+	void PlayPickupEffect(const Math::Vector3& pos, const Math::Color& baseColor,
+		PickupBurst::Style style = PickupBurst::Style::Full);
 
 	std::list<std::shared_ptr<Coin>>        m_coins;
 	std::list<std::shared_ptr<ParasolItem>> m_parasols;
+	std::list<std::shared_ptr<RockDrop>>    m_rocks;
 	std::list<std::shared_ptr<PickupBurst>> m_bursts;
+	int                                     m_rockCount = 0;   // 取得した岩石の累計
 };

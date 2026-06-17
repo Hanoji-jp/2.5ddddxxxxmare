@@ -75,6 +75,23 @@ namespace GravityCoreConst
 	// Rock ゆっくり自転（ラジアン/秒）
 	constexpr float RotSpeed   = 0.4f;
 
+	// ── グロー画像（中心をふんわり光らせる加算ビルボード）──────
+	// Effekseer のリングの代わりに、glow テクスチャでやわらかく光らせる
+	constexpr const char* GlowSpriteTexPath = "Asset/Effect/Particle04_bokashi_hard.png"; // 柔らかいハロー
+	constexpr float GlowSpriteSizeMul = 3.2f;  // radius に対する見かけサイズ倍率
+	constexpr float GlowSpriteAlpha   = 0.55f; // 基本アルファ（控えめに光らす）
+	constexpr float GlowSpritePulseSpeed = 2.2f; // 明滅速度（rad/秒）
+	constexpr float GlowSpritePulseAmp   = 0.18f; // サイズ・明るさの脈動幅
+
+	// ワイヤーを面より少しだけ外側に出して描く倍率（Z-fight 回避＋前面のみ表示）
+	constexpr float WireDepthOutset = 1.02f;
+
+	// Glow コアの取得判定半径（radius に対する倍率）
+	constexpr float PickupRadiusMul = 1.4f;
+
+	// 取得時に開くゴール用 WarpHole の出口を、入口(コア位置)から up 方向にどれだけ離すか
+	constexpr float GoalWarpExitUp  = 30.0f;
+
 	// ── カリング ────────────────────────────────────────
 	constexpr float CullingRadiusMul = 2.0f;  // radius * この係数 = m_cullingRadius
 

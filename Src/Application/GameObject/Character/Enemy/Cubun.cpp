@@ -67,6 +67,7 @@ void Cubun::Update()
 	if (IsDead() && !m_deathBounceActive)
 	{
 		m_requestBurstEffect = true;
+		if (!m_rockDropped) { m_requestRockDrop = true; m_rockDropped = true; }
 	}
 
 	if (IsDead()) { return; }
@@ -79,6 +80,7 @@ void Cubun::Update()
 		{
 			// m_squashActive はリセットしない → DrawLit がぺちゃんこ状態のまま終わる
 			m_requestBurstEffect = true;
+			if (!m_rockDropped) { m_requestRockDrop = true; m_rockDropped = true; }
 			Expire();  // death bounce をスキップして即消去
 		}
 		return;  // 演出中は移動・ジャンプを止める

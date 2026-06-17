@@ -76,6 +76,24 @@
     <Filter Include="Src\Application\Scene\TitleScene">
       <UniqueIdentifier>{6036b8f3-498e-401e-865a-f8632985b816}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Src\Application\GameObject">
+      <UniqueIdentifier>{e4c117e7-6baf-49fe-8597-3e2cf20edf3b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Src\Application\Camera">
+      <UniqueIdentifier>{20de8733-f7c4-4da9-8f36-fa908009d82d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Src\Application\Const">
+      <UniqueIdentifier>{71a7bd87-faf9-4728-9b69-7f91f9ce71f4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Src\Application\Editor">
+      <UniqueIdentifier>{bef0d219-747f-4e22-96c0-1103b340d541}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Src\Application\Input">
+      <UniqueIdentifier>{7f3367cf-4417-4aae-8181-91a0b293f6e6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Src\Application\Manager">
+      <UniqueIdentifier>{ce122717-4f71-4112-989f-d84601657f3c}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\Pch.h">
@@ -275,7 +293,6 @@
     <ClInclude Include="Src\Application\GameObject\Camera\CameraRoom.h" />
     <ClInclude Include="Src\Application\GameObject\Camera\RoomBounds.h" />
     <ClInclude Include="Src\Application\Editor\RoomBoundsEditor.h" />
-    <ClInclude Include="Src\Application\Camera\CameraSettings.h" />
     <ClInclude Include="Src\Application\Const\CollisionConst.h" />
     <ClInclude Include="Src\Application\Manager\CollisionManager.h" />
     <ClInclude Include="Src\Application\Const\SpawnConst.h" />
@@ -320,6 +337,14 @@
     <ClInclude Include="Src\Application\Editor\GravityCoreEditor.h" />
     <ClInclude Include="Src\Application\GameObject\Item\ParasolItem.h" />
     <ClInclude Include="Src\Application\Input\Input.h" />
+    <ClInclude Include="Src\Application\Const\RockConst.h" />
+    <ClInclude Include="Src\Application\Const\SpikeBoxConst.h" />
+    <ClInclude Include="Src\Application\Editor\SpikeBoxEditor.h" />
+    <ClInclude Include="Src\Application\GameObject\Gimmick\SpikeBox.h" />
+    <ClInclude Include="Src\Application\GameObject\Item\RockDrop.h" />
+    <ClInclude Include="Src\Application\Camera\CameraSettings.h">
+      <Filter>Src\Application\Camera</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Pch.cpp">
@@ -479,7 +504,6 @@
     <ClCompile Include="Src\Application\GameObject\Weapon\Arrow.cpp" />
     <ClCompile Include="Src\Application\GameObject\Character\AnimBlender.cpp" />
     <ClCompile Include="Src\Application\Editor\RoomBoundsEditor.cpp" />
-    <ClCompile Include="Src\Application\Camera\CameraSettings.cpp" />
     <ClCompile Include="Src\Application\GameObject\Character\Enemy\EnemyRanged.cpp" />
     <ClCompile Include="Src\Application\Editor\EnemyPlacementEditor.cpp" />
     <ClCompile Include="Src\Application\GameObject\Checkpoint\Checkpoint.cpp" />
@@ -506,6 +530,12 @@
     <ClCompile Include="Src\Application\Editor\GravityCoreEditor.cpp" />
     <ClCompile Include="Src\Application\GameObject\Item\ParasolItem.cpp" />
     <ClCompile Include="Src\Application\Input\Input.cpp" />
+    <ClCompile Include="Src\Application\Editor\SpikeBoxEditor.cpp" />
+    <ClCompile Include="Src\Application\GameObject\Gimmick\SpikeBox.cpp" />
+    <ClCompile Include="Src\Application\GameObject\Item\RockDrop.cpp" />
+    <ClCompile Include="Src\Application\Camera\CameraSettings.cpp">
+      <Filter>Src\Application\Camera</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="Src\Framework\Shader\inc_KdCommon.hlsli">

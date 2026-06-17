@@ -94,5 +94,7 @@ protected:
 public:
     // 撃破エフェクトスポーンフラグ（GameScene 側が1フレームだけ読んで AddObject する）
     bool  m_requestBurstEffect = false;
+    // 撃破時の岩石ドロップ要求フラグ（GameScene 側が1フレームだけ読んで生成する）
+    bool  m_requestRockDrop    = false;
 };
 

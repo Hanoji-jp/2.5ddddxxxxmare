@@ -49,6 +49,42 @@ void GravityCore::Init(const Math::Vector3& pos, float radius, CoreType type)
 	m_mWorld = Math::Matrix::CreateTranslation(m_pos);
 
 	if (m_type == CoreType::Rock) { BakeMesh(); }
+
+	// 本体色（タイプ別）：星・グローの色に流用
+	if (m_type == CoreType::Glow)
+	{
+		m_coreColor = { GravityCoreConst::GlowFaceR, GravityCoreConst::GlowFaceG,
+						GravityCoreConst::GlowFaceB, 1.0f };
+	}
+	else
+	{
+		m_coreColor = { GravityCoreConst::FaceColorR, GravityCoreConst::FaceColorG,
+						GravityCoreConst::FaceColorB, 1.0f };
+	}
+
+	// 星きらめきのみ（Effekseer の広がるリングは使わない）
+	ItemEffect::Params fxp;
+	fxp.starSize    = SparkleConst::ParasolStarSize;
+	fxp.orbitRadius = SparkleConst::ParasolStarRadius;
+	fxp.colorShift  = SparkleConst::ParasolColorShift;
+	fxp.color       = m_coreColor;
+	m_effect.Init(m_pos, fxp);   // efkPath 無し → 星のみ
+
+	// 中心をふんわり光らせる glow 画像ビルボード
+	m_glowTex = std::make_shared<KdTexture>();
+	if (m_glowTex->Load(GravityCoreConst::GlowSpriteTexPath))
+	{
+		m_glowPoly.SetMaterial(m_glowTex);
+		m_glowPoly.SetScale(1.0f);
+	}
+
+	// Glow コアは取得判定コライダー（TypeEvent）を持つ → 触れるとゴールが開く
+	if (m_type == CoreType::Glow)
+	{
+		m_pCollider = std::make_unique<KdCollider>();
+		m_pCollider->RegisterCollisionShape("CoreHit", Math::Vector3::Zero,
+			m_radius * GravityCoreConst::PickupRadiusMul, KdCollider::TypeEvent);
+	}
 }
 
 //==========================================================
@@ -221,6 +257,9 @@ void GravityCore::Update()
 
 	m_mWorld = Math::Matrix::CreateRotationY(m_rotAngle)
 			 * Math::Matrix::CreateTranslation(m_pos);
+
+	// 星きらめき更新＋Effekseer位置追従
+	m_effect.Update(m_pos, dt);
 }
 
 //==========================================================
@@ -228,22 +267,56 @@ void GravityCore::Update()
 //==========================================================
 void GravityCore::DrawEffect()
 {
+	// 星きらめきエフェクト（タイプ問わず常時）
+	m_effect.DrawEffect(m_pos);
+
+	// 中心をふんわり光らせる glow 画像（加算・ゆるく脈動）
+	if (m_glowTex)
+	{
+		auto& sm = KdShaderManager::Instance();
+		sm.ChangeBlendState(KdBlendState::Add);
+		sm.ChangeDepthStencilState(KdDepthStencilState::ZWriteDisable);
+		sm.m_StandardShader.SetDissolve(0.0f);
+
+		const float pulse = 1.0f + GravityCoreConst::GlowSpritePulseAmp
+			* std::sinf(m_animTime * GravityCoreConst::GlowSpritePulseSpeed);
+		const float size  = m_radius * GravityCoreConst::GlowSpriteSizeMul * pulse;
+
+		const Math::Color   col{ m_coreColor.x, m_coreColor.y, m_coreColor.z,
+								 GravityCoreConst::GlowSpriteAlpha * pulse };
+		const Math::Vector3 emis{ m_coreColor.x, m_coreColor.y, m_coreColor.z };
+		EffectBase::DrawBillboard(m_glowPoly, m_pos, size, 0.0f, col, emis);
+
+		sm.UndoDepthStencilState();
+		sm.UndoBlendState();
+	}
+
 	if (m_type == CoreType::Rock)
 	{
-		auto& shader = KdShaderManager::Instance().m_StandardShader;
+		auto& sm = KdShaderManager::Instance();
+		// 加算ブレンドで描画 → 不透明な面で奥を埋めず、光を足すだけになる
+		sm.ChangeBlendState(KdBlendState::Add);
+		auto& shader = sm.m_StandardShader;
+
+		// 面は深度を書く（ZEnable）→ 前面の半球が裏側の線を隠す
 		if (!m_triVerts.empty())
 		{
 			shader.DrawVertices(m_triVerts, m_mWorld,
 				Math::Color(1, 1, 1, 1),
-				KdDepthStencilState::ZWriteDisable,
+				KdDepthStencilState::ZEnable,
 				D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 		}
+		// ワイヤーは面より少し外側＋深度テストのみ（書き込まない）
+		// → 手前側の線だけが通り、裏側の線は前面の面に隠れて消える
 		if (!m_wireVerts.empty())
 		{
-			shader.DrawVertices(m_wireVerts, m_mWorld,
+			const Math::Matrix wireWorld =
+				Math::Matrix::CreateScale(GravityCoreConst::WireDepthOutset) * m_mWorld;
+			shader.DrawVertices(m_wireVerts, wireWorld,
 				Math::Color(1, 1, 1, 1),
 				KdDepthStencilState::ZWriteDisable);
 		}
+		sm.UndoBlendState();
 	}
 	else
 	{
@@ -347,6 +420,14 @@ void GravityCore::DrawGlowEffect()
 		}
 	}
 
+	// カメラ手前側の線分だけ描く（裏側の線を出さないようにする）
+	const Math::Vector3 camPos = KdShaderManager::Instance().GetCameraCB().CamPos;
+	auto segFront = [&](const Math::Vector3& la, const Math::Vector3& lb) -> bool
+	{
+		const Math::Vector3 wm = Math::Vector3::Transform((la + lb) * 0.5f, m_mWorld);
+		return (wm - m_pos).Dot(camPos - wm) > 0.0f;
+	};
+
 	// ── ワイヤー ─────────────────────────────────────────────
 	m_wireVerts.clear();
 	m_wireVerts.reserve(
@@ -358,9 +439,12 @@ void GravityCore::DrawGlowEffect()
 		for (int lon = 0; lon < lons; ++lon)
 		{
 			const int lonNext = (lon + 1) % lons;
+			const Math::Vector3 a = GetVert(lat, lon);
+			const Math::Vector3 b = GetVert(lat, lonNext);
+			if (!segFront(a, b)) { continue; }   // 裏側の線はスキップ
 			KdPolygon::Vertex va{}, vb{};
-			va.pos = GetVert(lat, lon);     va.color = wc;
-			vb.pos = GetVert(lat, lonNext); vb.color = wc;
+			va.pos = a; va.color = wc;
+			vb.pos = b; vb.color = wc;
 			m_wireVerts.push_back(va); m_wireVerts.push_back(vb);
 		}
 	}
@@ -368,9 +452,12 @@ void GravityCore::DrawGlowEffect()
 	{
 		for (int lat = 0; lat < lats; ++lat)
 		{
+			const Math::Vector3 a = GetVert(lat,     lon);
+			const Math::Vector3 b = GetVert(lat + 1, lon);
+			if (!segFront(a, b)) { continue; }   // 裏側の線はスキップ
 			KdPolygon::Vertex va{}, vb{};
-			va.pos = GetVert(lat,     lon); va.color = WireCol(lat);
-			vb.pos = GetVert(lat + 1, lon); vb.color = WireCol(lat + 1);
+			va.pos = a; va.color = WireCol(lat);
+			vb.pos = b; vb.color = WireCol(lat + 1);
 			m_wireVerts.push_back(va); m_wireVerts.push_back(vb);
 		}
 	}

@@ -51,6 +51,19 @@ public:
     // パラソルアイテム取得
     void GiveParasol() { m_hasParasol = true; }
 
+    // ステージセレクト（ハブ）用：惑星がない平地で歩けるよう手動重力Downを与える。
+    // 重力ゾーン外なら手動重力は維持されるので、ハブを惑星から離して置けば成立する。
+    void SetHubGravityDown() { SetInitialGravityDir(ManualGravityDir::Down); }
+
+    // 演出用：操作の有効/無効。false の間は入力を受けず重力落下のみ
+    // （投げ出され→不時着などのカットシーン用）。velocity は外部から維持できる。
+    void SetControlEnabled(bool e) { m_controlEnabled = e; }
+    bool IsControlEnabled() const  { return m_controlEnabled; }
+
+    // 演出用：見た目のタンブル回転（描画のみ。コリジョンには影響しない）
+    // 吹っ飛ばされてくるくる回る表現などに使う（ワールドZ軸まわりのロール）。
+    void SetCutsceneSpin(float radians) { m_cutsceneSpin = radians; }
+
     // 取得演出の発光を開始（色指定）／ヒットストップ中も進める更新
     void TriggerPickupGlow(const Math::Color& color);
     void UpdatePickupGlow(float dt);
@@ -110,6 +123,12 @@ private:
 
     // ダッシュ中フラグ
     bool m_isDashing = false;
+
+    // 操作の有効/無効（演出用カットシーン中は false）
+    bool m_controlEnabled = true;
+
+    // 演出用タンブル回転角（描画のみ。ワールドZ軸ロール）
+    float m_cutsceneSpin = 0.0f;
 
     // 攻撃モーション再生中フラグ（上半身 Attack 上書き管理用）
     bool m_isAttacking = false;

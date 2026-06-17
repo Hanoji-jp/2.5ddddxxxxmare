@@ -119,6 +119,12 @@ public:
         m_enemyObstacles = obstacles;
     }
 
+    // 棘ボックスリストをセット（本体の押し出し判定に使用）
+    void SetSpikeBoxObjects(const std::vector<std::weak_ptr<KdGameObject>>& spikeBoxes)
+    {
+        m_spikeBoxColliders = spikeBoxes;
+    }
+
     // コリジョンデバッグUI（ImGui）
     void DrawCollisionDebugGui();
 
@@ -180,6 +186,10 @@ protected:
     // 壁判定
     void CheckWall();
 
+    // 本体めり込み解決：球カプセル vs 地形(Box=AABB) を最近接点で押し出す。
+    // 角でも斜めに押し出されるため端めり込みが起きない（レイ非依存）。
+    void ResolvePenetration();
+
     int   m_hp          = 1;
     State m_state       = State::Idle;
 
@@ -227,6 +237,7 @@ protected:
 
     // 敵障害物リスト（めり込み防止押し出し）
     std::vector<std::weak_ptr<KdGameObject>> m_enemyObstacles;
+    std::vector<std::weak_ptr<KdGameObject>> m_spikeBoxColliders;
 
     // CheckGround の移動床 XZ 判定用：ApplyVelocityHorizontal 前の位置
     Math::Vector3 m_preMovePos = {};

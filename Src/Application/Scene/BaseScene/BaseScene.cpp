@@ -160,6 +160,7 @@ void BaseScene::Draw()
 			if (!obj->CheckInScreen(m_frustum)) { continue; }
 			obj->DrawBright();
 		}
+		DrawBrightExtra();   // objList 外の発光（ブルーム源）追加描画用
 	}
 	KdShaderManager::Instance().m_postProcessShader.EndBright();
 }

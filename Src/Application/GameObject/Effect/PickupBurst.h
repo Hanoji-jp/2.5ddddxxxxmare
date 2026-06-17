@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "EffectBase.h"
 #include "../../Const/SparkleConst.h"
 
@@ -12,13 +12,17 @@
 class PickupBurst : public EffectBase
 {
 public:
-    void Spawn(const Math::Vector3& pos, const Math::Color& color)
+    // 取得演出のスタイル
+    enum class Style { Full, Calm, Ring };
+
+    void Spawn(const Math::Vector3& pos, const Math::Color& color, Style style = Style::Full)
     {
         EnsureAssets();
         m_pos       = pos;
         m_color     = color;
         m_age       = 0.0f;
         m_isExpired = false;
+        m_style     = style;
 
         // 取得ごとに毎回振り直す（位置でなく乱数シード）
         m_seed      = static_cast<float>(std::rand());
@@ -31,7 +35,9 @@ public:
         if (m_isExpired) { return; }
         m_age += KdFPSController::GetDt();
         m_mWorld = Math::Matrix::CreateTranslation(m_pos);   // for frustum culling
-        const float total = SparkleConst::PickupBurstLife + SparkleConst::PickupAfterglowLife;
+        float total = SparkleConst::PickupBurstLife + SparkleConst::PickupAfterglowLife;
+        if      (m_style == Style::Calm) { total = SparkleConst::CalmPickupLife; }
+        else if (m_style == Style::Ring) { total = SparkleConst::RingPickupLife; }
         if (m_age >= total) { m_isExpired = true; }
     }
 
@@ -45,6 +51,16 @@ public:
         // depth write OFF: stacked coplanar additive quads must not Z-fight (no jaggies)
         KdShaderManager::Instance().ChangeDepthStencilState(KdDepthStencilState::ZWriteDisable);
         KdShaderManager::Instance().m_StandardShader.SetDissolve(0.0f);
+
+        // スタイル別の演出（Full 以外はここで描いて終了）
+        if (m_style != Style::Full)
+        {
+            if (m_style == Style::Calm) { DrawCalm(); }
+            else                        { DrawRing(); }
+            KdShaderManager::Instance().UndoDepthStencilState();
+            KdShaderManager::Instance().UndoBlendState();
+            return;
+        }
 
         // After the main burst (and hit-stop) ends -> lingering afterglow, then return.
         if (m_age > SparkleConst::PickupBurstLife)
@@ -162,6 +178,126 @@ public:
     }
 
 private:
+    // 落ち着いた取得演出：やわらかいグロー＋小さな星がふわっと上昇して消える
+    void DrawCalm() const
+    {
+        const Assets& a = GetAssets();
+        const float t    = m_age / SparkleConst::CalmPickupLife;   // 0..1
+        const float fade = 1.0f - t;                               // フェードアウト
+
+        // やわらかいグロー（ゆるく広がりつつ薄くなる）
+        const float gs = SparkleConst::CalmGlowStart
+            + (SparkleConst::CalmGlowEnd - SparkleConst::CalmGlowStart) * t;
+        const float ga = fade * SparkleConst::CalmGlowAlpha;
+        const Math::Color   gcol { m_color.x, m_color.y, m_color.z, ga };
+        const Math::Vector3 gem  { m_color.x * ga, m_color.y * ga, m_color.z * ga };
+        DrawBillboard(a.glow, m_pos, gs, m_age * SparkleConst::CalmGlowSpin, gcol, gem);
+
+        // 立ち上がりの白いポップ（元気さ）
+        const float pop = (t < SparkleConst::CalmPopFrac)
+            ? (1.0f - t / SparkleConst::CalmPopFrac) : 0.0f;
+        if (pop > 0.0f)
+        {
+            const float cs = SparkleConst::CalmCoreSize * (0.5f + 0.6f * pop);
+            const Math::Color   pcol { 1.0f, 1.0f, 1.0f, pop };
+            const Math::Vector3 pem  { 1.0f, 1.0f, 1.0f };
+            DrawBillboard(a.core, m_pos, cs, m_age * 2.0f, pcol, pem);
+        }
+
+        // 星の色は元色を白寄りにブレンド（白く光らせる）
+        const float w  = SparkleConst::CalmStarWhiten;
+        const float scr = m_color.x * (1.0f - w) + w;
+        const float scg = m_color.y * (1.0f - w) + w;
+        const float scb = m_color.z * (1.0f - w) + w;
+
+        // 小さな星が少しだけ広がりながら上昇＋またたいて消える
+        for (int i = 0; i < SparkleConst::CalmStarCount; ++i)
+        {
+            const float ang    = DirectX::XM_2PI * Hash(m_seed + i * 1.7f);
+            const float spread = SparkleConst::CalmStarSpread * (0.4f + 0.6f * Hash(m_seed + i * 3.3f))
+                               * (0.5f + 0.5f * t);
+            const float rise   = t * SparkleConst::CalmStarRise;
+            Math::Vector3 p = m_pos;
+            p.x += std::cosf(ang) * spread;
+            p.y += rise;
+            p.z += std::sinf(ang) * spread;
+
+            const float tw = 0.5f + 0.5f * std::sinf(m_age * SparkleConst::CalmStarTwinkle + i * 2.0f);
+            const float sa = fade * tw;
+            const float sz = SparkleConst::CalmStarSize * fade * (0.7f + 0.3f * tw);
+            const Math::Color   scol { scr, scg, scb, sa };
+            const Math::Vector3 sem  { scr * sa, scg * sa, scb * sa };
+            DrawBillboard(a.star, p, sz, m_age * 3.0f + i, scol, sem);
+        }
+    }
+
+    // Object_Ring_Glow 風：中央からリング状に広がる＋星が上に飛んで放物線で落ちる
+    void DrawRing() const
+    {
+        const Assets& a = GetAssets();
+        const float t    = m_age / SparkleConst::RingPickupLife;   // 0..1
+        const float fade = 1.0f - t;
+
+        // 中央から広がるリング（速く消える：寿命の RingFadeFrac で消滅、アルファは 0.5 から減衰）
+        const float ringT = (t < SparkleConst::RingFadeFrac)
+            ? (t / SparkleConst::RingFadeFrac) : 1.0f;   // 0..1（リング進行）
+        if (ringT < 1.0f)
+        {
+            const float rs = SparkleConst::RingGlowStart
+                + (SparkleConst::RingGlowEnd - SparkleConst::RingGlowStart) * ringT;
+            const float ra = SparkleConst::RingGlowAlpha * (1.0f - ringT);   // 0.5 → 0
+            const Math::Color   rcol { m_color.x, m_color.y, m_color.z, ra };
+            const Math::Vector3 rem  { m_color.x * ra, m_color.y * ra, m_color.z * ra };
+            const KdPolygon& ringPoly = a.hasRing ? a.ring : a.glow;   // 画像が無ければグローで代用
+            DrawBillboard(ringPoly, m_pos, rs, m_age * SparkleConst::RingGlowSpin, rcol, rem);
+        }
+
+        // 中央の初期フラッシュ（白）
+        const float pop = (t < SparkleConst::RingCoreFrac)
+            ? (1.0f - t / SparkleConst::RingCoreFrac) : 0.0f;
+        if (pop > 0.0f)
+        {
+            const float cs = SparkleConst::RingCoreSize * (0.5f + 0.6f * pop);
+            const Math::Color   pcol { 1.0f, 1.0f, 1.0f, pop };
+            const Math::Vector3 pem  { 1.0f, 1.0f, 1.0f };
+            DrawBillboard(a.core, m_pos, cs, m_age * 2.0f, pcol, pem);
+        }
+
+        // 星：上＋外へ飛び、重力で徐々に落ちる（放物線）。色は星ごとにランダムでカラフル。
+        const float age = m_age;
+        for (int i = 0; i < SparkleConst::RingStarCount; ++i)
+        {
+            const float ang     = DirectX::XM_2PI * static_cast<float>(i)
+                                / static_cast<float>(SparkleConst::RingStarCount)
+                                + Hash(m_seed + i) * 0.8f;
+            const float outSpd  = SparkleConst::RingStarOut * (0.6f + 0.8f * Hash(m_seed + i * 2.7f));
+            const float upSpd   = SparkleConst::RingStarUp  * (0.7f + 0.6f * Hash(m_seed + i * 4.3f));
+
+            // 放物線：横は等速、縦は up*age - 0.5*g*age^2
+            Math::Vector3 p = m_pos;
+            p.x += std::cosf(ang) * outSpd * age;
+            p.z += std::sinf(ang) * outSpd * age;
+            p.y += upSpd * age - 0.5f * SparkleConst::RingStarGravity * age * age;
+
+            // 星ごとのランダムな色（虹の中から1色）を白とブレンドして淡いパステルに
+            const Math::Vector3 raw = Rainbow(Hash(m_seed + i * 12.9898f));
+            const float sat = SparkleConst::RingStarSat;
+            const Math::Vector3 rc{
+                (1.0f - sat) + raw.x * sat,
+                (1.0f - sat) + raw.y * sat,
+                (1.0f - sat) + raw.z * sat };
+
+            const float tw = 0.6f + 0.4f * std::sinf(age * SparkleConst::RingStarTwinkle + i * 2.0f);
+            const float sa = fade * tw;
+            const float sz = SparkleConst::RingStarSize * (0.6f + 0.4f * fade) * tw;
+            const Math::Color   scol { rc.x, rc.y, rc.z, sa };
+            const Math::Vector3 sem  { rc.x * sa, rc.y * sa, rc.z * sa };
+            // 画像を回転させながら落下（spin = age 依存 ＋ 個体オフセット）
+            const float spin = age * (4.0f + 2.0f * Hash(m_seed + i * 5.1f)) + i;
+            DrawBillboard(a.star, p, sz, spin, scol, sem);
+        }
+    }
+
     // lingering soft halo after the burst (pastel rainbow, gently expanding + fading)
     void DrawAfterglow() const
     {
@@ -223,12 +359,15 @@ private:
         KdSquarePolygon            star;
         KdSquarePolygon            glow;
         KdSquarePolygon            core;
+        KdSquarePolygon            ring;   // Ring スタイル用（Particle02）
         KdStretchPoly              beam;   // tapered/flared radial beam
         std::shared_ptr<KdTexture> starTex;
         std::shared_ptr<KdTexture> glowTex;
         std::shared_ptr<KdTexture> coreTex;
+        std::shared_ptr<KdTexture> ringTex;
         std::shared_ptr<KdTexture> beamTex;
-        bool                       ready = false;
+        bool                       ready   = false;
+        bool                       hasRing = false;   // リング画像の読込成否
     };
     static Assets& GetAssets() { static Assets a; return a; }
     static void EnsureAssets()
@@ -247,6 +386,12 @@ private:
         a.glow.SetMaterial(a.glowTex); a.glow.SetScale(1.0f);
         a.core.SetMaterial(a.coreTex); a.core.SetScale(1.0f);
         a.beam.SetMaterial(a.beamTex);   // KdStretchPoly: corners set per-draw
+
+        // Ring 画像（任意：読めなければグローで代用）
+        a.ringTex = std::make_shared<KdTexture>();
+        a.hasRing = a.ringTex->Load(SparkleConst::RingTexPath);
+        if (a.hasRing) { a.ring.SetMaterial(a.ringTex); a.ring.SetScale(1.0f); }
+
         a.ready = true;
     }
     static float Hash(float n)
@@ -258,4 +403,5 @@ private:
     Math::Color m_color { 1.0f, 1.0f, 1.0f, 1.0f };
     float       m_seed = 0.0f;
     int         m_beamCount = SparkleConst::PickupBeamCountMin;   // re-rolled each pickup
+    Style       m_style = Style::Full;   // 取得演出スタイル
 };

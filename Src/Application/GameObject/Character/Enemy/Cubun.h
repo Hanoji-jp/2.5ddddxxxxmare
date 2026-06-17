@@ -71,6 +71,7 @@ private:
 	float m_jumpTimer    = 0.0f;  // 着地後のジャンプ待機タイマー
 	bool  m_squashActive = false; // ぺちゃんこ演出中
 	float m_squashTimer  = 0.0f;  // 演出経過時間
+	bool  m_rockDropped  = false; // 岩石ドロップ要求を1回だけ出すためのガード
 
 	// 叩きつけコライダー（モデルの COL_Attack ノードをレイで判定）
 	std::unique_ptr<KdCollider> m_pAttackCollider = nullptr;

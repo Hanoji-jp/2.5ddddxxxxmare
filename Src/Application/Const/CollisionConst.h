@@ -66,5 +66,15 @@ namespace CollisionConst
 
     // 壁レイ方向（8方向）の数
     constexpr int   WallRayDirCount     = 8;
+
+    // -------------------------------------------------------
+    // 形状押し出し（球カプセル vs 地形）：本体のめり込み解決
+    //   レイではなく「形状が重なったら法線方向へ押し戻す」方式。
+    //   角(コーナー)でも最近接点方向へ斜めに押し出されるので端めり込みが起きない。
+    // -------------------------------------------------------
+    constexpr float BodyRadius          = 0.4f;  // プレイヤー本体の球半径（見た目の体半幅）
+    constexpr float BodyLowerOffset     = 0.4f;  // 下側の球：足元(m_upDir)からのオフセット
+    constexpr float BodyUpperOffset     = 1.0f;  // 上側の球：足元(m_upDir)からのオフセット
+    constexpr int   PenetrationIterations = 3;   // 複数接触の収束反復回数
 }
 

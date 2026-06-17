@@ -1,5 +1,7 @@
 ﻿#pragma once
 #include "../../Const/GravityCoreConst.h"
+#include "../../Const/ItemConst.h"
+#include "../Effect/ItemEffect.h"
 
 //==========================================================
 // GravityCore
@@ -25,6 +27,9 @@ public:
 
 	bool IsVisible() const override { return true; }
 
+	// Glow タイプか（ゴール用 WarpHole を開くトリガー）
+	bool IsGlow() const { return m_type == CoreType::Glow; }
+
 private:
 	void BakeMesh();           // Rock 用: ジッター球体を事前計算
 	void DrawGlowEffect();     // Glow 描画（DrawEffect から呼ぶ）
@@ -44,4 +49,12 @@ private:
 	// ── 共用頂点バッファ（DrawEffect/DrawBright で毎フレーム構築）──
 	mutable std::vector<KdPolygon::Vertex> m_triVerts;
 	mutable std::vector<KdPolygon::Vertex> m_wireVerts;
+
+	// ── 星きらめきエフェクト（Effekseer ループは使わず星だけ）──
+	ItemEffect m_effect;
+
+	// ── 中心をふんわり光らせる glow 画像ビルボード（加算）──
+	KdSquarePolygon            m_glowPoly;
+	std::shared_ptr<KdTexture> m_glowTex;
+	Math::Color                m_coreColor{ 1.0f, 1.0f, 1.0f, 1.0f }; // タイプ別の本体色
 };

@@ -61,6 +61,23 @@ void Player::Update()
 	// アイテム取得ヒットボックスをプレイヤー座標に合わせて更新
 	m_pickupHitBox.Update(GetPos());
 
+	// ── 演出用：操作無効中は入力を受けず、重力落下のみ ──
+	// （投げ出され→不時着などのカットシーン用。velocity は外部設定を維持）
+	if (!m_controlEnabled)
+	{
+		m_moveVelocity = Math::Vector3::Zero;
+		m_isDashing    = false;
+		m_state        = m_isGround ? State::Idle : State::Fall;
+
+		Character::Update();   // 重力（移動・当たり判定は PostUpdate 側）
+
+		// 状態に応じてアニメ（Fall / Idle）を設定してから更新
+		if (m_state == State::Fall) { if (!ChangeAnimIfExist("Fall", true)) { ChangeAnim("Idle", true); } }
+		else                        { ChangeAnim("Idle", true); }
+		m_animBlender.Update(m_modelWork, 1.0f);
+		return;
+	}
+
 	// 手動重力ゾーンチェック
 	const bool canUseManualGravity = ManualGravityZoneManager::Instance().CanUseManualGravity(GetPos());
 
@@ -461,6 +478,19 @@ void Player::PostUpdate()
             Math::Matrix drawNoTrans = m_drawWorld;
             drawNoTrans._41 = 0.0f; drawNoTrans._42 = 0.0f; drawNoTrans._43 = 0.0f;
             drawNoTrans = drawNoTrans * tiltRot;
+            drawNoTrans._41 = drawPos.x; drawNoTrans._42 = drawPos.y; drawNoTrans._43 = drawPos.z;
+            m_drawWorld = drawNoTrans;
+        }
+
+        // ── 演出用タンブル（描画のみ。ワールドZ軸まわりにロール）──
+        if (std::abs(m_cutsceneSpin) > 0.0001f)
+        {
+            const Math::Vector3 drawPos = { m_drawWorld._41, m_drawWorld._42, m_drawWorld._43 };
+            const Math::Matrix  spinRot = Math::Matrix::CreateFromAxisAngle(
+                Math::Vector3{ 0.0f, 0.0f, 1.0f }, m_cutsceneSpin);
+            Math::Matrix drawNoTrans = m_drawWorld;
+            drawNoTrans._41 = 0.0f; drawNoTrans._42 = 0.0f; drawNoTrans._43 = 0.0f;
+            drawNoTrans = drawNoTrans * spinRot;
             drawNoTrans._41 = drawPos.x; drawNoTrans._42 = drawPos.y; drawNoTrans._43 = drawPos.z;
             m_drawWorld = drawNoTrans;
         }

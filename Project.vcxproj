@@ -288,6 +288,7 @@
     <ClInclude Include="Src\Application\Const\GravityCoreConst.h" />
     <ClInclude Include="Src\Application\Const\GravityRingConst.h" />
     <ClInclude Include="Src\Application\Const\ItemConst.h" />
+    <ClInclude Include="Src\Application\Const\RockConst.h" />
     <ClInclude Include="Src\Application\Const\JuiceConst.h" />
     <ClInclude Include="Src\Application\Const\LightConst.h" />
     <ClInclude Include="Src\Application\Const\MapConst.h" />
@@ -296,10 +297,13 @@
     <ClInclude Include="Src\Application\Const\PlayerConst.h" />
     <ClInclude Include="Src\Application\Const\PostProcessConst.h" />
     <ClInclude Include="Src\Application\Const\SpawnConst.h" />
+    <ClInclude Include="Src\Application\Const\StageSelectConst.h" />
     <ClInclude Include="Src\Application\Const\StarFieldConst.h" />
+    <ClInclude Include="Src\Application\Const\StoryConst.h" />
     <ClInclude Include="Src\Application\Const\UIConst.h" />
     <ClInclude Include="Src\Application\Const\WarpHoleConst.h" />
     <ClInclude Include="Src\Application\Const\WindBoxConst.h" />
+    <ClInclude Include="Src\Application\Const\SpikeBoxConst.h" />
     <ClInclude Include="Src\Application\Editor\CheckpointEditor.h" />
     <ClInclude Include="Src\Application\Editor\EnemyPlacementData.h" />
     <ClInclude Include="Src\Application\Editor\EnemyPlacementEditor.h" />
@@ -308,6 +312,7 @@
     <ClInclude Include="Src\Application\Editor\RoomBoundsEditor.h" />
     <ClInclude Include="Src\Application\Editor\WarpHoleEditor.h" />
     <ClInclude Include="Src\Application\Editor\WindBoxEditor.h" />
+    <ClInclude Include="Src\Application\Editor\SpikeBoxEditor.h" />
     <ClInclude Include="Src\Application\GameObject\BackGround\BackGround.h" />
     <ClInclude Include="Src\Application\GameObject\BackGround\StarField.h" />
     <ClInclude Include="Src\Application\GameObject\Camera\CameraRoom.h" />
@@ -328,7 +333,9 @@
     <ClInclude Include="Src\Application\GameObject\Gimmick\MovingFloor.h" />
     <ClInclude Include="Src\Application\GameObject\Gimmick\WarpHole.h" />
     <ClInclude Include="Src\Application\GameObject\Gimmick\WindBox.h" />
+    <ClInclude Include="Src\Application\GameObject\Gimmick\SpikeBox.h" />
     <ClInclude Include="Src\Application\GameObject\Item\Coin.h" />
+    <ClInclude Include="Src\Application\GameObject\Item\RockDrop.h" />
     <ClInclude Include="Src\Application\GameObject\Item\HitBox.h" />
     <ClInclude Include="Src\Application\GameObject\Item\ParasolItem.h" />
     <ClInclude Include="Src\Application\GameObject\Light\PointLightObject.h" />
@@ -347,6 +354,8 @@
     <ClInclude Include="Src\Application\Scene\EditorScene\EditorScene.h" />
     <ClInclude Include="Src\Application\Scene\GameScene\GameScene.h" />
     <ClInclude Include="Src\Application\Scene\SceneManager.h" />
+    <ClInclude Include="Src\Application\Scene\StageSelectScene\StageSelectScene.h" />
+    <ClInclude Include="Src\Application\Scene\StoryScene\StoryScene.h" />
     <ClInclude Include="Src\Application\Scene\TitleScene\TitleScene.h" />
     <ClInclude Include="Src\Framework\Direct3D\KdMaterial.h" />
     <ClInclude Include="Src\Framework\Direct3D\Polygon\KdPolygon.h" />
@@ -408,6 +417,7 @@
     <ClCompile Include="Src\Application\Editor\RoomBoundsEditor.cpp" />
     <ClCompile Include="Src\Application\Editor\WarpHoleEditor.cpp" />
     <ClCompile Include="Src\Application\Editor\WindBoxEditor.cpp" />
+    <ClCompile Include="Src\Application\Editor\SpikeBoxEditor.cpp" />
     <ClCompile Include="Src\Application\GameObject\BackGround\BackGround.cpp" />
     <ClCompile Include="Src\Application\GameObject\BackGround\StarField.cpp" />
     <ClCompile Include="Src\Application\GameObject\Camera\EditorCamera.cpp" />
@@ -426,8 +436,10 @@
     <ClCompile Include="Src\Application\GameObject\Gimmick\MovingFloor.cpp" />
     <ClCompile Include="Src\Application\GameObject\Gimmick\WarpHole.cpp" />
     <ClCompile Include="Src\Application\GameObject\Gimmick\WindBox.cpp" />
+    <ClCompile Include="Src\Application\GameObject\Gimmick\SpikeBox.cpp" />
     <ClCompile Include="Src\Application\GameObject\Item\Coin.cpp" />
     <ClCompile Include="Src\Application\GameObject\Item\ParasolItem.cpp" />
+    <ClCompile Include="Src\Application\GameObject\Item\RockDrop.cpp" />
     <ClCompile Include="Src\Application\GameObject\Light\PointLightObject.cpp" />
     <ClCompile Include="Src\Application\GameObject\UI\HpUI.cpp" />
     <ClCompile Include="Src\Application\GameObject\Weapon\Arrow.cpp" />
@@ -443,6 +455,8 @@
     <ClCompile Include="Src\Application\Scene\EditorScene\EditorScene.cpp" />
     <ClCompile Include="Src\Application\Scene\GameScene\GameScene.cpp" />
     <ClCompile Include="Src\Application\Scene\SceneManager.cpp" />
+    <ClCompile Include="Src\Application\Scene\StageSelectScene\StageSelectScene.cpp" />
+    <ClCompile Include="Src\Application\Scene\StoryScene\StoryScene.cpp" />
     <ClCompile Include="Src\Application\Scene\TitleScene\TitleScene.cpp" />
     <ClCompile Include="Src\Framework\Direct3D\KdMaterial.cpp">
       <SubType>

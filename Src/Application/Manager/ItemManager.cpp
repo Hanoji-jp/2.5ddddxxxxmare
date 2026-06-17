@@ -55,6 +55,23 @@ int ItemManager::Update(HitBox& _playerHitBox, bool& outParasolPickedUp)
 		}
 	}
 
+	// ── 岩石ドロップ（敵撃破でばら撒かれる通貨）の更新＋取得判定 ──
+	for (const auto& rock : m_rocks)
+	{
+		if (rock->IsExpired()) { continue; }
+
+		rock->Update();
+
+		// 散らばり猶予を過ぎたら取得可能
+		if (rock->IsPickable() && rock->Intersects(hitSphere, nullptr))
+		{
+			// 岩石は Ring スタイル：中央からリング拡散＋星が上に飛んで放物線で落ちる（白）
+			PlayPickupEffect(playerPos, { 1.0f, 1.0f, 1.0f, 1.0f }, PickupBurst::Style::Ring);
+			rock->Expire();
+			++m_rockCount;
+		}
+	}
+
 	UpdatePickupEffects();
 
 	return collected;
@@ -67,11 +84,12 @@ void ItemManager::UpdatePickupEffects()
 	m_bursts.remove_if([](const std::shared_ptr<PickupBurst>& b) { return b->IsExpired(); });
 }
 
-void ItemManager::PlayPickupEffect(const Math::Vector3& pos, const Math::Color& baseColor)
+void ItemManager::PlayPickupEffect(const Math::Vector3& pos, const Math::Color& baseColor,
+	PickupBurst::Style style)
 {
 	// 自前CPU星バーストを生成（星ごとの微ランダム色シフトは PickupBurst 内で付与）
 	auto b = std::make_shared<PickupBurst>();
-	b->Spawn(pos, baseColor);
+	b->Spawn(pos, baseColor, style);
 	m_bursts.push_back(std::move(b));
 }
 
@@ -98,6 +116,11 @@ void ItemManager::DrawEffect()
 	{
 		if (!p->IsExpired()) { p->DrawEffect(); }
 	}
+	// 岩石ドロップ（加算でローポリ描画）
+	for (const auto& rock : m_rocks)
+	{
+		if (!rock->IsExpired()) { rock->DrawEffect(); }
+	}
 	// 取得バースト
 	for (const auto& b : m_bursts)
 	{
@@ -109,6 +132,27 @@ void ItemManager::Refresh()
 {
 	m_coins.remove_if([](const std::shared_ptr<Coin>& c) { return c->IsExpired(); });
 	m_parasols.remove_if([](const std::shared_ptr<ParasolItem>& p) { return p->IsExpired(); });
+	m_rocks.remove_if([](const std::shared_ptr<RockDrop>& r) { return r->IsExpired(); });
+}
+
+void ItemManager::SpawnRockBurst(const Math::Vector3& spawnPos, const Math::Vector3& upDir)
+{
+	// 6〜10 個ランダム
+	const int range = RockConst::DropCountMax - RockConst::DropCountMin + 1;
+	const int count = RockConst::DropCountMin + (std::rand() % (range > 0 ? range : 1));
+	for (int i = 0; i < count; ++i)
+	{
+		auto r = std::make_shared<RockDrop>();
+		r->Spawn(spawnPos, upDir);
+		m_rocks.push_back(std::move(r));
+	}
+}
+
+void ItemManager::ClearRocks()
+{
+	for (auto& r : m_rocks) { r->Expire(); }
+	m_rocks.remove_if([](const std::shared_ptr<RockDrop>& r) { return r->IsExpired(); });
+	m_rockCount = 0;
 }
 
 void ItemManager::SpawnCoinLine(const Math::Vector3& _start, const Math::Vector3& _end, int _count)

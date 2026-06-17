@@ -2,6 +2,7 @@
 #include "Character.h"
 #include "../Gimmick/MovingFloor.h"
 #include "../Gimmick/WindBox.h"
+#include "../Gimmick/SpikeBox.h"
 
 void Character::Update()
 {
@@ -63,6 +64,10 @@ void Character::PostUpdate()
         ApplyVelocityVertical();
         CheckCeiling();
         CheckGround();   // ここで m_pRidingFloor を更新（次フレームの追従に使う）
+
+        // 本体めり込み解決（最後の保証）：球カプセル vs 地形を最近接点で押し出す。
+        // 角でも斜めに押し出されるため、レイで取りこぼした端めり込みもここで必ず解消される。
+        ResolvePenetration();
 
         m_currentFrameLog.isGround = m_isGround;
 
@@ -1055,6 +1060,169 @@ void Character::CheckWall()
     }
 
     SetPos(pos);
+}
+
+// ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== =====
+// 本体めり込み解決：球カプセル vs 地形(Box=AABB) を最近接点で押し出す
+//  - レイではなく「形状が重なったら法線方向へ押し戻す」方式。
+//  - 角(コーナー)では最近接点が頂点/辺になるので、斜め方向に正しく押し出される。
+//    → 真四角の箱の端でも、レイでは取りこぼす端めり込みが原理的に起きない。
+//  - Box は回転しない前提（軸並行=AABB）。将来回転させる場合は地形ローカル空間へ
+//    変換して同じ「球 vs AABB」を回せば OBB として動く。
+// ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== =====
+void Character::ResolvePenetration()
+{
+    const float r = CollisionConst::BodyRadius;
+    const float offsets[2] = { CollisionConst::BodyLowerOffset, CollisionConst::BodyUpperOffset };
+
+    // 1つのワールドAABBに対して、カプセル各球を押し出す。押し出したら true。
+    auto resolveAABB = [&](const Math::Vector3& bmin, const Math::Vector3& bmax) -> bool
+    {
+        bool pushed = false;
+        for (float off : offsets)
+        {
+            const Math::Vector3 c = GetPos() + m_upDir * off;  // 球の中心（ワールド）
+
+            // AABB 上の最近接点（各軸を範囲内へクランプ）。これは範囲フラグ判定ではなく
+            // 押し出しベクトルを得るための最近接点計算。
+            const Math::Vector3 closest = {
+                std::max(bmin.x, std::min(c.x, bmax.x)),
+                std::max(bmin.y, std::min(c.y, bmax.y)),
+                std::max(bmin.z, std::min(c.z, bmax.z)),
+            };
+
+            const Math::Vector3 d = c - closest;
+            const float dist2 = d.LengthSquared();
+            if (dist2 > r * r) { continue; }  // 重なっていない
+
+            if (dist2 > 1e-8f)
+            {
+                // 表面の外側：最近接点→中心方向へ (r - dist) 押し出す（角は斜めになる）
+                const float dist = std::sqrtf(dist2);
+                const Math::Vector3 n = d / dist;
+                SetPos(GetPos() + n * (r - dist));
+            }
+            else
+            {
+                // 中心がボックス内部：最も浅い面の外向きへ押し出す
+                const float faceDist[6] = {
+                    bmax.x - c.x, c.x - bmin.x,
+                    bmax.y - c.y, c.y - bmin.y,
+                    bmax.z - c.z, c.z - bmin.z,
+                };
+                const Math::Vector3 faceN[6] = {
+                    {  1.0f, 0.0f, 0.0f }, { -1.0f, 0.0f, 0.0f },
+                    {  0.0f, 1.0f, 0.0f }, {  0.0f,-1.0f, 0.0f },
+                    {  0.0f, 0.0f, 1.0f }, {  0.0f, 0.0f,-1.0f },
+                };
+                int best = 0;
+                for (int i = 1; i < 6; ++i) { if (faceDist[i] < faceDist[best]) { best = i; } }
+                SetPos(GetPos() + faceN[best] * (faceDist[best] + r));
+            }
+            pushed = true;
+        }
+        return pushed;
+    };
+
+    // 箱を「素の半幅 + キャップがある面だけ capThickness*2 膨らませた」ワールドAABBにして押し出す。
+    // プレイヤーはグラスキャップ表面に立つ（CheckGround も同じ面にスナップする）ので、
+    // 押し出しもこの膨張面を相手にしないと、キャップ領域の角でレイ隙間の貫通が残る。
+    const float capT2 = PlanetConst::GrassCapThickness * 2.0f;
+    auto resolveBox = [&](const Math::Vector3& center, const Math::Vector3& half,
+                          bool isNormal,
+                          BoxFaceGravityMode top,  BoxFaceGravityMode bottom,
+                          BoxFaceGravityMode left, BoxFaceGravityMode right) -> bool
+    {
+        Math::Vector3 bmin = center - half;
+        Math::Vector3 bmax = center + half;
+        const bool capTop    = isNormal ? true : (top    == BoxFaceGravityMode::Inward);
+        const bool capBottom = !isNormal && (bottom == BoxFaceGravityMode::Inward);
+        const bool capRight  = !isNormal && (right  == BoxFaceGravityMode::Inward);
+        const bool capLeft   = !isNormal && (left   == BoxFaceGravityMode::Inward);
+        if (capTop)    { bmax.y += capT2; }
+        if (capBottom) { bmin.y -= capT2; }
+        if (capRight)  { bmax.x += capT2; }
+        if (capLeft)   { bmin.x -= capT2; }
+        return resolveAABB(bmin, bmax);
+    };
+
+    // 任意コライダーに対する球押し出し（キャップの無い箱＝WindBox 等に使う）。
+    // エンジンの SphereInfo は三角形メッシュへワールド行列込みで球を押し出してくれる。
+    auto resolveCollider = [&](const KdCollider& col, const Math::Matrix& mat) -> bool
+    {
+        bool pushed = false;
+        for (float off : offsets)
+        {
+            const Math::Vector3 c = GetPos() + m_upDir * off;
+            const KdCollider::SphereInfo sphere(KdCollider::TypeBump, c, r);
+
+            std::list<KdCollider::CollisionResult> results;
+            if (!col.Intersects(sphere, mat, &results)) { continue; }
+
+            const KdCollider::CollisionResult* pBest = nullptr;
+            for (const auto& res : results)
+            {
+                if (!pBest || res.m_overlapDistance > pBest->m_overlapDistance) { pBest = &res; }
+            }
+            if (pBest && pBest->m_overlapDistance > 0.0f)
+            {
+                SetPos(GetPos() + pBest->m_hitDir * pBest->m_overlapDistance);
+                pushed = true;
+            }
+        }
+        return pushed;
+    };
+
+    // 複数接触（角など）に収束させるため数回反復する
+    for (int iter = 0; iter < CollisionConst::PenetrationIterations; ++iter)
+    {
+        bool any = false;
+
+        // Box 惑星
+        for (const auto& p : PlanetGravityManager::Instance().GetPlanets())
+        {
+            if (p.Shape != PlanetShape::Box) { continue; }
+            any |= resolveBox(p.Position, p.BoxHalfExtents, p.bNormalGravity,
+                p.BoxFaceGravityTop, p.BoxFaceGravityBottom,
+                p.BoxFaceGravityLeft, p.BoxFaceGravityRight);
+        }
+
+        // 移動床（GetPos=中心, GetHalfExtents=半幅）
+        for (auto& wpMF : m_movingFloors)
+        {
+            const auto spMF = wpMF.lock();
+            if (!spMF) { continue; }
+            any |= resolveBox(spMF->GetPos(), spMF->GetHalfExtents(), spMF->IsNormalGravity(),
+                spMF->GetFaceTop(), spMF->GetFaceBottom(),
+                spMF->GetFaceLeft(), spMF->GetFaceRight());
+        }
+
+        // WindBox（キャップ無し：素のコライダーへ球で押し出す）
+        for (auto& wpWB : m_windBoxColliders)
+        {
+            const auto spWB = wpWB.lock();
+            if (!spWB) { continue; }
+            const auto spWBBox = std::dynamic_pointer_cast<WindBox>(spWB);
+            if (!spWBBox || !spWBBox->IsEnabled()) { continue; }
+            const KdCollider* col = spWBBox->GetCollider();
+            if (!col) { continue; }
+            any |= resolveCollider(*col, spWBBox->GetWorldMatrix());
+        }
+
+        // SpikeBox（COL のワールドAABB に対し、惑星と同じ最近接点押し出し＝robust）
+        for (auto& wpSB : m_spikeBoxColliders)
+        {
+            const auto spSB = wpSB.lock();
+            if (!spSB) { continue; }
+            const auto spSpike = std::dynamic_pointer_cast<SpikeBox>(spSB);
+            if (!spSpike || !spSpike->IsEnabled() || !spSpike->HasColAabb()) { continue; }
+            const Math::Vector3 c = spSpike->GetColCenter();
+            const Math::Vector3 h = spSpike->GetColHalf();
+            any |= resolveAABB(c - h, c + h);
+        }
+
+        if (!any) { break; }
+    }
 }
 
 void Character::TakeDamage(int _damage)

@@ -171,6 +171,11 @@ void GameScene::Event()
 		RebuildGravityCores();
 		m_gravityCoreEditor.ClearDirty();
 	}
+	if (m_spikeBoxEditor.IsDirty())
+	{
+		RebuildSpikeBoxes();
+		m_spikeBoxEditor.ClearDirty();
+	}
 
 	// ── 風ボックス：範囲内プレイヤーに風を適用 ──────────
 	bool inAnyWind = false;
@@ -651,6 +656,27 @@ void GameScene::Event()
 		}
 		m_itemManager.Refresh();
 
+		// ── Glow コア取得 → その位置にゴール用 WarpHole を開く ──
+		{
+			const KdCollider::SphereInfo coreHit = m_spPlayer->GetPickupHitBox().GetSphereInfo();
+			for (auto& gc : m_gravityCores)
+			{
+				if (!gc || gc->IsExpired() || !gc->IsGlow()) { continue; }
+				if (gc->Intersects(coreHit, nullptr))
+				{
+					const Math::Vector3 corePos = gc->GetPos();
+					gc->Expire();
+					SpawnGoalWarpHole(corePos);
+
+					// 取得演出：プレイヤーを光らせ、メインバーストが終わるまで停止
+					TriggerHitStop(SparkleConst::PickupBurstLife);
+					m_spPlayer->TriggerPickupGlow(Math::Color{
+						GravityCoreConst::GlowFaceR, GravityCoreConst::GlowFaceG,
+						GravityCoreConst::GlowFaceB, 1.0f });
+				}
+			}
+		}
+
 		// ── Cubun 踏みつけ・棘ダメージ判定 ────────────────
 		// 頭側(+m_upDir)＝安全面：上から踏むと 1 回で撃破＋プレイヤー跳ね返り
 		// 足側(-m_upDir)＝棘面　：触れるとプレイヤー被ダメージ
@@ -690,6 +716,21 @@ void GameScene::Event()
 			}
 		}
 
+		// ── SpikeBox 棘ダメージ判定 ──────────────────────
+		if (m_spPlayer && !m_spPlayer->IsExpired() && !m_spPlayer->IsDead())
+		{
+			const Math::Vector3 ppos = m_spPlayer->GetPos()
+				+ m_spPlayer->GetUpDir() * SpikeBoxConst::HitRadius;
+			for (auto& sb : m_spikeBoxes)
+			{
+				if (!sb || !sb->IsEnabled()) { continue; }
+				if (sb->IsSpikeHit(ppos, SpikeBoxConst::HitRadius))
+				{
+					m_spPlayer->TakeDamageFrom(SpikeBoxConst::SpikeDamage, sb->GetCenter());
+				}
+			}
+		}
+
 		// ── Cubun 撃破バーストエフェクト ────────────────
 		{
 			const auto dustData = ModelManager::Instance().GetModel(PlayerConst::DustPath);
@@ -701,6 +742,12 @@ void GameScene::Event()
 					auto burst = std::make_shared<StarBurstEffect>();
 					burst->Spawn(sp->GetPos(), sp->GetUpDir(), dustData);
 					AddObject(burst);
+				}
+				// 撃破時の岩石ドロップ（6〜10個ばら撒く）
+				if (sp->m_requestRockDrop)
+				{
+					sp->m_requestRockDrop = false;
+					m_itemManager.SpawnRockBurst(sp->GetPos(), sp->GetUpDir());
 				}
 			}
 		}
@@ -750,6 +797,19 @@ void GameScene::DrawSpriteExtra()
 	// ── 被ダメ赤フラッシュ ──
 	KdShaderManager::Instance().m_postProcessShader.DrawDamageFlash();
 
+	// ── シーン開始フェードイン（白→透明。タイトルの白フラッシュから繋ぐ）──
+	if (m_introFadeAlpha > 0.0f)
+	{
+		const float kDt = KdFPSController::GetDt();
+		const Math::Color introOverlay(1.0f, 1.0f, 1.0f, m_introFadeAlpha);
+		KdShaderManager::Instance().m_spriteShader.DrawBox(
+			screenW / 2, screenH / 2,
+			screenW, screenH,
+			&introOverlay, true);
+		m_introFadeAlpha -= JuiceConst::IntroFadeSpeed * kDt;
+		if (m_introFadeAlpha < 0.0f) { m_introFadeAlpha = 0.0f; }
+	}
+
 	// ── 引力コンパスUI ──
 
 }
@@ -768,6 +828,7 @@ void GameScene::DrawDebugExtra()
 		m_movingFloorEditor.DrawDebug();
 		m_windBoxEditor.DrawDebug();
 		m_gravityCoreEditor.DrawDebug();
+		m_spikeBoxEditor.DrawDebug();
 		PlanetGravityManager::Instance().DrawDebugShapes();
 	}
 }
@@ -814,6 +875,7 @@ void GameScene::DrawGui()
 	m_movingFloorEditor.DrawGui();
 	m_windBoxEditor.DrawGui();
 	m_gravityCoreEditor.DrawGui();
+	m_spikeBoxEditor.DrawGui();
 	CameraSettings::Instance().DrawGui();
 	PlanetGravityManager::Instance().DrawGui();
 	ManualGravityZoneManager::Instance().DrawGui();
@@ -1029,6 +1091,20 @@ void GameScene::RebuildWarpHoles()
 	}
 }
 
+void GameScene::SpawnGoalWarpHole(const Math::Vector3& pos)
+{
+	// コア位置を入口に、ゴール用の WarpHole を動的生成して開く（Enabled=true）
+	WarpHoleData d;
+	d.EntryPos = pos;
+	d.ExitPos  = pos + Math::Vector3{ 0.0f, GravityCoreConst::GoalWarpExitUp, 0.0f };
+	d.Enabled  = true;
+
+	auto sp = std::make_shared<WarpHole>(d);
+	sp->Init();
+	m_warpHoles.push_back(sp);
+	AddObject(sp);
+}
+
 void GameScene::RebuildMovingFloors()
 {
 	for (auto& mf : m_movingFloors) { mf->Expire(); }
@@ -1074,6 +1150,29 @@ void GameScene::RebuildWindBoxes()
 	if (m_spPlayer) { m_spPlayer->SetWindBoxObjects(wpList); }
 	for (auto& sp : m_enemies) { sp->SetWindBoxObjects(wpList); }
 	for (auto& sp : m_cubuns)  { sp->SetWindBoxObjects(wpList); }
+}
+
+void GameScene::RebuildSpikeBoxes()
+{
+	for (auto& sb : m_spikeBoxes) { sb->Expire(); }
+	m_spikeBoxes.clear();
+
+	for (const auto& data : m_spikeBoxEditor.GetBoxes())
+	{
+		auto sp = std::make_shared<SpikeBox>();
+		sp->Init(data);
+		m_spikeBoxes.push_back(sp);
+		AddObject(sp);
+	}
+
+	// プレイヤー・敵に SpikeBox コライダーリストを登録（押し出し用）
+	std::vector<std::weak_ptr<KdGameObject>> wpList;
+	wpList.reserve(m_spikeBoxes.size());
+	for (const auto& sp : m_spikeBoxes) { wpList.push_back(sp); }
+
+	if (m_spPlayer) { m_spPlayer->SetSpikeBoxObjects(wpList); }
+	for (auto& sp : m_enemies) { sp->SetSpikeBoxObjects(wpList); }
+	for (auto& sp : m_cubuns)  { sp->SetSpikeBoxObjects(wpList); }
 }
 
 void GameScene::RebuildGravityCores()
@@ -1193,6 +1292,10 @@ void GameScene::Init()
 	// 重力コアエディター → 重力コア生成
 	RebuildGravityCores();
 	m_gravityCoreEditor.ClearDirty();
+
+	// 棘ボックスエディター → 棘ボックス生成
+	RebuildSpikeBoxes();
+	m_spikeBoxEditor.ClearDirty();
 
 	// コイン・パラソルアイテム読み込み
 	m_itemManager.Load();

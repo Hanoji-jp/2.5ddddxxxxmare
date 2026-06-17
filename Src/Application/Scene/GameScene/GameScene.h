@@ -19,6 +19,7 @@
 #include"../../Camera/CameraSettings.h"
 #include"../../GameObject/Camera/EditorCamera.h"
 #include"../../Const/SpawnConst.h"
+#include"../../Const/JuiceConst.h"
 #include"../../GameObject/Checkpoint/Checkpoint.h"
 #include"../../Const/CheckpointConst.h"
 #include"../../GameObject/UI/HpUI.h"
@@ -33,6 +34,8 @@
 #include"../../GameObject/Gimmick/WindBox.h"
 #include"../../Editor/GravityCoreEditor.h"
 #include"../../GameObject/Gimmick/GravityCore.h"
+#include"../../Editor/SpikeBoxEditor.h"
+#include"../../GameObject/Gimmick/SpikeBox.h"
 class GameScene : public BaseScene
 {
 public :
@@ -67,6 +70,10 @@ private:
 	void RebuildMovingFloors();
 	void RebuildWindBoxes();
 	void RebuildGravityCores();
+	void RebuildSpikeBoxes();
+
+	// Glow コア取得時に、その位置へゴール用 WarpHole を生成して開く
+	void SpawnGoalWarpHole(const Math::Vector3& pos);
 
 	// 画面フラッシュをトリガー（強さ 0〜1）
 	void TriggerFlash(float alpha) { m_flashAlpha = std::max(m_flashAlpha, alpha); }
@@ -130,6 +137,9 @@ private:
 	// 画面フラッシュ（白）
 	float           m_flashAlpha           = 0.0f;  // 現在の白フラッシュ強度
 
+	// シーン開始時のフェードイン（白→透明）
+	float           m_introFadeAlpha       = JuiceConst::IntroFadeStart;
+
 	// HP ダメージ検知（前フレームの HP を保持）
 	int             m_prevPlayerHp         = -1;
 
@@ -161,6 +171,9 @@ private:
 	// 重力コアエディタ・オブジェクトリスト
 	GravityCoreEditor                            m_gravityCoreEditor;
 	std::vector<std::shared_ptr<GravityCore>>    m_gravityCores;
+
+	SpikeBoxEditor                               m_spikeBoxEditor;
+	std::vector<std::shared_ptr<SpikeBox>>       m_spikeBoxes;
 
 	// Cubun 敵リスト
 	std::vector<std::shared_ptr<Cubun>> m_cubuns;

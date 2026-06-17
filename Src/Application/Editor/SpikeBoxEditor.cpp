@@ -1,0 +1,145 @@
+﻿#include "../../Pch.h"
+#include "SpikeBoxEditor.h"
+#include <fstream>
+#include <sstream>
+
+//----------------------------------------------------------
+// DrawGui
+//----------------------------------------------------------
+void SpikeBoxEditor::DrawGui()
+{
+	if (!ImGui::Begin("Spike Box Editor"))
+	{
+		ImGui::End();
+		return;
+	}
+
+	if (ImGui::Button("Add Box"))
+	{
+		m_boxes.push_back(SpikeBoxData{});
+		m_selectedIndex = static_cast<int>(m_boxes.size()) - 1;
+		m_dirty = true;
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("Save"))   { Save(); }
+	ImGui::SameLine();
+	if (ImGui::Button("Reload")) { Load(); }
+
+	ImGui::Separator();
+
+	ImGui::Text("Spike Box List");
+	for (int i = 0; i < static_cast<int>(m_boxes.size()); ++i)
+	{
+		const auto& b = m_boxes[i];
+		char label[128];
+		std::snprintf(label, sizeof(label),
+			"[%d] (%.1f, %.1f, %.1f) size(%.2f,%.2f,%.2f)##%d",
+			i, b.center.x, b.center.y, b.center.z,
+			b.size.x, b.size.y, b.size.z, i);
+
+		const bool selected = (m_selectedIndex == i);
+		if (ImGui::Selectable(label, selected)) { m_selectedIndex = i; }
+	}
+
+	ImGui::Separator();
+
+	if (m_selectedIndex >= 0 && m_selectedIndex < static_cast<int>(m_boxes.size()))
+	{
+		auto& b = m_boxes[m_selectedIndex];
+
+		ImGui::Text("Inspector [%d]", m_selectedIndex);
+
+		if (ImGui::Checkbox("Enabled", &b.enabled)) { m_dirty = true; }
+
+		float center[3] = { b.center.x, b.center.y, b.center.z };
+		if (ImGui::DragFloat3("Center", center, 0.1f))
+		{
+			b.center = { center[0], center[1], center[2] };
+			m_dirty  = true;
+		}
+
+		float size[3] = { b.size.x, b.size.y, b.size.z };
+		if (ImGui::DragFloat3("Size", size, 0.05f, 0.05f, 100.0f))
+		{
+			b.size  = { size[0], size[1], size[2] };
+			m_dirty = true;
+		}
+
+		ImGui::Spacing();
+
+		if (ImGui::Button("Delete"))
+		{
+			m_boxes.erase(m_boxes.begin() + m_selectedIndex);
+			m_selectedIndex = -1;
+			m_dirty = true;
+		}
+	}
+
+	ImGui::End();
+}
+
+//----------------------------------------------------------
+// DrawDebug ─ ワイヤーフレームで範囲を可視化
+//----------------------------------------------------------
+void SpikeBoxEditor::DrawDebug() const
+{
+	for (const auto& b : m_boxes)
+	{
+		if (!b.enabled) { continue; }
+		KdDebugWireFrame wire;
+		wire.AddDebugBox(Math::Matrix::CreateTranslation(b.center), b.size,
+			Math::Vector3::Zero, false, { 1.0f, 0.3f, 0.2f, 0.7f });
+		wire.Draw();
+	}
+}
+
+//----------------------------------------------------------
+// Save
+//----------------------------------------------------------
+void SpikeBoxEditor::Save() const
+{
+	std::ofstream ofs(SpikeBoxConst::SavePath);
+	if (!ofs) { return; }
+
+	for (const auto& b : m_boxes)
+	{
+		ofs << b.center.x << ","
+			<< b.center.y << ","
+			<< b.center.z << ","
+			<< b.size.x   << ","
+			<< b.size.y   << ","
+			<< b.size.z   << ","
+			<< (b.enabled ? 1 : 0) << "\n";
+	}
+}
+
+//----------------------------------------------------------
+// Load
+//----------------------------------------------------------
+void SpikeBoxEditor::Load()
+{
+	m_boxes.clear();
+	m_selectedIndex = -1;
+
+	std::ifstream ifs(SpikeBoxConst::SavePath);
+	if (!ifs) { return; }
+
+	std::string line;
+	while (std::getline(ifs, line))
+	{
+		if (line.empty()) { continue; }
+
+		std::istringstream ss(line);
+		std::string token;
+		std::vector<std::string> tokens;
+		while (std::getline(ss, token, ',')) { tokens.push_back(token); }
+		if (tokens.size() < 6) { continue; }
+
+		SpikeBoxData d;
+		d.center  = { std::stof(tokens[0]), std::stof(tokens[1]), std::stof(tokens[2]) };
+		d.size    = { std::stof(tokens[3]), std::stof(tokens[4]), std::stof(tokens[5]) };
+		if (tokens.size() >= 7) { d.enabled = (std::stoi(tokens[6]) != 0); }
+
+		m_boxes.push_back(d);
+	}
+}
