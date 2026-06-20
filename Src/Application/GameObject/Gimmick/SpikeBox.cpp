@@ -1,5 +1,6 @@
 ﻿#include "../../../Pch.h"
 #include "SpikeBox.h"
+#include "../../Const/OutlineConst.h"
 
 //----------------------------------------------------------
 void SpikeBox::Init(const SpikeBoxData& data)
@@ -81,6 +82,16 @@ void SpikeBox::DrawLit()
 {
 	if (!m_enabled || !m_boxModel || !m_boxModel->IsEnable()) { return; }
 	KdShaderManager::Instance().m_StandardShader.DrawModel(*m_boxModel, m_worldMat);
+}
+
+//----------------------------------------------------------
+void SpikeBox::DrawOutline()
+{
+	if (!m_enabled || !m_boxModel || !m_boxModel->IsEnable()) { return; }
+	auto& shader = KdShaderManager::Instance().m_StandardShader;
+	shader.SetOutlineWidth(OutlineConst::TerrainWidth);   // 大きいので太め
+	const Math::Color c(OutlineConst::ColorMul, OutlineConst::ColorMul, OutlineConst::ColorMul, 1.0f);
+	shader.DrawModel(*m_boxModel, m_worldMat, c, Math::Vector3::Zero);
 }
 
 //----------------------------------------------------------

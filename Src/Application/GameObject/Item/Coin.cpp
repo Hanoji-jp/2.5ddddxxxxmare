@@ -1,5 +1,6 @@
 ﻿#include "../../main.h"
 #include "Coin.h"
+#include "../../Const/OutlineConst.h"
 
 void Coin::Init()
 {
@@ -64,4 +65,18 @@ void Coin::DrawLit()
 	const Math::Matrix  trans = Math::Matrix::CreateTranslation(pos);
 
 	KdShaderManager::Instance().m_StandardShader.DrawModel(m_modelWork, rot * trans);
+}
+
+void Coin::DrawOutline()
+{
+	if (!m_modelWork.IsEnable()) { return; }
+
+	const Math::Vector3 pos   = GetPos();
+	const Math::Matrix  rot   = Math::Matrix::CreateRotationY(m_rotAngle);
+	const Math::Matrix  trans = Math::Matrix::CreateTranslation(pos);
+
+	auto& shader = KdShaderManager::Instance().m_StandardShader;
+	shader.SetOutlineWidth(OutlineConst::Width);
+	const Math::Color c(OutlineConst::ColorMul, OutlineConst::ColorMul, OutlineConst::ColorMul, 1.0f);
+	shader.DrawModel(m_modelWork, rot * trans, c, Math::Vector3::Zero);
 }

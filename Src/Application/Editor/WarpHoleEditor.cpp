@@ -1,5 +1,6 @@
 ﻿#include "../../Pch.h"
 #include "WarpHoleEditor.h"
+#include "../Manager/StageManager.h"
 #include <fstream>
 #include <sstream>
 
@@ -223,7 +224,7 @@ void WarpHoleEditor::DrawDebug() const
 
 void WarpHoleEditor::Save() const
 {
-	std::ofstream ofs(WarpHoleConst::SavePath);
+	std::ofstream ofs(StageManager::Instance().ResolvePath("warp_holes.csv"));
 	if (!ofs) { return; }
 
 	for (const auto& h : m_holes)
@@ -251,7 +252,7 @@ void WarpHoleEditor::Save() const
 void WarpHoleEditor::Load()
 {
 	m_holes.clear();
-	std::ifstream ifs(WarpHoleConst::SavePath);
+	std::ifstream ifs(StageManager::Instance().ResolvePath("warp_holes.csv"));
 	if (!ifs) { return; }
 
 	std::string line;

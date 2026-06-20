@@ -10,5 +10,8 @@ namespace SpawnConst
 
     // スポーン設定の保存先
     constexpr const char* SavePath = "Asset/Data/spawn_settings.csv";
+
+    // 奈落落下の保険：スポーンよりこの距離以上下に落ちたら静かにスポーンへ戻す（死亡なし）
+    constexpr float FallResetBelow = 150.0f;
 }
 

@@ -23,16 +23,31 @@ public:
     void Init()       override;
     void Update()     override;
     void PostUpdate() override;
-    void DrawLit()    override;
-    void DrawBright() override;   // 取得演出中の加算ブルーム発光
+    void DrawLit()     override;
+    void DrawOutline() override;  // 原神式アウトライン（背面押し出し）
+    void DrawBright()  override;  // 取得演出中の加算ブルーム発光
 
     bool IsVisible() const override { return true; }
+
+    // プレイヤーは死亡(HP0)で Character::TakeDamage が m_isExpired を立てるが、
+    // シーンのリストから除去されると復活しても表示・操作されない。プレイヤーは
+    // GameScene が明示管理し死亡＝Dead状態で扱うので、自動除去の対象から外す。
+    bool IsExpired() const override { return false; }
 
     void TakeDamage(int _damage) override;
     void TakeDamageFrom(int _damage, const Math::Vector3& sourcePos) override;
 
     // 即死（無敵を無視して HP を 0 にする。ドッスンの叩きつけ等）
     void InstantDeath();
+
+    // 復活：モデルは作り直さず、HP・状態・速度・操作可否だけ初期化する
+    void Revive();
+
+    // 回復：HPを加算（MaxHpでクランプ）し、緑の取得発光を出す（緑石アイテム用）
+    void Heal(int amount);
+
+    // 会話中に顔（頭ボーン）を相手へ向ける（毎フレーム呼ぶ。首制限つき）
+    void LookAtHead(const Math::Vector3& target);
 
     // GhostTrail 用：描画ワールド行列を公開
     const Math::Matrix& GetDrawWorld() const { return m_drawWorld; }
@@ -51,6 +66,12 @@ public:
     // パラソルアイテム取得
     void GiveParasol() { m_hasParasol = true; }
 
+    // パラソルを開いて滑空中か（滑空中は場外落下死タイマーを止めるのに使う）
+    bool IsParasolOpen() const { return m_isParasolOpen; }
+
+    // 現在の手動重力方向（重力矢印を即切替するのに使う）
+    ManualGravityDir GetManualGravityDir() const { return GetManualGravity(); }
+
     // ステージセレクト（ハブ）用：惑星がない平地で歩けるよう手動重力Downを与える。
     // 重力ゾーン外なら手動重力は維持されるので、ハブを惑星から離して置けば成立する。
     void SetHubGravityDown() { SetInitialGravityDir(ManualGravityDir::Down); }
@@ -63,6 +84,9 @@ public:
     // 演出用：見た目のタンブル回転（描画のみ。コリジョンには影響しない）
     // 吹っ飛ばされてくるくる回る表現などに使う（ワールドZ軸まわりのロール）。
     void SetCutsceneSpin(float radians) { m_cutsceneSpin = radians; }
+
+    // 演出用：重力スケール（1.0=通常、小さいほどゆっくり落ちて滞空が長い）
+    void SetGravityScale(float s) { m_gravityScale = s; }
 
     // 取得演出の発光を開始（色指定）／ヒットストップ中も進める更新
     void TriggerPickupGlow(const Math::Color& color);
@@ -108,6 +132,14 @@ private:
 
     // 被ダメージ後の無敵タイマー（フレーム。> 0 の間は再被弾しない）
     int m_invincibleTimer = 0;
+
+    // 被ダメージ時に本体を赤くするフラッシュタイマー（フレーム）
+    int m_damageFlashTimer = 0;
+
+    // 会話中の頭(顔)向きヨー角（rad、首制限内・平滑化）
+    float m_headLookYaw = 0.0f;
+    bool  m_headLookActive = false;                       // 会話中に頭を回しているか
+    Math::Matrix m_headBaseLocal = Math::Matrix::Identity; // 頭ボーンの基準ローカル（累積防止）
 
     // 近接攻撃クールダウン
     int m_meleeCooldown = 0;

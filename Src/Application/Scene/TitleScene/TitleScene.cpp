@@ -227,7 +227,9 @@ void TitleScene::Event()
 	}
 
 	// Enter で「むっちゃ光って小さくなる」演出を開始 → 終わったらゲームへ
-	if (!m_starting && (GetAsyncKeyState(VK_RETURN) & 0x8000))
+	// （シーン切替直後の押しっぱなし/連打は無視）
+	if (!m_starting && (GetAsyncKeyState(VK_RETURN) & 0x8000)
+		&& !SceneManager::Instance().IsInputLocked())
 	{
 		m_starting   = true;
 		m_startTimer = 0.0f;

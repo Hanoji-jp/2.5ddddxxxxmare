@@ -32,6 +32,7 @@ public:
 	virtual void GenerateDepthMapFromLight();
 	virtual void PreDraw() {}
 	virtual void DrawLit() {}
+	virtual void DrawOutline() {}   // 原神式アウトライン（背面押し出し）パス用
 	virtual void DrawUnLit() {}
 	virtual void DrawEffect() {}
 	virtual void DrawBright() {}

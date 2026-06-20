@@ -14,6 +14,7 @@ public:
 
     void Update();
     void SetPos(const Math::Vector3& _pos) { m_pos = _pos; }
+    const Math::Vector3& GetPos() const { return m_pos; }
 
 private:
     void RotateByMouse();

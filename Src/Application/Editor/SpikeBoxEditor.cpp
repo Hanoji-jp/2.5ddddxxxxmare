@@ -1,5 +1,6 @@
 ﻿#include "../../Pch.h"
 #include "SpikeBoxEditor.h"
+#include "../Manager/StageManager.h"
 #include <fstream>
 #include <sstream>
 
@@ -98,7 +99,7 @@ void SpikeBoxEditor::DrawDebug() const
 //----------------------------------------------------------
 void SpikeBoxEditor::Save() const
 {
-	std::ofstream ofs(SpikeBoxConst::SavePath);
+	std::ofstream ofs(StageManager::Instance().ResolvePath("spike_boxes.csv"));
 	if (!ofs) { return; }
 
 	for (const auto& b : m_boxes)
@@ -121,7 +122,7 @@ void SpikeBoxEditor::Load()
 	m_boxes.clear();
 	m_selectedIndex = -1;
 
-	std::ifstream ifs(SpikeBoxConst::SavePath);
+	std::ifstream ifs(StageManager::Instance().ResolvePath("spike_boxes.csv"));
 	if (!ifs) { return; }
 
 	std::string line;

@@ -1,5 +1,6 @@
 ﻿#include "../../Pch.h"
 #include "MovingFloorEditor.h"
+#include "../Manager/StageManager.h"
 #include <fstream>
 #include <sstream>
 
@@ -189,7 +190,7 @@ void MovingFloorEditor::DrawDebug() const
 //----------------------------------------------------------
 void MovingFloorEditor::Save() const
 {
-	std::ofstream ofs(SavePath);
+	std::ofstream ofs(StageManager::Instance().ResolvePath("moving_floors.csv"));
 	if (!ofs) { return; }
 
 	for (const auto& f : m_floors)
@@ -221,7 +222,7 @@ void MovingFloorEditor::Load()
 	m_floors.clear();
 	m_selectedIndex = -1;
 
-	std::ifstream ifs(SavePath);
+	std::ifstream ifs(StageManager::Instance().ResolvePath("moving_floors.csv"));
 	if (!ifs) { return; }
 
 	std::string line;

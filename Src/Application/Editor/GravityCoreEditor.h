@@ -33,6 +33,12 @@ public:
 
 	const std::vector<GravityCoreData>& GetCores() const { return m_cores; }
 
+	// エディタ操作（マウスピッキング／生成／コピー）用のアクセサ
+	std::vector<GravityCoreData>& WorkCores()       { return m_cores; }
+	void MarkDirty()                                { m_dirty = true; }
+	void SetSelected(int _i)                        { m_selectedIndex = _i; }
+	int  GetSelected() const                        { return m_selectedIndex; }
+
 	bool IsDirty()    const { return m_dirty; }
 	void ClearDirty()       { m_dirty = false; }
 

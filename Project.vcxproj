@@ -289,6 +289,7 @@
     <ClInclude Include="Src\Application\Const\GravityRingConst.h" />
     <ClInclude Include="Src\Application\Const\ItemConst.h" />
     <ClInclude Include="Src\Application\Const\RockConst.h" />
+    <ClInclude Include="Src\Application\Const\DeathConst.h" />
     <ClInclude Include="Src\Application\Const\JuiceConst.h" />
     <ClInclude Include="Src\Application\Const\LightConst.h" />
     <ClInclude Include="Src\Application\Const\MapConst.h" />
@@ -296,6 +297,8 @@
     <ClInclude Include="Src\Application\Const\PlanetConst.h" />
     <ClInclude Include="Src\Application\Const\PlayerConst.h" />
     <ClInclude Include="Src\Application\Const\PostProcessConst.h" />
+    <ClInclude Include="Src\Application\Const\OutlineConst.h" />
+    <ClInclude Include="Src\Application\Const\PauseMenuConst.h" />
     <ClInclude Include="Src\Application\Const\SpawnConst.h" />
     <ClInclude Include="Src\Application\Const\StageSelectConst.h" />
     <ClInclude Include="Src\Application\Const\StarFieldConst.h" />
@@ -348,6 +351,8 @@
     <ClInclude Include="Src\Application\Manager\CollisionManager.h" />
     <ClInclude Include="Src\Application\Manager\ItemManager.h" />
     <ClInclude Include="Src\Application\Manager\ManualGravityZoneManager.h" />
+    <ClInclude Include="Src\Application\Manager\DeadZoneManager.h" />
+    <ClInclude Include="Src\Application\Manager\CoreliaManager.h" />
     <ClInclude Include="Src\Application\Manager\ModelManager.h" />
     <ClInclude Include="Src\Application\Manager\PlanetGravityManager.h" />
     <ClInclude Include="Src\Application\Scene\BaseScene\BaseScene.h" />
@@ -449,6 +454,8 @@
     <ClCompile Include="Src\Application\main.cpp" />
     <ClCompile Include="Src\Application\Manager\ItemManager.cpp" />
     <ClCompile Include="Src\Application\Manager\ManualGravityZoneManager.cpp" />
+    <ClCompile Include="Src\Application\Manager\DeadZoneManager.cpp" />
+    <ClCompile Include="Src\Application\Manager\CoreliaManager.cpp" />
     <ClCompile Include="Src\Application\Manager\ModelManager.cpp" />
     <ClCompile Include="Src\Application\Manager\PlanetGravityManager.cpp" />
     <ClCompile Include="Src\Application\Scene\BaseScene\BaseScene.cpp" />
@@ -528,6 +535,12 @@
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
     </FxCompile>
+    <FxCompile Include="Src\Framework\Shader\PostProcessShader\KdPostProcessShader_PS_Outline.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+    </FxCompile>
     <FxCompile Include="Src\Framework\Shader\PostProcessShader\KdPostProcessShader_VS.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
@@ -581,6 +594,18 @@
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+    </FxCompile>
+    <FxCompile Include="Src\Framework\Shader\StandardShader\KdStandardShader_VS_Outline.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+    </FxCompile>
+    <FxCompile Include="Src\Framework\Shader\StandardShader\KdStandardShader_PS_Outline.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
     </FxCompile>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

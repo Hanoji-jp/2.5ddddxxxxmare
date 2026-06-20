@@ -186,6 +186,8 @@ void RockDrop::Spawn(const Math::Vector3& spawnPos, const Math::Vector3& upDir)
 		{
 			m_groundLvl = bestUp + capSurface + RockConst::LandHeightOffset;
 		}
+		m_hasGround = found;                       // 地面が無ければ落下し続ける
+		m_spawnUp   = m_pos.Dot(m_upDir);          // 落下消滅判定の基準
 	}
 
 	// このゲームは Z 方向に移動しない 2.5D なので、散らばりは XY 平面内のみに限定。
@@ -229,6 +231,15 @@ void RockDrop::Update()
 		m_velocity -= m_upDir * (RockConst::Gravity * dt);
 		m_pos += m_velocity * dt;
 
+		// 真下に地面が無ければ着地せず落下し続け、十分落ちたら消滅
+		if (!m_hasGround)
+		{
+			if (m_spawnUp - m_pos.Dot(m_upDir) >= RockConst::FallDespawnDist) { m_expired = true; }
+			m_mWorld = Math::Matrix::CreateTranslation(m_pos);
+			SetPos(m_pos);
+			return;
+		}
+
 		// 着地面（up 座標）を下回ったらクランプ＆バウンド
 		const float up = m_pos.Dot(m_upDir);
 		if (up <= m_groundLvl)
@@ -266,11 +277,25 @@ void RockDrop::Update()
 void RockDrop::DrawEffect()
 {
 	auto& sm = KdShaderManager::Instance();
-	sm.ChangeBlendState(KdBlendState::Add);
 	auto& shader = sm.m_StandardShader;
 
 	const Math::Vector3 pos = GetPos();
 	const Math::Matrix rot  = Math::Matrix::CreateFromAxisAngle(m_upDir, m_rotAngle);
+
+	// ── アウトライン：一回り大きい暗い面を前面カリングで描く（背面がシルエット）──
+	//   不透明で深度を書き、この後の本体が内側を上書きして縁だけ残る。
+	{
+		const Math::Matrix oWorld =
+			Math::Matrix::CreateScale(RockConst::Radius * RockConst::OutlineScale) * rot *
+			Math::Matrix::CreateTranslation(pos);
+		shader.DrawVertices(TriVerts(), oWorld,
+			Math::Color(0.03f, 0.03f, 0.05f, 1.0f),
+			KdDepthStencilState::ZEnable,
+			D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
+			KdRasterizerState::CullFront);
+	}
+
+	sm.ChangeBlendState(KdBlendState::Add);
 
 	// 面：少し縮めて深度を書く → 裏側の線を隠す
 	const Math::Matrix faceWorld =

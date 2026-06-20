@@ -1,5 +1,6 @@
 ﻿#include "../../Pch.h"
 #include "CheckpointEditor.h"
+#include "../Manager/StageManager.h"
 #include <fstream>
 #include <sstream>
 
@@ -85,7 +86,7 @@ void CheckpointEditor::DrawDebugSpheres() const
 
 void CheckpointEditor::Save() const
 {
-	std::ofstream ofs(SavePath);
+	std::ofstream ofs(StageManager::Instance().ResolvePath("checkpoints.csv"));
 	if (!ofs) { return; }
 
 	for (const auto& p : m_positions)
@@ -96,7 +97,7 @@ void CheckpointEditor::Save() const
 
 void CheckpointEditor::Load()
 {
-	std::ifstream ifs(SavePath);
+	std::ifstream ifs(StageManager::Instance().ResolvePath("checkpoints.csv"));
 	if (!ifs) { return; }
 
 	m_positions.clear();

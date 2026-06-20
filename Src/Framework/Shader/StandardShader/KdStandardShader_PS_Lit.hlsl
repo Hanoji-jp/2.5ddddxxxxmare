@@ -38,6 +38,27 @@ static const float k_EnvReflectDownMul = 0.8f;  // 下方向（暗い宇宙）�
 // トーンマッピング / 色変換
 //=============================================================
 
+// セル(トゥーン)ランプ：明るさ t を数段に量子化する。境界はわずかに滑らかにしてジャギを抑える。
+// シーン全体をアニメ調のフラットな陰影にして、暗い輪郭を際立たせる用途。
+float ToonRamp(float t)
+{
+	t = saturate(t);
+	// しきい値（暗→明）と各段の明るさ（3段：影 / 中 / 光）
+	const float t0 = 0.25f;   // 影→中 の境界
+	const float t1 = 0.60f;   // 中→光 の境界
+	const float lvShadow = 0.32f;
+	const float lvMid    = 0.66f;
+	const float lvLit    = 1.00f;
+	const float aa = 0.03f;   // 境界の柔らかさ
+
+	float s0 = smoothstep(t0 - aa, t0 + aa, t);
+	float s1 = smoothstep(t1 - aa, t1 + aa, t);
+	float lv = lvShadow;
+	lv = lerp(lv, lvMid, s0);
+	lv = lerp(lv, lvLit, s1);
+	return lv;
+}
+
 // ACES フィルミックトーンマッピング近似（HDR → LDR、FORZA等の映える階調）
 float3 ACESFilm(float3 x)
 {
@@ -409,12 +430,23 @@ float4 main(VSOutput In) : SV_Target0
 	//------------------------------------------
 	float3 outColor = 0.0f;
 
-	// ---- 平行光 (PBR Cook-Torrance) ----
+	// ---- 平行光 (トゥーン/セルシェード) ----
+	// 明るさを段階化してフラットなアニメ調に。これで輪郭が際立つ。
 	{
 		float3 lightDir = normalize(-g_DL_Dir);
-		outColor += CookTorrance(lightDir, vCam, wN,
-								 albedo, F0, roughness, metallic,
-								 g_DL_Color, 1.0f) * shadow;
+
+		// 自己陰影＋落ち影をまとめて段階化
+		float lightAmt = saturate(dot(wN, lightDir)) * shadow;
+		float toon     = ToonRamp(lightAmt);
+		outColor += albedo * g_DL_Color * toon;
+
+		// トゥーンスペキュラ：くっきりした1段のハイライト
+		float3 H   = normalize(vCam + lightDir);
+		float  ndh = saturate(dot(wN, H));
+		float  shininess = exp2(lerp(8.0f, 1.0f, roughness));   // 粗いほど鈍い
+		float  spec      = pow(ndh, shininess);
+		float  specToon  = smoothstep(0.48f, 0.52f, spec) * (1.0f - roughness);
+		outColor += g_DL_Color * specToon * shadow * 0.6f;
 	}
 
 	// ---- 点光 (PBR Cook-Torrance) ----

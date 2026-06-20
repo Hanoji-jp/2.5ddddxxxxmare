@@ -31,6 +31,11 @@ public :
 		m_nextSceneType = _nextScene;
 	}
 
+	// シーン切替直後の入力ロック中か（前シーンの押しっぱなし入力が
+	// 新シーンで即発火する“連打/持ち越し”を防ぐため、各UIの決定入力はこれを見る）
+	// ・一定フレーム経過 かつ 決定キー(Enter/Space/Tab)を一度離す までロック継続。
+	bool IsInputLocked() const { return m_inputLockFrames > 0 || !m_confirmReleased; }
+
 	// 現在のシーンのオブジェクトリストを取得
 	const std::list<std::shared_ptr<KdGameObject>>& GetObjList();
 
@@ -58,6 +63,11 @@ private :
 	
 	// 次のシーンの種類を保持している変数
 	SceneType m_nextSceneType = m_currentSceneType;
+
+	// シーン切替直後に入力を無視するフレーム数（持ち越し/連打防止）
+	static constexpr int kInputLockFrames = 12;   // 約0.2秒(60fps)
+	int  m_inputLockFrames  = kInputLockFrames;
+	bool m_confirmReleased  = false;   // 切替後に決定キーが一度離されたか
 
 private:
 

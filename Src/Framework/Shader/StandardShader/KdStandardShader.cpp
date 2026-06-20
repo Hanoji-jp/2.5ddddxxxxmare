@@ -76,6 +76,10 @@ void KdStandardShader::BeginUnLit()
 		KdShaderManager::Instance().SetPSConstantBuffer(0, m_cb0_Obj.GetAddress());
 		KdShaderManager::Instance().SetPSConstantBuffer(2, m_cb2_Material.GetAddress());
 	}
+
+	// ボーン情報をセット(スキンメッシュ対応)。これが無いと UnLit/Bright パスで
+	// スキンメッシュが正しいポーズで描画されず、発光が本体のモーションとズレる。
+	KdShaderManager::Instance().SetVSConstantBuffer(3, m_cb3_Bone.GetAddress());
 }
 
 // ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// /////
@@ -122,6 +126,47 @@ void KdStandardShader::BeginGenerateDepthMapFromLight()
 void KdStandardShader::EndGenerateDepthMapFromLight()
 {
 	m_depthMapFromLightRTChanger.UndoRenderTarget();
+}
+
+// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// /////
+// アウトライン（原神式：背面押し出し）の描画準備
+// ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== =====
+// 法線方向に押し出した背面だけ（CullFront）を単色で描き、本体の裏に一回り
+// 大きいシルエットを出して輪郭線にする。この後 DrawModel() でモデルを描く。
+// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// /////
+void KdStandardShader::BeginOutline()
+{
+	if (KdShaderManager::Instance().SetVertexShader(m_VS_Outline))
+	{
+		KdShaderManager::Instance().SetInputLayout(m_outlineInputLayout);
+
+		KdShaderManager::Instance().SetVSConstantBuffer(0, m_cb0_Obj.GetAddress());
+		KdShaderManager::Instance().SetVSConstantBuffer(1, m_cb1_Mesh.GetAddress());
+	}
+
+	// ボーン情報（スキンメッシュ対応：アニメに追従）
+	KdShaderManager::Instance().SetVSConstantBuffer(3, m_cb3_Bone.GetAddress());
+	// アウトライン太さ（b4）
+	KdShaderManager::Instance().SetVSConstantBuffer(4, m_cb_Outline.GetAddress());
+	m_cb_Outline.Write();
+
+	if (KdShaderManager::Instance().SetPixelShader(m_PS_Outline))
+	{
+		KdShaderManager::Instance().SetPSConstantBuffer(0, m_cb0_Obj.GetAddress());
+		KdShaderManager::Instance().SetPSConstantBuffer(2, m_cb2_Material.GetAddress());
+	}
+
+	// 表面を省略して背面のみ描画（押し出した背面がシルエットになる）
+	KdShaderManager::Instance().ChangeRasterizerState(KdRasterizerState::CullFront);
+	// 深度テスト有効・書き込みなし：手前のオブジェクトに隠れる（＝他オブジェクトに
+	// 輪郭がはみ出して乗らない）。本体の「後」に描く前提。
+	KdShaderManager::Instance().ChangeDepthStencilState(KdDepthStencilState::ZWriteDisable);
+}
+
+void KdStandardShader::EndOutline()
+{
+	KdShaderManager::Instance().UndoDepthStencilState();
+	KdShaderManager::Instance().UndoRasterizerState();
 }
 
 
@@ -345,7 +390,8 @@ void KdStandardShader::DrawPolygon(const KdPolygon& rPolygon, const Math::Matrix
 }
 
 void KdStandardShader::DrawVertices(const std::vector<KdPolygon::Vertex>& vertices, const Math::Matrix& mWorld,
-	const Math::Color& colRate, KdDepthStencilState depthState, D3D_PRIMITIVE_TOPOLOGY topology)
+	const Math::Color& colRate, KdDepthStencilState depthState, D3D_PRIMITIVE_TOPOLOGY topology,
+	KdRasterizerState raster)
 {
 	// 頂点数が2より少なければポリゴンが形成できないので描画不能
 	if (vertices.size() < 2) { return; }
@@ -363,7 +409,7 @@ void KdStandardShader::DrawVertices(const std::vector<KdPolygon::Vertex>& vertic
 	// マテリアルの転送
 	WriteMaterial(KdMaterial(), colRate, Math::Vector3::Zero);
 
-	KdShaderManager::Instance().ChangeRasterizerState(KdRasterizerState::CullNone);
+	KdShaderManager::Instance().ChangeRasterizerState(raster);
 	KdShaderManager::Instance().ChangeDepthStencilState(depthState);
 
 	if (KdShaderManager::Instance().IsPixelArtStyle())
@@ -494,6 +540,47 @@ bool KdStandardShader::Init()
 			return false;
 		}
 	}
+
+	// アウトライン（背面押し出し）VS / PS
+	{
+#include "KdStandardShader_VS_Outline.shaderInc"
+
+		if (FAILED(KdDirect3D::Instance().WorkDev()->CreateVertexShader(compiledBuffer, sizeof(compiledBuffer), nullptr, &m_VS_Outline))) {
+			assert(0 && "頂点シェーダー作成失敗");
+			Release();
+			return false;
+		}
+
+		// アウトライン用入力レイアウト：スロット0=通常頂点、スロット1=スムース法線(NORMAL1)
+		std::vector<D3D11_INPUT_ELEMENT_DESC> olLayout = {
+			{ "POSITION",  0, DXGI_FORMAT_R32G32B32_FLOAT,    0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+			{ "TEXCOORD",  0, DXGI_FORMAT_R32G32_FLOAT,       0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+			{ "COLOR",     0, DXGI_FORMAT_R8G8B8A8_UNORM,     0, 20, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+			{ "NORMAL",    0, DXGI_FORMAT_R32G32B32_FLOAT,    0, 24, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+			{ "TANGENT",   0, DXGI_FORMAT_R32G32B32_FLOAT,    0, 36, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+			{ "SKININDEX", 0, DXGI_FORMAT_R16G16B16A16_UINT,  0, 48, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+			{ "SKINWEIGHT",0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 56, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+			// スロット1：溶接平均したスムース法線
+			{ "NORMAL",    1, DXGI_FORMAT_R32G32B32_FLOAT,    1,  0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+		};
+		if (FAILED(KdDirect3D::Instance().WorkDev()->CreateInputLayout(
+			&olLayout[0], (UINT)olLayout.size(),
+			&compiledBuffer[0], sizeof(compiledBuffer), &m_outlineInputLayout)))
+		{
+			assert(0 && "アウトライン入力レイアウト作成失敗");
+			Release();
+			return false;
+		}
+	}
+	{
+#include "KdStandardShader_PS_Outline.shaderInc"
+
+		if (FAILED(KdDirect3D::Instance().WorkDev()->CreatePixelShader(compiledBuffer, sizeof(compiledBuffer), nullptr, &m_PS_Outline))) {
+			assert(0 && "ピクセルシェーダー作成失敗");
+			Release();
+			return false;
+		}
+	}
 	//-------------------------------------
 	// 定数バッファ作成
 	//-------------------------------------
@@ -501,6 +588,7 @@ bool KdStandardShader::Init()
 	m_cb1_Mesh.Create();
 	m_cb2_Material.Create();
 	m_cb3_Bone.Create();
+	m_cb_Outline.Create();
 
 	// シャドウマップ解像度（大きいほど影がシャープ。2048で1024比4倍の精細さ）
 	constexpr UINT kShadowMapSize = 2048;
@@ -531,18 +619,22 @@ void KdStandardShader::Release()
 	KdSafeRelease(m_VS_Lit);
 	KdSafeRelease(m_VS_GenDepthFromLight);
 	KdSafeRelease(m_VS_UnLit);
+	KdSafeRelease(m_VS_Outline);
 
 	KdSafeRelease(m_inputLayout);
-	
+	KdSafeRelease(m_outlineInputLayout);
+
 	KdSafeRelease(m_PS_Lit);
 	KdSafeRelease(m_PS_GenDepthFromLight);
 	KdSafeRelease(m_PS_UnLit);
+	KdSafeRelease(m_PS_Outline);
 
 	m_cb0_Obj.Release();
 	m_cb1_Mesh.Release();
 	m_cb2_Material.Release();
 	// スキンメッシュ対応
 	m_cb3_Bone.Release();
+	m_cb_Outline.Release();
 }
 
 // ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// /////

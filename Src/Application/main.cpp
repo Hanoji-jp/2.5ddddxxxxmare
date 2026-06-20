@@ -143,6 +143,25 @@ void Application::PostDraw()
 // ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// /////
 void Application::DrawSprite()
 {
+	// エディタ画面中は2DのゲームUIをシーンRTへ描く（Gameウィンドウにも映るように）。
+	// 通常時はこれまで通りバックバッファへ。
+	const bool editor = KdDebugGUI::Instance().IsGameViewport();
+	auto* ctx = KdDirect3D::Instance().WorkDevContext();
+	ID3D11RenderTargetView* prevRTV = nullptr;
+	ID3D11DepthStencilView* prevDSV = nullptr;
+	bool redirected = false;
+	if (editor)
+	{
+		const auto& sceneRT = KdShaderManager::Instance().m_postProcessShader.GetSceneRT();
+		if (sceneRT && sceneRT->WorkRTView())
+		{
+			ctx->OMGetRenderTargets(1, &prevRTV, &prevDSV);
+			ID3D11RenderTargetView* rtv = sceneRT->WorkRTView();
+			ctx->OMSetRenderTargets(1, &rtv, nullptr);
+			redirected = true;
+		}
+	}
+
 	// ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== =====
 	// 2Dの描画はこの間で行う
 	KdShaderManager::Instance().m_spriteShader.Begin();
@@ -150,6 +169,13 @@ void Application::DrawSprite()
 		SceneManager::Instance().DrawSprite();
 	}
 	KdShaderManager::Instance().m_spriteShader.End();
+
+	if (redirected)
+	{
+		ctx->OMSetRenderTargets(1, &prevRTV, prevDSV);
+		if (prevRTV) { prevRTV->Release(); }
+		if (prevDSV) { prevDSV->Release(); }
+	}
 }
 
 // ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// /////

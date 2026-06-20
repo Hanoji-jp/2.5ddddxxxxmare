@@ -1,5 +1,7 @@
 ﻿#pragma once
 
+class KdTexture;
+
 struct ImGuiAppLog
 {
 	ImGuiTextBuffer     Buf;
@@ -121,7 +123,17 @@ public:
 	// ImGui描画コールバックを登録する
 	void SetGuiCallback(const std::function<void()>& _callback) { m_guiCallback = _callback; }
 	void ClearGuiCallback() { m_guiCallback = nullptr; }
-	
+
+	// ゲーム画面を別ウィンドウ(ImGui)に表示するか（動画編集風レイアウト用。エディタ時に有効化）
+	void SetGameViewport(bool enable) { m_gameViewport = enable; }
+	bool IsGameViewport() const { return m_gameViewport; }
+
+	// Game ウィンドウ(ImGui::Image)上のマウス情報（GuiProcess で更新、シーン側が次フレームで参照）
+	// マウスが Game 画像の上にあるか
+	bool IsGameHovered() const { return m_gameHovered; }
+	// Game 画像内のマウス正規化座標（左上0,0 〜 右下1,1）
+	void GetGameUV(float& u, float& v) const { u = m_gameUV[0]; v = m_gameUV[1]; }
+
 private:
 	void GuiRelease();
 
@@ -129,6 +141,14 @@ private:
 	std::unique_ptr<ImGuiAppLog> m_uqLog = nullptr;
 
 	std::function<void()> m_guiCallback = nullptr;
+
+	// ゲーム画面ビューポート（バックバッファをコピーして ImGui::Image で表示）
+	bool m_gameViewport = false;
+	std::shared_ptr<KdTexture> m_gameCapture = nullptr;
+
+	// Game 画像上のマウス状態（GuiProcess で更新）
+	bool  m_gameHovered = false;
+	float m_gameUV[2]   = { 0.0f, 0.0f };
 
 //=====================================================
 // シングルトンパターン

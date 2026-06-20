@@ -26,6 +26,16 @@ namespace PlayerConst
     // 無敵時間（フレーム数）
     constexpr int   InvincibleFrame  = 60;
 
+    // 被ダメージ時に本体を赤くする時間（フレーム数）
+    constexpr int   DamageFlashFrame = 18;
+
+    // 赤フラッシュの強さ（0=変化なし, 1=真っ赤）
+    constexpr float DamageFlashStrength = 0.85f;
+
+    // 復活直後の無敵時間（フレーム数）。明転(0.6s)＋逃げる猶予を確保し、
+    // 敵の近くに復活しても即再死亡＝復活ループに陥らないようにする。
+    constexpr int   RespawnInvincibleFrame = 150;
+
     // ノックバック（マリオギャラクシー風：水平に吹き飛び＋少し上）
     constexpr float KnockbackSpeed   = 0.28f;  // 水平方向速度
     constexpr float KnockbackUpSpeed = 0.22f;  // 上方向速度（m_upDir 方向）

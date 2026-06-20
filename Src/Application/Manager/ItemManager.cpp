@@ -1,5 +1,6 @@
 ﻿#include "../main.h"
 #include "ItemManager.h"
+#include "StageManager.h"
 #include <fstream>
 #include <sstream>
 
@@ -11,9 +12,10 @@ void ItemManager::SpawnCoin(const Math::Vector3& _pos)
 	m_coins.push_back(std::move(coin));
 }
 
-int ItemManager::Update(HitBox& _playerHitBox, bool& outParasolPickedUp)
+int ItemManager::Update(HitBox& _playerHitBox, bool& outParasolPickedUp, int& outRocksPicked)
 {
 	outParasolPickedUp = false;
+	outRocksPicked = 0;
 	int collected = 0;
 
 	const KdCollider::SphereInfo hitSphere = _playerHitBox.GetSphereInfo();
@@ -65,10 +67,11 @@ int ItemManager::Update(HitBox& _playerHitBox, bool& outParasolPickedUp)
 		// 散らばり猶予を過ぎたら取得可能
 		if (rock->IsPickable() && rock->Intersects(hitSphere, nullptr))
 		{
-			// 岩石は Ring スタイル：中央からリング拡散＋星が上に飛んで放物線で落ちる（白）
-			PlayPickupEffect(playerPos, { 1.0f, 1.0f, 1.0f, 1.0f }, PickupBurst::Style::Ring);
+			// 緑石(回復)：リング状の緑バースト
+			PlayPickupEffect(playerPos, { 0.30f, 1.0f, 0.45f, 1.0f }, PickupBurst::Style::Ring);
 			rock->Expire();
 			++m_rockCount;
+			++outRocksPicked;
 		}
 	}
 
@@ -102,6 +105,18 @@ void ItemManager::DrawLit()
 	for (const auto& p : m_parasols)
 	{
 		if (!p->IsExpired()) { p->DrawLit(); }
+	}
+}
+
+void ItemManager::DrawOutline()
+{
+	for (const auto& coin : m_coins)
+	{
+		if (!coin->IsExpired()) { coin->DrawOutline(); }
+	}
+	for (const auto& p : m_parasols)
+	{
+		if (!p->IsExpired()) { p->DrawOutline(); }
 	}
 }
 
@@ -316,7 +331,7 @@ void ItemManager::DrawGui()
 
 void ItemManager::Save() const
 {
-	std::ofstream ofs(SavePath);
+	std::ofstream ofs(StageManager::Instance().ResolvePath("coins.csv"));
 	if (!ofs) { return; }
 
 	for (const auto& coin : m_coins)
@@ -329,7 +344,7 @@ void ItemManager::Save() const
 
 void ItemManager::Load()
 {
-	std::ifstream ifs(SavePath);
+	std::ifstream ifs(StageManager::Instance().ResolvePath("coins.csv"));
 	if (!ifs) { return; }
 
 	std::string line;
@@ -367,7 +382,7 @@ void ItemManager::ClearParasols()
 
 void ItemManager::SaveParasols() const
 {
-	std::ofstream ofs(ItemConst::ParasolSavePath);
+	std::ofstream ofs(StageManager::Instance().ResolvePath("parasol_items.csv"));
 	if (!ofs)
 	{
 		OutputDebugStringA("[ItemManager] SaveParasols: failed to open file\n");
@@ -387,7 +402,7 @@ void ItemManager::SaveParasols() const
 
 void ItemManager::LoadParasols()
 {
-	std::ifstream ifs(ItemConst::ParasolSavePath);
+	std::ifstream ifs(StageManager::Instance().ResolvePath("parasol_items.csv"));
 	if (!ifs)
 	{
 		OutputDebugStringA("[ItemManager] LoadParasols: file not found\n");

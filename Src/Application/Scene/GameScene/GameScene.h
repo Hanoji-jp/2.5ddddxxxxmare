@@ -1,5 +1,6 @@
 ﻿#pragma once
 
+#include <functional>
 #include"../BaseScene/BaseScene.h"
 #include"../../GameObject/Character/Player/Player.h"
 #include"../../GameObject/Character/Enemy/Enemy.h"
@@ -16,10 +17,15 @@
 #include"../../GameObject/Gimmick/WarpHole.h"
 #include"../../Manager/PlanetGravityManager.h"
 #include"../../Manager/ManualGravityZoneManager.h"
+#include"../../Manager/DeadZoneManager.h"
+#include"../../Manager/CoreliaManager.h"
 #include"../../Camera/CameraSettings.h"
 #include"../../GameObject/Camera/EditorCamera.h"
 #include"../../Const/SpawnConst.h"
+#include"../../Const/EditorPickConst.h"
 #include"../../Const/JuiceConst.h"
+#include"../../Const/PauseMenuConst.h"
+#include"../../Const/DeathConst.h"
 #include"../../GameObject/Checkpoint/Checkpoint.h"
 #include"../../Const/CheckpointConst.h"
 #include"../../GameObject/UI/HpUI.h"
@@ -49,11 +55,31 @@ private:
 	void Init()               override;
 	void DrawGui()            override;
 	void DrawDebugExtra()     override;
+	void DrawDebugWires();    // デバッグワイヤー実体（シーンRTへ。DrawEffectExtraから呼ぶ）
 	void DrawUnLitExtra()     override;  // 背景Box描画
 	void DrawLitExtra()       override;  // 惑星モデル描画
+	void DrawOutlineExtra()   override;  // 惑星の地形アウトライン
 	void DrawEffectExtra()    override;  // アイテム星きらめき描画
 	void UpdateDuringHitStop() override; // ヒットストップ中も取得演出を更新
 	void DrawSpriteExtra() override;  // フェードオーバーレイ描画
+
+	// ポーズメニュー or コアリア会話中はワールドを止める。
+	// エディタ中は「他Updateを止める」トグル(m_editorFreeze)が ON ならワールドを停止。
+	// 惑星(地面)が1つも無い未作成ステージは、プレイヤーが奈落に落ち続けてカメラが
+	// 暴れるのを防ぐため停止する（マップ作成中の安定化）。
+	bool IsUpdatePaused() const override
+	{
+		const bool unbuiltStage = PlanetGravityManager::Instance().GetPlanets().empty();
+		return m_menuOpen || m_convoActive || (m_editorMode && m_editorFreeze) || unbuiltStage;
+	}
+	void UpdatePauseMenu();   // メニュー操作（Event から呼ぶ）
+	void DrawPauseMenu();     // メニュー描画（DrawSpriteExtra から呼ぶ）
+
+	// 回復「＋」マークをプレイヤー位置とHP UI位置に出す（緑石取得時）
+	void SpawnHealPlus(int count);
+
+	// 重力ゾーンの重力方向を壁に2D矢印で表示（マリギャラ風）
+	void DrawGravityArrows();
 
 	void RebuildEnemies();
 	void RebuildCheckpoints();
@@ -124,6 +150,68 @@ private:
 	bool                    m_f2Prev      = false;
 	EditorCamera*           m_pEditorCam  = nullptr;
 
+	// ─── エディタ：オブジェクト選択・操作（自前マウスピッキング＋ドラッグ）───
+	// 生成・コピー対象の種別
+	enum class EditKind { Planet, WindBox, SpikeBox, GravityCore, MovingFloor,
+						   ManualZone, DeadZone, Corelia };
+
+	// ギズモの操作軸
+	enum class GizmoAxis { None, X, Y, Z };
+
+	// 1 個の編集対象（位置の取得／設定／複製を抽象化して全オブジェクトを統一的に扱う）
+	struct EditEntry
+	{
+		Math::Vector3                              pos;        // 現在位置
+		std::function<void(const Math::Vector3&)>  setPos;     // 位置を設定（dirty 反映込み）
+		std::function<void()>                      dup;        // 複製
+		std::function<void()>                      select;     // 該当エディタの選択indexを同期
+		std::string                                label;      // 表示名
+		EditKind                                   kind;       // 種別
+		int                                        idx = -1;   // 種別内のコンテナindex
+	};
+	std::vector<EditEntry> m_editEntries;        // 毎フレーム再構築
+	int   m_selEntry      = -1;                  // 選択中エントリ(index)
+	bool  m_lmbPrev       = false;               // 左クリックのエッジ検出
+	bool  m_editorFreeze  = true;                // 他オブジェクトのUpdateを止めるトグル
+
+	// ギズモ（軸ドラッグ）
+	GizmoAxis     m_dragAxis    = GizmoAxis::None; // ドラッグ中の軸
+	Math::Vector3 m_dragStartPos = {};            // ドラッグ開始時のオブジェクト位置
+	float         m_dragStartS  = 0.0f;           // ドラッグ開始時の軸上パラメータ
+	bool          m_moveActive  = false;          // 軸ドラッグ移動中か
+	Math::Vector3 m_movePreStart = {};            // 移動前位置（アンドゥ記録用）
+
+	// アンドゥ／リドゥ
+	struct EditCommand
+	{
+		std::function<void()> undo;
+		std::function<void()> redo;
+	};
+	std::vector<EditCommand> m_undoStack;
+	std::vector<EditCommand> m_redoStack;
+	bool m_ctrlZPrev = false;
+	bool m_ctrlYPrev = false;
+
+	// グリッドスナップ（カクカク移動）
+	bool  m_snapEnabled = false;
+	float m_snapSize    = EditorPickConst::DefaultSnapSize;
+
+	void BuildEditEntries();                     // 全オブジェクトから編集エントリを構築
+	void UpdateEditorPick();                     // マウス選択＋軸ドラッグ＋アンドゥ（Event から）
+	bool ScreenRayFromGameUV(float _u, float _v,
+		Math::Vector3& _outOrigin, Math::Vector3& _outDir) const;
+	GizmoAxis  PickGizmoAxis(const Math::Vector3& _ro, const Math::Vector3& _rd,
+		const Math::Vector3& _selPos) const;     // 軸ハンドルのピック
+	void SpawnAtCursor(EditKind _kind);          // エディタカメラ前方に新規生成
+	void CreateDefaultAt(EditKind _kind, const Math::Vector3& _pos); // 既定オブジェクト生成
+	void RemoveLastOfKind(EditKind _kind);       // 種別の末尾を削除（生成のアンドゥ）
+	void SetPosByKindIndex(EditKind _kind, int _idx, const Math::Vector3& _pos); // 位置設定
+	void PushMoveCommand(EditKind _kind, int _idx,
+		const Math::Vector3& _oldPos, const Math::Vector3& _newPos);
+	void EditUndo();
+	void EditRedo();
+	void DrawSelectionMarker();                  // 選択中オブジェクト＋軸ギズモの描画
+
 	// テレポート型ワープのフェード状態
 	float           m_teleportFadeAlpha    = 0.0f;
 	float           m_teleportHoldTimer    = 0.0f;
@@ -140,8 +228,32 @@ private:
 	// シーン開始時のフェードイン（白→透明）
 	float           m_introFadeAlpha       = JuiceConst::IntroFadeStart;
 
+	// 導入カットシーン（Stage1限定：投げ出され→落下きりもみ→着地で操作開始）
+	bool            m_introCutscene = false;
+	float           m_introTimer    = 0.0f;   // 経過時間
+	float           m_introSpin     = 0.0f;   // タンブル回転角
+	void StartIntroCutscene();
+	void UpdateIntroCutscene();
+
+	// ポーズメニュー状態
+	bool            m_menuOpen        = false;
+	int             m_menuIndex       = 0;
+	bool            m_menuEscPrev     = false;
+	bool            m_menuNavPrev     = false;
+	bool            m_menuConfirmPrev = false;
+	float           m_menuBlinkTimer  = 0.0f;
+
 	// HP ダメージ検知（前フレームの HP を保持）
 	int             m_prevPlayerHp         = -1;
+
+	// 死亡シーケンス（暗転→復活→明転）
+	bool            m_deathActive  = false;
+	float           m_deathTimer   = 0.0f;
+	bool            m_deathRevived = false;
+	bool            m_checkpointReached = false; // チェックポイントを踏んだか（未踏なら初期スポーン）
+	float           m_airTime           = 0.0f;  // 連続で接地していない時間（落下死判定）
+	int             m_deathCount        = 0;     // このステージで死んだ回数（Maxに達したらリトライ）
+	Math::Vector3   m_deathCamFocus = { 0.0f, 0.0f, 0.0f }; // 死亡カメラの注視点（死んだ場所）
 
 	// FootDust 生成タイマー
 	float           m_dustTimer            = 0.0f;
@@ -181,12 +293,73 @@ private:
 	// プレイヤースポーン座標
 	Math::Vector3           m_spawnPos       = { SpawnConst::DefaultX, SpawnConst::DefaultY, SpawnConst::DefaultZ };
 
+	// 導入カットシーンの「飛んでくる」開始位置（エディタで設定・保存。ここからスポーンへ投げる）
+	Math::Vector3           m_introStartPos  = { SpawnConst::DefaultX + 25.0f, SpawnConst::DefaultY + 70.0f, SpawnConst::DefaultZ };
+
 	// チェックポイントリスト＋現在有効なリスポーン座標
 	std::vector<std::shared_ptr<Checkpoint>> m_checkpoints;
 	Math::Vector3           m_respawnPos     = { SpawnConst::DefaultX, SpawnConst::DefaultY, SpawnConst::DefaultZ };
 
 	// HP UI
 	std::shared_ptr<HpUI>   m_spHpUI;
+
+	// コアリア残機アイコン（死亡暗転画面に中央表示）
+	std::shared_ptr<KdTexture> m_lifeIconTex;
+	std::shared_ptr<KdTexture> m_lifeStarTex;          // 減る瞬間に散る星屑
+	bool                       m_lifeLostSePlayed = false; // 減るSEを1回だけ鳴らす用
+
+	// コイン（収集物）カウンター
+	std::shared_ptr<KdTexture> m_coinIconTex;
+	int                        m_coinTotal    = 0;     // 取得した累計
+	float                      m_coinPopTimer = 0.0f;  // 取得時の拡大演出残り
+
+	// HP（星1個で完結する満ち欠けゲージ）
+	std::shared_ptr<KdTexture> m_hpStarTex;
+	float                      m_hpShakeTimer = 0.0f;  // 被ダメ時の揺れ残り
+	float                      m_hpCoreAnim   = 0.0f;  // 重力コア2D表示の波アニメ時間
+	int                        m_hpPrevHp     = -1;    // 前フレームHP（凹み発生検知用）
+
+	// HPコアが凹んだ瞬間に飛ばすパーティクル（DrawTriangleで描画）
+	struct HpParticle
+	{
+		Math::Vector2 pos{ 0.0f, 0.0f };   // アイコン中心からのローカル座標
+		Math::Vector2 vel{ 0.0f, 0.0f };
+		float life = 0.0f;                 // 残り寿命(秒)
+		float maxLife = 0.5f;
+		float size = 6.0f;
+		float rot = 0.0f;
+		Math::Color col{ 0.6f, 0.9f, 1.0f, 1.0f };
+	};
+	std::vector<HpParticle> m_hpParticles;
+
+	// 回復(緑石取得)時に上昇する「＋」マーク（プレイヤー位置・HP UI位置の両方）
+	struct HealPlus
+	{
+		Math::Vector2 pos{ 0.0f, 0.0f };   // スクリーン座標(中心原点・+Yが上)
+		float life = 0.0f;
+		float maxLife = 0.8f;
+		float size = 18.0f;
+	};
+	std::vector<HealPlus> m_healPluses;
+
+	// ── コアリア会話（ヒントNPC）──
+	bool          m_convoActive   = false;  // 会話中か
+	Math::Vector3 m_convoNpcPos   = {};     // ズーム対象のNPC位置
+	std::string   m_convoText;              // 表示するヒント本文（SJIS）
+	float         m_convoZoom     = 0.0f;   // 0=通常, 1=ズームイン完了
+	bool          m_interactPrev  = false;  // Wキーの押下エッジ検出
+
+	// デバッグ可視化（ManualZone以外＝デッドゾーン/コアリア判定）。1キーでトグル
+	bool          m_debugZonesVisible = false;
+	bool          m_debugKeyPrev      = false;
+
+	float         m_gravArrowScroll   = 0.0f;  // 重力矢印の流れ（スクロール）時間
+
+	// エディタ画面（ゲームをImGuiウィンドウに表示）。F3でトグル。OFFで通常フルスクリーン描画
+	bool          m_editorScreen   = true;
+	bool          m_editorKeyPrev  = false;
+	void UpdateCorelia();                   // 会話・インタラクト処理（Event から呼ぶ）
+	void DrawCorelia();                     // 会話UI描画（DrawSpriteExtra から呼ぶ）
 
 	// ポイントライトリスト
 	std::vector<std::shared_ptr<PointLightObject>> m_pointLights;

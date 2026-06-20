@@ -28,10 +28,17 @@ public:
 
 	void Draw();
 
+	// シーン描画先のRT（SRV付き）。エディタのゲームビューポート表示に使う
+	const std::shared_ptr<KdTexture>& GetSceneRT() const { return m_postEffectRTPack.m_RTTexture; }
+
 	void BeginBright();
 	void EndBright();
 
 	void PostEffectProcess();
+
+	// 不透明シーン描画の直後・エフェクト描画の前に呼ぶ：画面エッジ検出のアウトラインを
+	// 不透明シーンにだけ適用する（この後に描くエフェクトには線が乗らない）。
+	void ApplySceneOutline();
 
 	// モーションブラー用：毎フレームカメラ位置を渡す
 	void SetCameraPositionForMotionBlur(const Math::Vector3& pos) { m_currentCamPos = pos; m_camPosSet = true; }
@@ -61,6 +68,9 @@ private:
 	void SetBlurToDevice();
 	void SetDoFToDevice();
 	void SetBrightToDevice();
+	void SetOutlineToDevice();
+	// アウトライン（画面エッジ検出）：srcColor を入力に、輪郭を乗せて m_outlineRTPack へ出力
+	void OutlineProcess(const std::shared_ptr<KdTexture>& srcColor);
 
 	ID3D11VertexShader* m_VS = nullptr;
 	ID3D11InputLayout* m_inputLayout = nullptr;
@@ -68,6 +78,7 @@ private:
 	ID3D11PixelShader* m_PS_Blur = nullptr;
 	ID3D11PixelShader* m_PS_DoF = nullptr;
 	ID3D11PixelShader* m_PS_Bright = nullptr;
+	ID3D11PixelShader* m_PS_Outline = nullptr;
 
 	static const int kBlurSamplingRadius = 8;
 	static const int kLightBloomSamplingRadius = 4;
@@ -101,6 +112,22 @@ private:
 	};
 	KdConstantBuffer<cbBrightFilter>	m_cb0_BrightInfo;
 
+	// アウトライン（画面エッジ検出）パラメータ
+	struct cbOutlineInfo
+	{
+		float TexelX = 0.0f;
+		float TexelY = 0.0f;
+		float Thickness       = 1.6f;   // 線の太さ（テクセル）
+		float DepthThreshold  = 0.35f;  // 深度エッジ（シルエット）しきい値
+
+		float NormalThreshold = 0.2f;   // 法線エッジ（角）しきい値
+		float EdgeStrength    = 1.0f;   // 線の濃さ
+		float _opad[2] = { 0.0f, 0.0f };
+
+		Math::Vector4 Color = { 0.0f, 0.0f, 0.0f, 1.0f };  // 線の色
+	};
+	KdConstantBuffer<cbOutlineInfo>		m_cb0_OutlineInfo;
+
 	KdRenderTargetPack	m_postEffectRTPack;
 
 	KdRenderTargetPack	m_blurRTPack;
@@ -117,6 +144,7 @@ private:
 	float         m_damageFlashTimer = 0.0f;
 
 	KdRenderTargetPack	m_depthOfFieldRTPack;
+	KdRenderTargetPack	m_outlineRTPack;   // アウトライン合成結果
 
 	KdRenderTargetPack	m_brightEffectRTPack;
 	static const int	kLightBloomNum = 4;

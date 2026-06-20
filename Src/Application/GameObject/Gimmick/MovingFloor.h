@@ -23,6 +23,7 @@ public:
 	void Init()      override;
 	void Update()    override;
 	void DrawLit()   override;
+	void DrawOutline() override;   // 地形アウトライン（細め）
 	void DrawUnLit() override;
 	void DrawDebug() override;
 

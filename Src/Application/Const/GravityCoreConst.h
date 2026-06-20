@@ -85,6 +85,7 @@ namespace GravityCoreConst
 
 	// ワイヤーを面より少しだけ外側に出して描く倍率（Z-fight 回避＋前面のみ表示）
 	constexpr float WireDepthOutset = 1.02f;
+	constexpr float OutlineScale    = 1.16f;  // アウトライン用に一回り大きく描く倍率
 
 	// Glow コアの取得判定半径（radius に対する倍率）
 	constexpr float PickupRadiusMul = 1.4f;

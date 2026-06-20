@@ -1,6 +1,8 @@
 ﻿#include "../../Pch.h"
 #include "PlanetGravityManager.h"
+#include "StageManager.h"
 #include "../Manager/ModelManager.h"
+#include "../Const/OutlineConst.h"
 #include <fstream>
 #include <sstream>
 
@@ -531,7 +533,7 @@ int PlanetGravityManager::FindNearestPlanetIndex(const Math::Vector3& _charPos) 
 
 void PlanetGravityManager::Save() const
 {
-	std::ofstream ofs(PlanetConst::SavePath);
+	std::ofstream ofs(StageManager::Instance().ResolvePath("planets.csv"));
 	if (!ofs) { return; }
 
 	for (const auto& p : m_planets)
@@ -558,10 +560,11 @@ void PlanetGravityManager::Save() const
 
 void PlanetGravityManager::Load()
 {
-	std::ifstream ifs(PlanetConst::SavePath);
-	if (!ifs) { return; }
+	std::ifstream ifs(StageManager::Instance().ResolvePath("planets.csv"));
 
+	// ステージ切替時、新ステージのファイルが無くても「空のステージ」にするため先にクリア
 	m_planets.clear();
+	if (!ifs) { return; }
 
 	std::string line;
 	while (std::getline(ifs, line))
@@ -817,5 +820,19 @@ void PlanetGravityManager::DrawLit() const
 			shader.SetTriplanarUV(false);
 			shader.SetGrassBlend(false);
 		}
+	}
+}
+
+// 惑星の地形アウトライン（細め）。BeginOutline/EndOutline の間に呼ぶ前提。
+void PlanetGravityManager::DrawOutline() const
+{
+	auto& shader = KdShaderManager::Instance().m_StandardShader;
+	shader.SetOutlineWidth(OutlineConst::TerrainWidth);
+	const Math::Color c(OutlineConst::ColorMul, OutlineConst::ColorMul, OutlineConst::ColorMul, 1.0f);
+
+	for (const auto& p : m_planets)
+	{
+		if (!p.modelWork || !p.modelWork->GetData()) { continue; }
+		shader.DrawModel(*p.modelWork, p.mWorld, c, Math::Vector3::Zero);
 	}
 }

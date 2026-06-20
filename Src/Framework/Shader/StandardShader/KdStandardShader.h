@@ -6,6 +6,7 @@
 //============================================================
 // KdShaderManager.h より先に include されるため前方宣言
 enum class KdDepthStencilState;
+enum class KdRasterizerState;
 
 class KdStandardShader
 {
@@ -77,6 +78,15 @@ public:
 	// 定数バッファ(ボーン単位更新：スキンメッシュ対応)
 	struct cbBone {
 		Math::Matrix mBones[300];
+	};
+
+	// 定数バッファ(アウトライン：原神式背面押し出し)
+	struct cbOutline {
+		float			Width = 0.04f;    // ワールド単位の押し出し幅（遠いほど画面上は細くなる）
+		// 深度を少しだけ奥へずらす量(NDC)。NDCバイアスは遠距離で効きすぎる（遠くで
+		// 輪郭が消える）ため既定は0。継ぎ目対策はポスト処理側で行う。
+		float			DepthBias = 0.0f;
+		float			_opad[2] = { 0.0f, 0.0f };
 	};
 
 	//================================================
@@ -257,6 +267,18 @@ public:
 	void BeginGenerateDepthMapFromLight();
 	void EndGenerateDepthMapFromLight();
 
+	// アウトライン（原神式：法線方向に背面を押し出して単色描画）を描く前後に行う。
+	// この間に DrawModel() でモデルを描くと輪郭線になる。colRate に暗めの色を渡すと
+	// その色（=ベース色×colRate）で輪郭が出る。
+	void BeginOutline();
+	void EndOutline();
+	// 輪郭の太さ（画面上のおおよその割合。FOVにほぼ依存しない）
+	void SetOutlineWidth(float width)
+	{
+		m_cb_Outline.Work().Width = width;
+		m_cb_Outline.Write();
+	}
+
 	//================================================
 	// 描画関数
 	//================================================
@@ -280,7 +302,8 @@ public:
 	void DrawVertices(const std::vector<KdPolygon::Vertex>& vertices, const Math::Matrix& mWorld = Math::Matrix::Identity,
 		const Math::Color& colRate = kWhiteColor,
 		KdDepthStencilState depthState = static_cast<KdDepthStencilState>(2),
-		D3D_PRIMITIVE_TOPOLOGY topology = D3D_PRIMITIVE_TOPOLOGY_LINELIST);
+		D3D_PRIMITIVE_TOPOLOGY topology = D3D_PRIMITIVE_TOPOLOGY_LINELIST,
+		KdRasterizerState raster = static_cast<KdRasterizerState>(0)); // 0 = CullNone
 
 	//================================================
 	// 初期化・解放
@@ -334,14 +357,17 @@ private:
 	ID3D11VertexShader* m_VS_Lit = nullptr;					// 陰影あり
 	ID3D11VertexShader* m_VS_UnLit = nullptr;				// 陰影なし
 	ID3D11VertexShader* m_VS_GenDepthFromLight = nullptr;	// 光からの深度
+	ID3D11VertexShader* m_VS_Outline = nullptr;				// アウトライン（背面押し出し）
 
 	// 頂点入力レイアウト
 	ID3D11InputLayout* m_inputLayout = nullptr;
+	ID3D11InputLayout* m_outlineInputLayout = nullptr;	// アウトライン用（スロット1=スムース法線）
 	
 	// ピクセルシェーダー
 	ID3D11PixelShader* m_PS_Lit = nullptr;					// 陰影あり
 	ID3D11PixelShader* m_PS_UnLit = nullptr;				// 陰影なし
 	ID3D11PixelShader* m_PS_GenDepthFromLight = nullptr;	// 光からの深度
+	ID3D11PixelShader* m_PS_Outline = nullptr;				// アウトライン（単色）
 
 	// テクスチャ
 	std::shared_ptr<KdTexture>	m_dissolveTex    = nullptr;	// ディゾルブで使用するデフォルトテクスチャ
@@ -354,6 +380,7 @@ private:
 	KdConstantBuffer<cbMesh>		m_cb1_Mesh;				// メッシュ毎に更新
 	KdConstantBuffer<cbMaterial>	m_cb2_Material;			// マテリアル毎に更新
 	KdConstantBuffer<cbBone>		m_cb3_Bone;				// ボーン事に更新(スキンメッシュ対応「)
+	KdConstantBuffer<cbOutline>		m_cb_Outline;			// アウトライン太さ（b4）
 
 	KdRenderTargetPack	m_depthMapFromLightRTPack;
 	KdRenderTargetChanger m_depthMapFromLightRTChanger;

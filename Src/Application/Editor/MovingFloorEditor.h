@@ -58,6 +58,12 @@ public:
 
 	const std::vector<MovingFloorData>& GetFloors() const { return m_floors; }
 
+	// エディタ操作（マウスピッキング／生成／コピー）用のアクセサ
+	std::vector<MovingFloorData>& WorkFloors()       { return m_floors; }
+	void MarkDirty()                                 { m_dirty = true; }
+	void SetSelected(int _i)                         { m_selectedIndex = _i; }
+	int  GetSelected() const                         { return m_selectedIndex; }
+
 	bool IsDirty()    const { return m_dirty; }
 	void ClearDirty()       { m_dirty = false; }
 

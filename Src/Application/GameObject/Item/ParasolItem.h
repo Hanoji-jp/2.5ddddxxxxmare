@@ -20,6 +20,7 @@ public:
 	void Init()    override;
 	void Update()  override;
 	void DrawLit() override;
+	void DrawOutline() override;   // 原神式アウトライン
 	void DrawEffect() override;   // 星きらめき
 
 	void SetSpawnPos(const Math::Vector3& pos) { m_spawnPos = pos; SetPos(pos); }

@@ -1,6 +1,7 @@
 #include "../../../../Pch.h"
 #include "Cubun.h"
 #include "../Character.h"
+#include "../../../Const/OutlineConst.h"
 
 //==========================================================
 // 初期化
@@ -137,6 +138,15 @@ void Cubun::DrawLit()
 
 	// ビジュアル行列（体は回転しない）
 	KdShaderManager::Instance().m_StandardShader.DrawModel(m_modelWork, CalcVisualMatrix());
+}
+
+void Cubun::DrawOutline()
+{
+	if (!m_modelWork.IsEnable()) { return; }
+	auto& shader = KdShaderManager::Instance().m_StandardShader;
+	shader.SetOutlineWidth(OutlineConst::Width);
+	const Math::Color c(OutlineConst::ColorMul, OutlineConst::ColorMul, OutlineConst::ColorMul, 1.0f);
+	shader.DrawModel(m_modelWork, CalcVisualMatrix(), c, Math::Vector3::Zero);
 }
 
 void Cubun::DrawDebug()

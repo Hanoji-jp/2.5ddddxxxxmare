@@ -1,5 +1,6 @@
 ﻿#include "../../Pch.h"
 #include "GravityCoreEditor.h"
+#include "../Manager/StageManager.h"
 #include <fstream>
 #include <sstream>
 
@@ -119,7 +120,7 @@ void GravityCoreEditor::DrawDebug() const
 //----------------------------------------------------------
 void GravityCoreEditor::Save() const
 {
-	std::ofstream ofs(GravityCoreConst::SavePath);
+	std::ofstream ofs(StageManager::Instance().ResolvePath("gravity_cores.csv"));
 	if (!ofs) { return; }
 
 	for (const auto& c : m_cores)
@@ -141,7 +142,7 @@ void GravityCoreEditor::Load()
 	m_cores.clear();
 	m_selectedIndex = -1;
 
-	std::ifstream ifs(GravityCoreConst::SavePath);
+	std::ifstream ifs(StageManager::Instance().ResolvePath("gravity_cores.csv"));
 	if (!ifs) { return; }
 
 	std::string line;

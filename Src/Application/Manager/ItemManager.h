@@ -39,9 +39,11 @@ public:
 	// 全アイテム更新 + プレイヤーの HitBox との取得判定
 	// 戻り値: 取得コイン数
 	// outParasolPickedUp: このフレームにパラソルを取得したか
-	int  Update(HitBox& _playerHitBox, bool& outParasolPickedUp);
+	// outRocksPicked: このフレームに取得した緑石(回復アイテム)の数
+	int  Update(HitBox& _playerHitBox, bool& outParasolPickedUp, int& outRocksPicked);
 
 	void DrawLit();
+	void DrawOutline();  // アイテムの原神式アウトライン
 	void DrawEffect();   // アイテム周りの星きらめき（エフェクトパスで呼ぶ）
 	void UpdatePickupEffects();   // 取得バーストのみ更新（ヒットストップ中も呼ぶ）
 	void DrawGui();   // ImGui によるアイテム配置エディター

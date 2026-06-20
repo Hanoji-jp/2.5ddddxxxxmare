@@ -38,6 +38,7 @@ protected:
 	virtual void DrawDebugExtra() {}
 	virtual void DrawUnLitExtra() {}  // 背景など objList 外の UnLit 描画用
 	virtual void DrawLitExtra()   {}  // 惑星など objList 外のモデル描画用
+	virtual void DrawOutlineExtra() {} // objList 外のアウトライン追加描画用
 	virtual void DrawEffectExtra() {} // アイテム星など objList 外のエフェクト描画用
 	virtual void DrawBrightExtra() {} // objList 外のブルーム源（発光）追加描画用
 	virtual void DrawSpriteExtra() {} // フルスクリーンオーバーレイ等の追加スプライト描画
@@ -49,6 +50,9 @@ protected :
 	virtual void Init();
 	// ヒットストップ中でも動かしたい演出の更新（取得バースト等）
 	virtual void UpdateDuringHitStop() {}
+
+	// true の間はオブジェクト更新・物理を止める（ポーズメニュー等）。Event は動く。
+	virtual bool IsUpdatePaused() const { return false; }
 
 	std::shared_ptr<KdCamera> m_camera = nullptr;
 

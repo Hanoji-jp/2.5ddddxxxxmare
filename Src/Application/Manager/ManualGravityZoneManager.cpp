@@ -1,11 +1,12 @@
 ﻿#include "../../Pch.h"
 #include "ManualGravityZoneManager.h"
+#include "StageManager.h"
 #include "ModelManager.h"
 #include "../../Framework/Utility/KdDebug/KdDebugWireFrame.h"
 #include <fstream>
 #include <sstream>
 
-constexpr const char* SavePath = "Asset/Data/ManualGravityZones.csv";
+constexpr const char* SaveFileName = "ManualGravityZones.csv";   // ステージ別フォルダ内のファイル名
 constexpr float kBackgroundDepth = 2.0f;  // 背景Boxを奥に配置する距離
 constexpr float kBackgroundThickness = 0.5f;  // 背景Boxの厚み（Z方向）
 constexpr float kBoxModelHalfSize = 1.0f;  // Box.gltfのハーフサイズ（-1〜+1なので1.0）
@@ -25,6 +26,15 @@ void ManualGravityZone::UpdateWorld()
 	const Math::Matrix scale = Math::Matrix::CreateScale(bgScale);
 	const Math::Matrix trans = Math::Matrix::CreateTranslation(bgCenter);
 	mWorld = scale * trans;
+}
+
+float ManualGravityZoneManager::GetWallFrontZ(int _index) const
+{
+	if (_index < 0 || _index >= static_cast<int>(m_zones.size())) { return 0.0f; }
+	// 背景Boxはカメラの奥(+Z)へ kBackgroundDepth ずらして厚み(±halfDepth)を持つ。
+	// そのカメラ側(小さいZ)の面 = center.z + depth - halfDepth
+	const float halfDepth = kBackgroundThickness * kBoxModelHalfSize;
+	return m_zones[_index].Center.z + kBackgroundDepth - halfDepth;
 }
 
 bool ManualGravityZoneManager::CanUseManualGravity(const Math::Vector3& _pos) const
@@ -75,7 +85,7 @@ bool ManualGravityZoneManager::IsInNormalGravityZone(const Math::Vector3& _pos, 
 	return false;
 }
 
-void ManualGravityZoneManager::DrawUnLit() const
+void ManualGravityZoneManager::DrawUnLit(bool showNormalGravity, bool manualGravityUp) const
 {
 	auto& shader = KdShaderManager::Instance().m_StandardShader;
 
@@ -85,9 +95,15 @@ void ManualGravityZoneManager::DrawUnLit() const
 	for (const auto& zone : m_zones)
 	{
 		if (!zone.bEnabled || !zone.modelWork || !zone.modelWork->GetData()) { continue; }
+		// 通常は ManualGravity の箱のみ。NormalGravity の箱は debug 時だけ
+		if (!showNormalGravity && zone.Type == ZoneType::NormalGravity) { continue; }
 
-		// 半透明の背景として描画（色レートで透明度調整）
-		const Math::Color bgColor = { 0.5f, 0.7f, 1.0f, 0.3f };  // 青っぽい半透明
+		// 半透明の背景として描画。ManualGravity は重力方向で色を変える（上=赤/下=青）
+		Math::Color bgColor = { 0.5f, 0.7f, 1.0f, 0.3f };   // 既定：青
+		if (zone.Type == ZoneType::ManualGravity && manualGravityUp)
+		{
+			bgColor = { 1.0f, 0.3f, 0.25f, 0.3f };          // 上向き：赤
+		}
 		shader.DrawModel(*zone.modelWork, zone.mWorld, bgColor);
 	}
 
@@ -234,7 +250,7 @@ void ManualGravityZoneManager::DrawGui()
 
 void ManualGravityZoneManager::Save() const
 {
-	std::ofstream ofs(SavePath);
+	std::ofstream ofs(StageManager::Instance().ResolvePath(SaveFileName));
 	if (!ofs) { return; }
 
 	for (const auto& zone : m_zones)
@@ -253,10 +269,11 @@ void ManualGravityZoneManager::Save() const
 
 void ManualGravityZoneManager::Load()
 {
-	std::ifstream ifs(SavePath);
-	if (!ifs) { return; }
+	std::ifstream ifs(StageManager::Instance().ResolvePath(SaveFileName));
 
+	// 新ステージのファイルが無くても空にする（前ステージのゾーンを残さない）
 	m_zones.clear();
+	if (!ifs) { return; }
 
 	std::string line;
 	while (std::getline(ifs, line))

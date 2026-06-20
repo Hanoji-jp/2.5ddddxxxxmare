@@ -46,6 +46,12 @@ public:
 
 	const std::vector<WindBoxData>& GetBoxes() const { return m_boxes; }
 
+	// エディタ操作（マウスピッキング／生成／コピー）用のアクセサ
+	std::vector<WindBoxData>& WorkBoxes()       { return m_boxes; }
+	void MarkDirty()                            { m_dirty = true; }
+	void SetSelected(int _i)                    { m_selectedIndex = _i; }
+	int  GetSelected() const                    { return m_selectedIndex; }
+
 	bool IsDirty()    const { return m_dirty; }
 	void ClearDirty()       { m_dirty = false; }
 

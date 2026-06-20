@@ -11,14 +11,15 @@ namespace RockConst
 	constexpr float        Radius         = 0.22f;   // 小さめ
 	constexpr float        DarkFactor     = 0.55f;   // 奥面を暗く
 
-	// 岩石色（GravityCore の FaceColor 系）
-	constexpr float ColorR = 0.55f;
-	constexpr float ColorG = 0.45f;
-	constexpr float ColorB = 0.35f;
+	// 回復アイテム用：緑の石（エメラルド系）
+	constexpr float ColorR = 0.18f;
+	constexpr float ColorG = 0.70f;
+	constexpr float ColorB = 0.30f;
 	constexpr float FaceAlpha = 0.95f;
 	constexpr float WireBoost = 1.6f;
 	constexpr float WireAlpha = 0.6f;
 	constexpr float WireDepthOutset = 1.03f;  // ワイヤーを面より少し外へ（裏線を隠す）
+	constexpr float OutlineScale    = 1.18f;  // アウトライン用に一回り大きく描く倍率
 
 	// ── 物理（重力は upDir 基準。横重力ステージでも正しく落ちる）──
 	constexpr float Gravity        = 22.0f;   // -upDir 方向の加速度（units/s^2）
@@ -37,6 +38,9 @@ namespace RockConst
 	// 床検出レイ（spawn 時に下向きへ撃って実際の地面を探す。敵を倒す高さに依存しないため）
 	constexpr float GroundRayUp  = 2.0f;    // spawn より少し上から
 	constexpr float GroundRayLen = 200.0f;  // 高所で倒しても地面まで届く長さ
+
+	// 地面が無い場合：これだけ落下したら消滅（奈落に落ちた岩を片付ける）
+	constexpr float FallDespawnDist = 120.0f;
 
 	// ── 着地後の演出（ふわふわ上下）──
 	constexpr float LandedBobSpeed = 2.5f;   // 上下の速さ（ゆっくり）

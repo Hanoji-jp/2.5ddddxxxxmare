@@ -38,17 +38,18 @@ void StoryScene::Event()
 	const float dt = KdFPSController::GetDt();
 	m_timer += dt;
 
-	// 入力エッジ検出（押した瞬間だけ反応）
+	// 入力エッジ検出（押した瞬間だけ反応）。シーン切替直後は持ち越し/連打を無視。
+	const bool locked = SceneManager::Instance().IsInputLocked();
 	const bool advNow = ((GetAsyncKeyState(VK_RETURN) & 0x8000) != 0)
 	                 || ((GetAsyncKeyState(VK_SPACE)  & 0x8000) != 0);
-	const bool advEdge = advNow && !m_advancePrev;
+	const bool advEdge = advNow && !m_advancePrev && !locked;
 	m_advancePrev = advNow;
 
-	const bool skipNow  = (GetAsyncKeyState(VK_ESCAPE) & 0x8000) != 0;
-	const bool skipEdge = skipNow && !m_skipPrev;
+	const bool skipNow  = (GetAsyncKeyState(VK_TAB) & 0x8000) != 0;
+	const bool skipEdge = skipNow && !m_skipPrev && !locked;
 	m_skipPrev = skipNow;
 
-	// ESC でストーリーをスキップ → ステージセレクトへ
+	// TAB でストーリーをスキップ → ステージセレクトへ（ESCはアプリ終了のため不可）
 	if (skipEdge)
 	{
 		SceneManager::Instance().SetNextScene(SceneManager::SceneType::StageSelect);

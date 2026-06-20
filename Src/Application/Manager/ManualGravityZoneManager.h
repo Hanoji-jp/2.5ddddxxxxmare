@@ -71,6 +71,12 @@ public:
 	// エリア数取得
 	size_t GetZoneCount() const { return m_zones.size(); }
 
+	// エディタ操作用：選択中インデックスを設定
+	void SetSelected(int _i) { m_selectedIndex = _i; }
+
+	// エディタ操作用：末尾のゾーンを削除（生成のアンドゥ用）
+	void RemoveLastZone() { if (!m_zones.empty()) { m_zones.pop_back(); } }
+
 	// エリア取得
 	ManualGravityZone* GetZone(int _index)
 	{
@@ -78,11 +84,15 @@ public:
 		return &m_zones[_index];
 	}
 
+	// 背景Boxモデルのカメラ側の面のZ座標（重力矢印をこの面に合わせるのに使う）
+	float GetWallFrontZ(int _index) const;
+
 	// デバッグ描画
 	void DrawDebugShapes() const;
 
-	// 背景Box描画
-	void DrawUnLit() const;
+	// 背景Box描画。showNormalGravity=false なら NormalGravity ゾーンの箱は描かない。
+	// manualGravityUp=true で ManualGravity ゾーンの箱を赤、false で青にする。
+	void DrawUnLit(bool showNormalGravity = true, bool manualGravityUp = false) const;
 
 	// ImGui エディタ
 	void DrawGui();

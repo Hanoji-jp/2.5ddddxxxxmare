@@ -1,5 +1,6 @@
 ﻿#include "../../../Pch.h"
 #include "WindBox.h"
+#include "../../Const/OutlineConst.h"
 
 static float WBRand01() { return static_cast<float>(rand()) / static_cast<float>(RAND_MAX); }
 static float WBRandSym() { return (WBRand01() - 0.5f) * 2.0f; }
@@ -172,6 +173,16 @@ void WindBox::DrawLit()
 	m_worldMat = scaleMat * rotMat * Math::Matrix::CreateTranslation(m_center);
 
 	KdShaderManager::Instance().m_StandardShader.DrawModel(*m_boxModel, m_worldMat);
+}
+
+//----------------------------------------------------------
+void WindBox::DrawOutline()
+{
+	if (!m_boxModel || !m_boxModel->IsEnable()) { return; }
+	auto& shader = KdShaderManager::Instance().m_StandardShader;
+	shader.SetOutlineWidth(OutlineConst::TerrainWidth);   // 大きいので太め
+	const Math::Color c(OutlineConst::ColorMul, OutlineConst::ColorMul, OutlineConst::ColorMul, 1.0f);
+	shader.DrawModel(*m_boxModel, m_worldMat, c, Math::Vector3::Zero);
 }
 
 //----------------------------------------------------------

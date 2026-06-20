@@ -42,8 +42,10 @@ private:
 	Math::Vector3 m_velocity  = {};
 	Math::Vector3 m_upDir     = { 0.0f, 1.0f, 0.0f };
 	float         m_groundLvl = 0.0f;   // 着地面の up 座標（spawn の up 成分）
+	float         m_spawnUp   = 0.0f;   // spawn 時の up 座標（落下消滅判定の基準）
 	float         m_rotAngle  = 0.0f;
 	float         m_age       = 0.0f;
 	bool          m_landed    = false;
+	bool          m_hasGround = true;   // 真下に地面があるか（無ければ落下し続ける）
 	bool          m_expired   = false;
 };

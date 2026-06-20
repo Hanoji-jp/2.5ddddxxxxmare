@@ -1,5 +1,6 @@
 ﻿#include "SceneManager.h"
 
+#include <Windows.h>
 #include "BaseScene/BaseScene.h"
 #include "TitleScene/TitleScene.h"
 #include "StoryScene/StoryScene.h"
@@ -9,6 +10,18 @@
 
 void SceneManager::PreUpdate()
 {
+	// 入力ロックを先に減らす（この後シーン切替があれば ChangeScene で再セットされ、
+	// 切替フレームは満タンのロックが維持される）
+	if (m_inputLockFrames > 0) { --m_inputLockFrames; }
+
+	// 切替後、決定キー(Enter/Space/Tab)が一度でも離されたら持ち越しロックを解除。
+	// （押しっぱなしのまま新シーンへ来ても、離すまで決定が効かない）
+	const bool confirmDown =
+		((GetAsyncKeyState(VK_RETURN) & 0x8000) != 0) ||
+		((GetAsyncKeyState(VK_SPACE)  & 0x8000) != 0) ||
+		((GetAsyncKeyState(VK_TAB)    & 0x8000) != 0);
+	if (!confirmDown) { m_confirmReleased = true; }
+
 	// シーン切替
 	if (m_currentSceneType != m_nextSceneType)
 	{
@@ -82,4 +95,9 @@ void SceneManager::ChangeScene(SceneType _sceneType)
 
 	// 現在のシーン情報を更新
 	m_currentSceneType = _sceneType;
+
+	// シーン切替直後は入力をロック（前シーンの押しっぱなしが即発火するのを防ぐ）
+	// タイマー＋「決定キーを一度離すまで」の二重ロック
+	m_inputLockFrames = kInputLockFrames;
+	m_confirmReleased = false;
 }

@@ -102,6 +102,7 @@ public:
 	void DrawGui();
 	void DrawDebugShapes() const;
 	void DrawLit() const;   // 惑星モデルを描画
+	void DrawOutline() const; // 惑星の地形アウトライン（細め）を描画
 	void PostUpdate();       // 位置変更に追従してワールド行列を更新（Dirty時のみ）
 
 	// 惑星の位置・形状が変わったことを通知（次の PostUpdate で行列を再計算）
@@ -129,6 +130,10 @@ public:
 	}
 
 	const std::vector<PlanetData>& GetPlanets() const { return m_planets; }
+
+	// エディタ操作（マウスピッキング／生成／コピー）用のアクセサ
+	std::vector<PlanetData>& WorkPlanets() { return m_planets; }
+	void SetSelected(int _i)               { m_selectedIndex = _i; }
 
 private:
 	PlanetGravityManager()  { Load(); }

@@ -82,9 +82,6 @@
     <Filter Include="Src\Application\Camera">
       <UniqueIdentifier>{20de8733-f7c4-4da9-8f36-fa908009d82d}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Src\Application\Const">
-      <UniqueIdentifier>{71a7bd87-faf9-4728-9b69-7f91f9ce71f4}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Src\Application\Editor">
       <UniqueIdentifier>{bef0d219-747f-4e22-96c0-1103b340d541}</UniqueIdentifier>
     </Filter>
@@ -93,6 +90,9 @@
     </Filter>
     <Filter Include="Src\Application\Manager">
       <UniqueIdentifier>{ce122717-4f71-4112-989f-d84601657f3c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Src\Application\Camera\Const">
+      <UniqueIdentifier>{71a7bd87-faf9-4728-9b69-7f91f9ce71f4}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -307,6 +307,8 @@
     <ClInclude Include="Src\Application\Manager\PlanetGravityManager.h" />
     <ClInclude Include="Src\Application\GameObject\Light\PointLightObject.h" />
     <ClInclude Include="Src\Application\Manager\ManualGravityZoneManager.h" />
+    <ClInclude Include="Src\Application\Manager\DeadZoneManager.h" />
+    <ClInclude Include="Src\Application\Manager\CoreliaManager.h" />
     <ClInclude Include="Src\Application\Const\WarpHoleConst.h" />
     <ClInclude Include="Src\Application\Editor\WarpHoleEditor.h" />
     <ClInclude Include="Src\Application\GameObject\Gimmick\WarpHole.h" />
@@ -345,6 +347,10 @@
     <ClInclude Include="Src\Application\Camera\CameraSettings.h">
       <Filter>Src\Application\Camera</Filter>
     </ClInclude>
+    <ClInclude Include="Src\Application\Const\StageSelectConst.h" />
+    <ClInclude Include="Src\Application\Const\StoryConst.h" />
+    <ClInclude Include="Src\Application\Scene\StageSelectScene\StageSelectScene.h" />
+    <ClInclude Include="Src\Application\Scene\StoryScene\StoryScene.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Pch.cpp">
@@ -512,6 +518,8 @@
     <ClCompile Include="Src\Application\Manager\PlanetGravityManager.cpp" />
     <ClCompile Include="Src\Application\GameObject\Light\PointLightObject.cpp" />
     <ClCompile Include="Src\Application\Manager\ManualGravityZoneManager.cpp" />
+    <ClCompile Include="Src\Application\Manager\DeadZoneManager.cpp" />
+    <ClCompile Include="Src\Application\Manager\CoreliaManager.cpp" />
     <ClCompile Include="Src\Application\Editor\WarpHoleEditor.cpp" />
     <ClCompile Include="Src\Application\GameObject\Gimmick\WarpHole.cpp" />
     <ClCompile Include="Src\Application\GameObject\BackGround\StarField.cpp" />
@@ -536,6 +544,8 @@
     <ClCompile Include="Src\Application\Camera\CameraSettings.cpp">
       <Filter>Src\Application\Camera</Filter>
     </ClCompile>
+    <ClCompile Include="Src\Application\Scene\StageSelectScene\StageSelectScene.cpp" />
+    <ClCompile Include="Src\Application\Scene\StoryScene\StoryScene.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Src\Framework\Shader\inc_KdCommon.hlsli">

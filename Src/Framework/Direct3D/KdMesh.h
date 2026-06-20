@@ -82,6 +82,8 @@ public:
 	{
 		m_vertBuf.Release();
 		m_indxBuf.Release();
+		m_smoothNormalBuf.Release();
+		m_hasSmoothNormal = false;
 		m_subsets.clear();
 		m_positions.clear();
 		m_faces.clear();
@@ -108,6 +110,9 @@ private:
 	KdBuffer					m_vertBuf;
 	// インデックスバッファ
 	KdBuffer					m_indxBuf;
+	// アウトライン用スムース法線バッファ（位置で溶接した平均法線・スロット1で使用）
+	KdBuffer					m_smoothNormalBuf;
+	bool						m_hasSmoothNormal = false;
 
 	// サブセット情報
 	std::vector<KdMeshSubset>	m_subsets;

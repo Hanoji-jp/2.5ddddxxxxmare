@@ -28,6 +28,7 @@ public:
     void Update()     override;
     void PostUpdate() override;
     void DrawLit()    override;
+    void DrawOutline() override;   // 原神式アウトライン
 
     bool IsVisible() const override { return true; }
 

@@ -63,11 +63,24 @@ bool KdPostProcessShader::Init()
 #include "KdPostProcessShader_PS_Bright.shaderInc"
 
 		if (FAILED(KdDirect3D::Instance().WorkDev()->CreatePixelShader(
-			compiledBuffer, sizeof(compiledBuffer), nullptr, &m_PS_Bright))) 
+			compiledBuffer, sizeof(compiledBuffer), nullptr, &m_PS_Bright)))
 		{
 			assert(0 && "ピクセルシェーダー作成失敗");
 			Release();
 
+			return false;
+		}
+	}
+
+	// アウトライン（画面エッジ検出）PS
+	{
+#include "KdPostProcessShader_PS_Outline.shaderInc"
+
+		if (FAILED(KdDirect3D::Instance().WorkDev()->CreatePixelShader(
+			compiledBuffer, sizeof(compiledBuffer), nullptr, &m_PS_Outline)))
+		{
+			assert(0 && "ピクセルシェーダー作成失敗");
+			Release();
 			return false;
 		}
 	}
@@ -77,6 +90,8 @@ bool KdPostProcessShader::Init()
 	m_cb0_DoFInfo.Create();
 
 	m_cb0_BrightInfo.Create();
+
+	m_cb0_OutlineInfo.Create();
 
 	const std::shared_ptr<KdTexture>& backBuffer = KdDirect3D::Instance().GetBackBuffer();
 	
@@ -90,7 +105,10 @@ bool KdPostProcessShader::Init()
 
 	// 被写界深度画像
 	m_depthOfFieldRTPack.CreateRenderTarget(backBuffer->GetWidth(), backBuffer->GetHeight());
-	
+
+	// アウトライン合成画像
+	m_outlineRTPack.CreateRenderTarget(backBuffer->GetWidth(), backBuffer->GetHeight());
+
 	m_brightEffectRTPack.CreateRenderTarget(backBuffer->GetWidth(), backBuffer->GetHeight());
 
 	int lightBloomWidth = m_brightEffectRTPack.m_RTTexture->GetWidth();
@@ -128,10 +146,12 @@ void KdPostProcessShader::Release()
 	KdSafeRelease(m_PS_Blur);
 	KdSafeRelease(m_PS_DoF);
 	KdSafeRelease(m_PS_Bright);
+	KdSafeRelease(m_PS_Outline);
 
 	m_cb0_BlurInfo.Release();
 	m_cb0_DoFInfo.Release();
 	m_cb0_BrightInfo.Release();
+	m_cb0_OutlineInfo.Release();
 }
 
 // ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// /////
@@ -236,9 +256,6 @@ void KdPostProcessShader::PostEffectProcess()
 						PostProcessConst::MotionBlurSamplingRadius,
 						blurDir);
 
-					KdShaderManager::Instance().m_spriteShader.DrawTex(
-						m_motionBlurRTPack.m_RTTexture.get(), 0, 0);
-
 					useMotionBlur = true;
 				}
 			}
@@ -251,11 +268,21 @@ void KdPostProcessShader::PostEffectProcess()
 
 		m_prevCamPos = camPos;
 
-		if (!useMotionBlur)
-		{
-			KdShaderManager::Instance().m_spriteShader.DrawTex(m_depthOfFieldRTPack.m_RTTexture.get(), 0, 0);
-		}
+		// 最終画像（DoF or モーションブラー）をバックバッファへ
+		// ※アウトラインは ApplySceneOutline()（不透明シーン直後）で適用済み
+		std::shared_ptr<KdTexture> finalColor =
+			useMotionBlur ? m_motionBlurRTPack.m_RTTexture : m_depthOfFieldRTPack.m_RTTexture;
+		KdShaderManager::Instance().m_spriteShader.DrawTex(finalColor.get(), 0, 0);
 	}
+}
+
+// 不透明シーンにだけアウトラインを適用（この後にエフェクトが上描きされる）
+void KdPostProcessShader::ApplySceneOutline()
+{
+	// 不透明シーン色＋深度からエッジ検出 → m_outlineRTPack へ
+	OutlineProcess(m_postEffectRTPack.m_RTTexture);
+	// 結果を現在のRT（=シーンRT m_postEffectRTPack）へ書き戻す
+	KdShaderManager::Instance().m_spriteShader.DrawTex(m_outlineRTPack.m_RTTexture.get(), 0, 0);
 }
 
 void KdPostProcessShader::DrawDamageFlash()
@@ -565,4 +592,37 @@ void KdPostProcessShader::SetBrightToDevice()
 	}
 
 	shaderMgr.SetPixelShader(m_PS_Bright);
+}
+
+void KdPostProcessShader::SetOutlineToDevice()
+{
+	ID3D11DeviceContext* DevCon = KdDirect3D::Instance().WorkDevContext();
+	if (!DevCon) { return; }
+
+	// 画面のテクセルサイズを反映
+	const auto& bb = KdDirect3D::Instance().GetBackBuffer();
+	m_cb0_OutlineInfo.Work().TexelX = 1.0f / static_cast<float>(bb->GetWidth());
+	m_cb0_OutlineInfo.Work().TexelY = 1.0f / static_cast<float>(bb->GetHeight());
+	m_cb0_OutlineInfo.Write();
+	DevCon->PSSetConstantBuffers(0, 1, m_cb0_OutlineInfo.GetAddress());
+
+	KdShaderManager& shaderMgr = KdShaderManager::Instance();
+	if (shaderMgr.SetVertexShader(m_VS))
+	{
+		DevCon->IASetInputLayout(m_inputLayout);
+	}
+	shaderMgr.SetPixelShader(m_PS_Outline);
+}
+
+// 画面エッジ検出でアウトラインを乗せ、m_outlineRTPack へ出力する
+void KdPostProcessShader::OutlineProcess(const std::shared_ptr<KdTexture>& srcColor)
+{
+	SetOutlineToDevice();
+	KdShaderManager::Instance().ChangeSamplerState(KdSamplerState::Linear_Clamp);
+
+	// t0=シーン色、t1=深度
+	std::shared_ptr<KdTexture> srcList[2] = { srcColor, m_postEffectRTPack.m_ZBuffer };
+	DrawTexture(srcList, 2, m_outlineRTPack.m_RTTexture, &m_outlineRTPack.m_viewPort);
+
+	KdShaderManager::Instance().UndoSamplerState();
 }

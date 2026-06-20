@@ -38,8 +38,11 @@ void BaseScene::Update()
 		return;
 	}
 
-	// シーン毎のイベント処理
+	// シーン毎のイベント処理（ポーズメニュー入力等はここで処理される）
 	Event();
+
+	// 一時停止中（ポーズメニュー等）はオブジェクト更新を止める
+	if (IsUpdatePaused()) { return; }
 
 	// KdGameObjectを継承した全てのオブジェクトの更新 (ポリモーフィズム)
 	for (auto& obj : m_objList)
@@ -65,6 +68,9 @@ void BaseScene::PostUpdate()
 {
 	// ヒットストップ中は物理・エフェクト更新も止める
 	if (m_hitStopTimer > 0.0f) { return; }
+
+	// 一時停止中（ポーズメニュー等）は物理・エフェクトも止める
+	if (IsUpdatePaused()) { return; }
 
 	for (auto& obj : m_objList)
 	{
@@ -133,6 +139,12 @@ void BaseScene::Draw()
 	DrawLitExtra();
 	}
 	KdShaderManager::Instance().m_StandardShader.EndLit();
+
+	// ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== =====
+	// アウトライン（ポストプロセス：画面エッジ検出）。
+	// 不透明シーンの直後・エフェクト描画の前に適用するので、後から描かれる
+	// エフェクト（ビルボード/パーティクル/Effekseer等）には輪郭が乗らない。
+	KdShaderManager::Instance().m_postProcessShader.ApplySceneOutline();
 
 	// ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== =====
 	// 陰影のないオブジェクト(エフェクトなど)はBeginとEndの間にまとめてDrawする

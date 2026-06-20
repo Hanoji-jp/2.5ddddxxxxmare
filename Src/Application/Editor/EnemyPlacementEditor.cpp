@@ -1,5 +1,6 @@
 ﻿#include "../../Pch.h"
 #include "EnemyPlacementEditor.h"
+#include "../Manager/StageManager.h"
 #include "../Const/EnemyConst.h"
 #include <fstream>
 #include <sstream>
@@ -132,7 +133,7 @@ void EnemyPlacementEditor::DrawDebugSpheres() const
 
 void EnemyPlacementEditor::Save() const
 {
-	std::ofstream ofs(SavePath);
+	std::ofstream ofs(StageManager::Instance().ResolvePath("enemy_placements.csv"));
 	if (!ofs) { return; }
 
 	for (const auto& p : m_placements)
@@ -150,7 +151,7 @@ void EnemyPlacementEditor::Save() const
 
 void EnemyPlacementEditor::Load()
 {
-	std::ifstream ifs(SavePath);
+	std::ifstream ifs(StageManager::Instance().ResolvePath("enemy_placements.csv"));
 	if (!ifs) { return; }
 
 	m_placements.clear();

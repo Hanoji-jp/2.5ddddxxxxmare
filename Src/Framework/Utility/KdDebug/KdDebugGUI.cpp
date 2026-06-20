@@ -1,6 +1,10 @@
 ﻿#include "../../../Application/main.h"
 
 #include "KdDebugGUI.h"
+#include "../../Direct3D/KdDirect3D.h"
+#include "../../Direct3D/KdTexture.h"
+#include "../../Shader/KdShaderManager.h"
+#include "../../Shader/PostProcessShader/KdPostProcessShader.h"
 
 KdDebugGUI::KdDebugGUI()
 {}
@@ -51,7 +55,8 @@ void KdDebugGUI::GuiProcess()
 	ImGui_ImplWin32_NewFrame();
 	ImGui::NewFrame();
 
-	// 画面全体を覆う DockSpace を作成（ウィンドウ同士をドラッグで結合できる）
+	// 画面全体を覆う DockSpace を作成（エディタ画面ON時のみ。OFFは全ImGui非表示）
+	if (m_gameViewport)
 	{
 		const ImGuiViewport* viewport = ImGui::GetMainViewport();
 		ImGui::SetNextWindowPos(viewport->WorkPos);
@@ -65,8 +70,55 @@ void KdDebugGUI::GuiProcess()
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
 		ImGui::Begin("##DockSpaceRoot", nullptr, dockFlags);
 		ImGui::PopStyleVar();
-		ImGui::DockSpace(ImGui::GetID("##MainDockSpace"),
-			ImVec2(0, 0), ImGuiDockNodeFlags_PassthruCentralNode);
+		// ゲームビューポート時は中央を不透明（裏のフル描画を隠す）、通常は透過でゲームが見える
+		const ImGuiDockNodeFlags centralFlag = m_gameViewport
+			? ImGuiDockNodeFlags_None : ImGuiDockNodeFlags_PassthruCentralNode;
+		ImGui::DockSpace(ImGui::GetID("##MainDockSpace"), ImVec2(0, 0), centralFlag);
+		ImGui::End();
+	}
+
+	// ── エディタ画面中：背景に合成された通常描画をクリアして隠す（GameウィンドウはシーンRT表示なので無影響）──
+	if (m_gameViewport)
+	{
+		auto bb = KdDirect3D::Instance().WorkBackBuffer();
+		if (bb && bb->WorkRTView())
+		{
+			const float clearCol[4] = { 0.08f, 0.08f, 0.10f, 1.0f };
+			KdDirect3D::Instance().WorkDevContext()->ClearRenderTargetView(bb->WorkRTView(), clearCol);
+		}
+	}
+
+	// ── ゲーム画面ビューポート：シーンRT(SRV)を「Game」ウィンドウに表示 ──
+	if (m_gameViewport)
+	{
+		// 既定で中央ドックスペースに入れる（別ウィンドウ化して見失わないように）
+		ImGui::SetNextWindowDockID(ImGui::GetID("##MainDockSpace"), ImGuiCond_FirstUseEver);
+		ImGui::Begin("Game");
+		const auto& sceneRT = KdShaderManager::Instance().m_postProcessShader.GetSceneRT();
+		if (sceneRT && sceneRT->WorkSRView())
+		{
+			ImVec2 avail = ImGui::GetContentRegionAvail();
+			const float texAspect = 16.0f / 9.0f;   // 16:9固定でレターボックス
+			float w = avail.x, h = avail.x / texAspect;
+			if (h > avail.y) { h = avail.y; w = avail.y * texAspect; }
+			const ImVec2 cur = ImGui::GetCursorPos();
+			ImGui::SetCursorPos(ImVec2(cur.x + (avail.x - w) * 0.5f, cur.y + (avail.y - h) * 0.5f));
+			ImGui::Image((ImTextureID)(intptr_t)sceneRT->WorkSRView(), ImVec2(w, h));
+
+			// 描画したゲーム画像の矩形内マウス座標を正規化して保持（シーン側のピッキングに使う）
+			const ImVec2 rmin = ImGui::GetItemRectMin();
+			const ImVec2 rmax = ImGui::GetItemRectMax();
+			const ImVec2 mp   = ImGui::GetIO().MousePos;
+			const float  gw   = rmax.x - rmin.x;
+			const float  gh   = rmax.y - rmin.y;
+			m_gameHovered = ImGui::IsItemHovered();
+			m_gameUV[0]   = (gw > 0.0f) ? (mp.x - rmin.x) / gw : 0.0f;
+			m_gameUV[1]   = (gh > 0.0f) ? (mp.y - rmin.y) / gh : 0.0f;
+		}
+		else
+		{
+			m_gameHovered = false;
+		}
 		ImGui::End();
 	}
 
@@ -82,11 +134,15 @@ void KdDebugGUI::GuiProcess()
 //	}
 //	ImGui::End();
 
-	// 登録されたシーンのImGui描画を呼ぶ
-	if (m_guiCallback) { m_guiCallback(); }
+	// エディタ画面ON時のみ、シーンのImGui・ログを表示（OFFは全ImGui非表示）
+	if (m_gameViewport)
+	{
+		// 登録されたシーンのImGui描画を呼ぶ
+		if (m_guiCallback) { m_guiCallback(); }
 
-	// ログウィンドウ
-	m_uqLog->Draw("Log Window");
+		// ログウィンドウ
+		m_uqLog->Draw("Log Window");
+	}
 
 	//=====================================================
 	// ログ出力 ・・・ AddLog("～") で追加
@@ -148,6 +204,14 @@ void KdDebugGUI::GuiRelease()
 {
 	// 初期化されてないなら動作させない
 	if (!m_uqLog) return;
+
+	m_gameCapture = nullptr;
+
+	// 終了時にレイアウト（ドッキング配置）を確実に保存する
+	if (ImGui::GetCurrentContext() && ImGui::GetIO().IniFilename)
+	{
+		ImGui::SaveIniSettingsToDisk(ImGui::GetIO().IniFilename);
+	}
 
 	m_uqLog = nullptr;
 

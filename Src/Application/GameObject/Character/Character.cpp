@@ -1238,8 +1238,9 @@ void Character::TakeDamage(int _damage)
 
 void Character::DrawCollisionDebugGui()
 {
-    ImGui::SetNextWindowSize(ImVec2(520, 600), ImGuiCond_Once);
-    ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_Once);
+    // FirstUseEver：imgui.ini に配置/ドッキング情報があればそちらを優先（Onceだと毎起動で上書きされ外れる）
+    ImGui::SetNextWindowSize(ImVec2(520, 600), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin("Collision Debug"))
     {
         ImGui::End();

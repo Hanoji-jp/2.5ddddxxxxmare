@@ -18,6 +18,7 @@ public:
 
 	void Init(const SpikeBoxData& data);
 	void DrawLit()    override;
+	void DrawOutline() override;   // 原神式アウトライン
 	void DrawDebug()  override;
 
 	bool IsVisible() const override { return true; }

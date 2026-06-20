@@ -1,5 +1,6 @@
 ﻿#include "../../Pch.h"
 #include "RoomBoundsEditor.h"
+#include "../Manager/StageManager.h"
 #include "../../Framework/Utility/KdDebug/KdDebugWireFrame.h"
 #include <fstream>
 #include <sstream>
@@ -98,7 +99,7 @@ void RoomBoundsEditor::DrawDebugLines() const
 //----------------------------------------------------------
 void RoomBoundsEditor::Save() const
 {
-    std::ofstream ofs(SavePath);
+    std::ofstream ofs(StageManager::Instance().ResolvePath("rooms.csv"));
     if (!ofs) { return; }
 
     // ヘッダ行
@@ -130,10 +131,11 @@ void RoomBoundsEditor::Save() const
 //----------------------------------------------------------
 void RoomBoundsEditor::Load()
 {
-    std::ifstream ifs(SavePath);
-    if (!ifs) { return; }
+    std::ifstream ifs(StageManager::Instance().ResolvePath("rooms.csv"));
 
+    // 新ステージのファイルが無くても空にする（前ステージのルーム＝カメラY制限を残さない）
     m_rooms.clear();
+    if (!ifs) { return; }
 
     std::string line;
     bool firstLine = true;

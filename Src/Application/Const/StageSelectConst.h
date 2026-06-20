@@ -2,96 +2,116 @@
 
 //==========================================================
 // StageSelectConst.h
-// ステージセレクト（ハブ）用の定数
+// ステージセレクト（マリギャラ2のワールドマップ式）の定数。
+// 箱ノードをドットの道で繋ぎ、プレイヤー(カーソル)がWASDでノード間を
+// ホップ移動して選び、Enter/Spaceで決定してステージへ入る。
 //==========================================================
 namespace StageSelectConst
 {
 	//----------------------------------------------------------
-	// ハブの配置
-	// PlanetGravityManager / ManualGravityZone はシングルトンでゲームの惑星を
-	// グローバル共有している。ハブで床惑星を足すとゲームを汚すため、ここでは
-	// 惑星の影響圏(GravityRadius=30程度)から十分離れた遠方にハブを置き、
-	// プレイヤーには手動重力Downを与えて静的な MovingFloor の上を歩かせる。
+	// カメラ（固定の見下ろし気味アイソメ）
 	//----------------------------------------------------------
-	constexpr float HubOriginX = 3000.0f;   // ハブの基準X（惑星から遠ざける）
+	constexpr float CamEyeY      = 17.0f;
+	constexpr float CamEyeZ      = -19.0f;
+	constexpr float CamTargetY   = 1.0f;
+	constexpr float CamFov       = 48.0f;
+	constexpr float CamSwayX     = 0.6f;   // 待機ゆらぎ
+	constexpr float CamSwayY     = 0.3f;
+	constexpr float CamSwaySpeed = 0.3f;
+	constexpr float CamFocusLerp   = 0.045f; // 選択ノードへの追従の滑らかさ（小さいほどゆったり）
+	constexpr float CamFocusAmount = 0.25f;  // 注視を寄せる割合（0=中心固定, 1=完全にノード中心）
+	constexpr float CamFocusMargin = 4.5f;   // デッドゾーン：この距離ぶんは追わない（遊び）
 
 	//----------------------------------------------------------
-	// 床（静的 MovingFloor）。サイズは半辺長。
+	// ステージノード（箱）
 	//----------------------------------------------------------
-	constexpr float FloorHalfX   = 32.0f;
-	constexpr float FloorHalfY   = 1.0f;
-	constexpr float FloorHalfZ   = 5.0f;
-	constexpr float FloorCenterY = -2.0f;
-	// 床上面のワールドY（着地面の目安。カメラ・配置の基準に使う）
-	constexpr float FloorTopY    = FloorCenterY + FloorHalfY;
+	constexpr const char* NodeModel       = "Asset/Data/Box.gltf";
+	constexpr float       NodeScale       = 1.5f;   // 箱の大きさ
+	constexpr float       NodeSelectScale = 1.25f;  // 選択中の拡大倍率
+	constexpr float       NodeBobAmp      = 0.25f;  // 選択中の上下ふわふわ
+	constexpr float       NodeBobSpeed    = 3.0f;
 
 	//----------------------------------------------------------
-	// プレイヤー初期位置（ハブローカル座標。X は HubOriginX に加算）
+	// マーカー（プレイヤー＝カーソル。物理なし・モデルのみ）
 	//----------------------------------------------------------
-	constexpr float PlayerStartLocalX = -18.0f;
-	constexpr float PlayerStartY      = FloorTopY + 3.0f;  // 少し上から落として着地させる
+	constexpr const char* MarkerModel  = "Asset/Data/Player.gltf";
+	constexpr float       MarkerScale   = 0.5f;
+	constexpr float       MarkerYOffset = 0.9f;   // 箱の上に立つ高さ
+	constexpr float       MoveDuration  = 0.25f;  // ノード間ホップ時間（秒）
+	constexpr float       HopHeight     = 1.4f;   // ホップの高さ
 
 	//----------------------------------------------------------
-	// ステージ入口（ポータル）。触れると入場する。
+	// 方向選択（押した方向に最も合う隣ノードへ）
 	//----------------------------------------------------------
-	constexpr float        PortalLocalX       = 16.0f;          // ハブローカルX
-	constexpr float        PortalHeight       = 2.6f;           // 床上の中心高さ
-	constexpr float        PortalSize         = 4.5f;           // ビルボードの大きさ
-	constexpr float        PortalTriggerRange = 2.4f;           // この距離以内で入場
-	constexpr float        PortalHintRange    = 7.0f;           // この距離以内でヒント表示
-	constexpr float        PortalPulseSpeed   = 3.0f;           // 明滅速度
-	constexpr float        PortalPulseAmp     = 0.25f;          // 明滅振幅
-	constexpr float        PortalSpinSpeed    = 1.2f;           // 回転速度
-	constexpr const char*  PortalTexPath      = "Asset/Effect/Particle04_bokashi_hard.png";
-	// ポータルの色（シアン系の光）
-	constexpr float        PortalColR = 0.4f;
-	constexpr float        PortalColG = 0.85f;
-	constexpr float        PortalColB = 1.0f;
+	constexpr float DirDotThreshold = 0.35f;
 
 	//----------------------------------------------------------
-	// カメラ（横スクロール追従。プレイヤーのXだけ追う）
+	// 連結ドット（ノード間の道）
 	//----------------------------------------------------------
-	constexpr float CamOffsetY = 5.0f;     // 床上面からの高さ
-	constexpr float CamOffsetZ = -22.0f;   // 手前(-Z)から +Z を見る
-	constexpr float CamTargetY = 2.0f;     // 注視点の高さ（床上面基準）
-	constexpr float CamFov     = 60.0f;
-	constexpr float CamFollowLerp = 0.12f; // 追従の滑らかさ
+	constexpr const char* DotTex     = "Asset/Effect/Particle03.png";
+	constexpr float       DotSpacing = 1.3f;   // ドット間隔
+	constexpr float       DotSize    = 0.35f;
+	constexpr float       DotColR    = 0.8f;
+	constexpr float       DotColG    = 0.9f;
+	constexpr float       DotColB    = 1.0f;
+
+	// 選択中ノードの後光
+	constexpr float HaloSize  = 4.5f;
+	constexpr float HaloPulse = 2.0f;
 
 	//----------------------------------------------------------
-	// 投げ出され演出（イントロ）：絵本→黒フェード→上空から落下→不時着→通常カメラ
+	// 背景の回転惑星（奥行き）
 	//----------------------------------------------------------
-	constexpr float IntroStartLocalX    = -4.0f;          // 落下開始のハブローカルX（中央寄り）
-	constexpr float IntroStartHeight    = 34.0f;          // 床上面からの落下開始高さ
-	constexpr float IntroThrowVX        = 0.05f;          // 吹き飛ばしの横初速（少し流す）
-	constexpr float IntroThrowVY        = 0.0f;           // 縦初速（0=そのまま落下）
-	constexpr float IntroFadeSpeed      = 1.2f;           // 黒フェードイン速度（絵本の黒から明ける）
-	constexpr float IntroSettleSpeed    = 1.6f;           // 不時着後にカメラが通常へ戻る速さ
-	constexpr float IntroShakeStr       = 0.8f;           // 不時着の揺れ強さ
-	constexpr float IntroShakeDecay     = 3.0f;           // 揺れ減衰
-	// 落下追従カメラ（プレイヤーを主体に、ぐるぐる旋回しながら追う）
-	constexpr float IntroFallCamOffsetY = 2.5f;           // 落下中カメラの高さオフセット
-	constexpr float IntroFallTargetY    = 0.5f;           // 落下中の注視点オフセット
-	constexpr float IntroOrbitRadius    = 15.0f;          // 旋回半径（プレイヤーからの距離）
-	constexpr float IntroOrbitStartDeg  = 180.0f;         // 旋回開始角（180=正面 -Z から開始）
-	constexpr float IntroOrbitSpeedDeg  = 130.0f;         // 旋回速度（度/秒）
-
-	// プレイヤーのタンブル（吹っ飛ばされてくるくる回る）
-	constexpr float IntroSpinSpeed      = 7.0f;           // 落下中の回転速度（rad/秒）
-	constexpr float IntroSpinSettle     = 9.0f;           // 着地後に回転を 0 へ戻す速さ
+	constexpr const char* BgPlanetModel = "Asset/Data/Planet.gltf";
+	constexpr float BgPlanetX     = -24.0f;
+	constexpr float BgPlanetY     = 13.0f;
+	constexpr float BgPlanetZ     = 55.0f;
+	constexpr float BgPlanetScale = 3.0f;
+	constexpr float BgPlanetSpin  = 0.06f;
 
 	//----------------------------------------------------------
-	// 入場フェード（白へ。GameScene 側の白フェードインへ繋ぐ）
+	// 漂う光の粒（モート）
 	//----------------------------------------------------------
-	constexpr float FadeOutSpeed = 1.8f;
+	constexpr const char* MoteTex = "Asset/Effect/Particle03.png";
+	constexpr int   MoteCount   = 36;
+	constexpr float MoteAreaX   = 40.0f;
+	constexpr float MoteAreaY   = 24.0f;
+	constexpr float MoteAreaZ   = 24.0f;
+	constexpr float MoteRise    = 0.6f;
+	constexpr float MoteSizeMin = 0.12f;
+	constexpr float MoteSizeMax = 0.4f;
+	constexpr float MoteColR    = 0.6f;
+	constexpr float MoteColG    = 0.8f;
+	constexpr float MoteColB    = 1.0f;
 
 	//----------------------------------------------------------
-	// フォント（プロンプト表示）
+	// フェード / フォント / プロンプト
 	//----------------------------------------------------------
+	constexpr float IntroFadeSpeed = 1.2f;   // 開始の黒フェードイン
+	constexpr float FadeOutSpeed   = 1.8f;   // 決定時の白フェード（GameSceneへ繋ぐ）
+
 	constexpr int          FontNo      = 0;
-	constexpr int          FontHeight  = 36;
+	constexpr int          FontHeight  = 32;
 	constexpr const char*  FontName    = "Arial";
-	constexpr const char*  HintText    = "WALK INTO THE GATE";
 	constexpr const char*  TitleText   = "STAGE SELECT";
-	constexpr float        HintYRatio  = 0.34f;   // 画面下寄り
-	constexpr float        TitleYRatio = 0.40f;   // 画面上寄り
+	constexpr const char*  HintText    = "WASD : MOVE     ENTER : GO";
+	constexpr float        TitleYRatio = 0.40f;   // 上寄り
+	constexpr float        HintYRatio  = 0.42f;   // 下寄り
+
+	//----------------------------------------------------------
+	// ステージ名（仮表示。いずれ各「島」のちゃんとした名前に差し替える）
+	// stageId（0始まり）でインデックスする。範囲外は StageNameFallback。
+	//----------------------------------------------------------
+	constexpr const char* StageNames[] =
+	{
+		"STAGE 1 - GREEN PLANET",
+		"STAGE 2 - (WIP)",
+		"STAGE 3 - (WIP)",
+		"STAGE 4 - (WIP)",
+		"STAGE 5 - (WIP)",
+		"STAGE 6 - (WIP)",
+	};
+	constexpr int         StageNameCount    = static_cast<int>(sizeof(StageNames) / sizeof(StageNames[0]));
+	constexpr const char* StageNameFallback = "STAGE ?";
+	constexpr float       StageNameYRatio   = 0.26f;   // 見出しの少し下に表示
 }

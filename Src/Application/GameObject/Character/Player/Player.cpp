@@ -6,6 +6,8 @@
 #include "../../../Const/JuiceConst.h"
 #include "../../../Const/WindBoxConst.h"
 #include "../../../Const/SparkleConst.h"
+#include "../../../Const/OutlineConst.h"
+#include "../../../Const/CoreliaConst.h"
 
 void Player::Init()
 {
@@ -41,6 +43,13 @@ void Player::Init()
 
 void Player::Update()
 {
+	// 通常更新が走るフレーム＝会話していない → 頭追尾はリセット（次の会話で基準を取り直す）
+	m_headLookActive = false;
+
+	// 取得演出の発光は「どの状態でも」必ず減衰させる。
+	// （死亡やカットシーンの早期returnより前に置かないと、グローが残留する）
+	UpdatePickupGlow(KdFPSController::GetDt());
+
 	// 死亡中は通常の入力・移動・状態遷移を止める。
 	// （Move() が毎フレーム m_state を上書きするため、放置すると Dead アニメが
 	//   他アニメと毎フレーム切り替わってガクガクする）
@@ -54,9 +63,6 @@ void Player::Update()
 		m_animBlender.Update(m_modelWork, m_animSpeed);
 		return;
 	}
-
-	// 取得演出の発光を進める（ヒットストップ解除後はここで継続）
-	UpdatePickupGlow(KdFPSController::GetDt());
 
 	// アイテム取得ヒットボックスをプレイヤー座標に合わせて更新
 	m_pickupHitBox.Update(GetPos());
@@ -125,6 +131,7 @@ void Player::Update()
 	if (m_meleeCooldown > 0) { --m_meleeCooldown; }
 	if (m_rangedCooldown > 0) { --m_rangedCooldown; }
 	if (m_invincibleTimer > 0) { --m_invincibleTimer; }
+	if (m_damageFlashTimer > 0) { --m_damageFlashTimer; }
 
 	// Jump 状態で下降局面に入ったら Fall に自動遷移してパラソルを開けるようにする
 	if (m_state == State::Jump && !m_isGround)
@@ -533,7 +540,18 @@ void Player::DrawLit()
 {
     if (m_modelWork.IsEnable())
     {
-        KdShaderManager::Instance().m_StandardShader.DrawModel(m_modelWork, m_drawWorld);
+        if (m_damageFlashTimer > 0)
+        {
+            // 被ダメージ中は本体を赤く（緑青を落として赤を強調）。点滅させる
+            const float k = static_cast<float>(m_damageFlashTimer) / PlayerConst::DamageFlashFrame;
+            const float s = PlayerConst::DamageFlashStrength * k;
+            const Math::Color red(1.0f, 1.0f - s, 1.0f - s, 1.0f);
+            KdShaderManager::Instance().m_StandardShader.DrawModel(m_modelWork, m_drawWorld, red);
+        }
+        else
+        {
+            KdShaderManager::Instance().m_StandardShader.DrawModel(m_modelWork, m_drawWorld);
+        }
     }
 
     // 矢の描画
@@ -541,6 +559,18 @@ void Player::DrawLit()
     {
         arrow->DrawLit();
     }
+}
+
+// 原神式アウトライン：本体モデルを背面押し出しシェーダーで暗色描画
+void Player::DrawOutline()
+{
+    if (!m_modelWork.IsEnable()) { return; }
+
+    auto& shader = KdShaderManager::Instance().m_StandardShader;
+    shader.SetOutlineWidth(OutlineConst::Width);
+    const Math::Color outlineCol(
+        OutlineConst::ColorMul, OutlineConst::ColorMul, OutlineConst::ColorMul, 1.0f);
+    shader.DrawModel(m_modelWork, m_drawWorld, outlineCol, Math::Vector3::Zero);
 }
 
 // 取得演出中：プレイヤーを加算ブルームバッファへ再描画して光らせる
@@ -776,6 +806,7 @@ void Player::TakeDamage(int _damage)
     if (m_invincibleTimer > 0) { return; }
     Character::TakeDamage(_damage);
     m_invincibleTimer = PlayerConst::InvincibleFrame;
+    m_damageFlashTimer = PlayerConst::DamageFlashFrame;   // 本体を赤くする
     KdShaderManager::Instance().m_postProcessShader.TriggerDamageFlash();
 }
 
@@ -792,12 +823,93 @@ void Player::InstantDeath()
     m_moveVelocity = Math::Vector3::Zero;
 }
 
+void Player::Revive()
+{
+    // モデル/装備は作り直さず、戦闘・移動状態だけ初期化（復活後すぐ動けるように）
+    m_hp              = PlayerConst::MaxHp;
+    m_isExpired       = false;           // 死亡時に Character::TakeDamage が立てた Expired を解除（これが無いと除去されたまま＝透明・操作不能）
+    m_state           = State::Idle;
+    m_velocity        = Math::Vector3::Zero;
+    m_moveVelocity    = Math::Vector3::Zero;
+    m_invincibleTimer = PlayerConst::RespawnInvincibleFrame; // 復活直後は無敵（再死亡ループ防止）
+    m_meleeCooldown   = 0;
+    m_rangedCooldown  = 0;
+    m_isAttacking     = false;
+    m_isDashing       = false;
+    m_isParasolOpen   = false;
+    m_hasParasol      = false;           // リスポーンでアイテムを元に戻すのに合わせ所持もリセット
+    m_controlEnabled  = true;            // 入力を必ず有効化
+    m_cutsceneSpin    = 0.0f;            // 演出回転をリセット
+    m_pickupGlowTimer = 0.0f;            // 取得発光の残留を消す
+    m_damageFlashTimer = 0;             // 被ダメ赤フラッシュをリセット
+    m_animBlender.ClearUpperBodyAnim();
+    ChangeAnim("Idle", true);
+}
+
+void Player::Heal(int amount)
+{
+    if (IsDead()) { return; }                 // 死亡中は回復しない
+    m_hp += amount;
+    if (m_hp > PlayerConst::MaxHp) { m_hp = PlayerConst::MaxHp; }
+    // プレイヤー本体を緑に発光させる（緑石の回復演出）
+    TriggerPickupGlow(Math::Color{ 0.30f, 1.0f, 0.45f, 1.0f });
+}
+
+void Player::LookAtHead(const Math::Vector3& target)
+{
+    if (!m_modelWork.IsEnable()) { return; }
+
+    const float limit = CoreliaConst::NeckLimitDeg * 0.01745329f;
+
+    // 体の前方（プレイヤーの向き）を地面平面で求める
+    Math::Vector3 up = GetUpDir();
+    Math::Vector3 tangent = { -up.y, up.x, 0.0f };
+    if (tangent.LengthSquared() < 1e-4f) { tangent = Math::Vector3(1.0f, 0.0f, 0.0f); }
+    tangent.Normalize();
+    Math::Vector3 fwd = tangent * m_facingSign;
+    fwd -= up * fwd.Dot(up);
+    if (fwd.LengthSquared() > 1e-4f) { fwd.Normalize(); } else { fwd = tangent; }
+
+    // 相手方向（地面平面）への首制限つきヨー
+    float targetYaw = 0.0f;
+    Math::Vector3 dir = target - GetPos();
+    dir -= up * dir.Dot(up);
+    if (dir.LengthSquared() > 1e-4f)
+    {
+        dir.Normalize();
+        const float d = std::clamp(fwd.Dot(dir), -1.0f, 1.0f);
+        float a = acosf(d);
+        Math::Vector3 c; fwd.Cross(dir, c);
+        if (c.Dot(up) < 0.0f) { a = -a; }
+        targetYaw = std::clamp(a, -limit, limit);
+    }
+    m_headLookYaw += (targetYaw - m_headLookYaw) * CoreliaConst::HeadTurnLerp;
+
+    KdModelWork::Node* head = m_modelWork.FindWorkNode("Head");
+    if (!head) { return; }
+
+    // 会話開始フレームで頭ボーンの基準ローカルを保存（毎フレームここから作り直す＝累積しない）
+    if (!m_headLookActive) { m_headBaseLocal = head->m_localTransform; m_headLookActive = true; }
+
+    // 基準姿勢に戻して world を確定 → 頭ローカル空間でのUp軸を求める
+    head->m_localTransform = m_headBaseLocal;
+    m_modelWork.CalcNodeMatrices();
+    Math::Vector3 axis = Math::Vector3::TransformNormal(up, head->m_worldTransform.Invert());
+    if (axis.LengthSquared() > 1e-8f) { axis.Normalize(); }
+
+    // 基準ローカルにヨーを合成 → 反映（頭の子も追従）
+    const Math::Matrix R = Math::Matrix::CreateFromAxisAngle(axis, m_headLookYaw);
+    head->m_localTransform = R * m_headBaseLocal;
+    m_modelWork.CalcNodeMatrices();
+}
+
 void Player::TakeDamageFrom(int _damage, const Math::Vector3& sourcePos)
 {
     if (IsDead())              { return; }   // 死体はノックバック・被ダメージしない
     if (m_invincibleTimer > 0) { return; }
     Character::TakeDamage(_damage);
     m_invincibleTimer = PlayerConst::InvincibleFrame;
+    m_damageFlashTimer = PlayerConst::DamageFlashFrame;   // 本体を赤くする
     KdShaderManager::Instance().m_postProcessShader.TriggerDamageFlash();
 
     // ── マリオギャラクシー風ノックバック ──────────────────

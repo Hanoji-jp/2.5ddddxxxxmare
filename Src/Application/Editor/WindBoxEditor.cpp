@@ -1,5 +1,6 @@
 ﻿#include "../../Pch.h"
 #include "WindBoxEditor.h"
+#include "../Manager/StageManager.h"
 #include <fstream>
 #include <sstream>
 #include <cmath>
@@ -148,7 +149,7 @@ void WindBoxEditor::DrawDebug() const
 //----------------------------------------------------------
 void WindBoxEditor::Save() const
 {
-	std::ofstream ofs(WindBoxConst::SavePath);
+	std::ofstream ofs(StageManager::Instance().ResolvePath("wind_boxes.csv"));
 	if (!ofs) { return; }
 
 	for (const auto& b : m_boxes)
@@ -176,7 +177,7 @@ void WindBoxEditor::Load()
 	m_boxes.clear();
 	m_selectedIndex = -1;
 
-	std::ifstream ifs(WindBoxConst::SavePath);
+	std::ifstream ifs(StageManager::Instance().ResolvePath("wind_boxes.csv"));
 	if (!ifs) { return; }
 
 	std::string line;

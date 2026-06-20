@@ -2,6 +2,7 @@
 #include "MovingFloor.h"
 #include "../../Manager/ModelManager.h"
 #include "../../Const/PlanetConst.h"
+#include "../../Const/OutlineConst.h"
 
 void MovingFloor::Init()
 {
@@ -96,6 +97,15 @@ shader.DrawModel(*m_grassCapWork[i], m_grassCapWorld[i]);
 shader.SetTriplanarUV(false);
 shader.SetGrassBlend(false);
 }
+}
+
+void MovingFloor::DrawOutline()
+{
+	if (!m_modelWork) { return; }
+	auto& shader = KdShaderManager::Instance().m_StandardShader;
+	shader.SetOutlineWidth(OutlineConst::TerrainWidth);   // 地形は細め
+	const Math::Color c(OutlineConst::ColorMul, OutlineConst::ColorMul, OutlineConst::ColorMul, 1.0f);
+	shader.DrawModel(*m_modelWork, m_mWorld, c, Math::Vector3::Zero);
 }
 
 void MovingFloor::DrawUnLit()

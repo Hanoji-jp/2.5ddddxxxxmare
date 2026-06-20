@@ -21,6 +21,7 @@ public:
 	void Update()     override;
 	void PostUpdate() override;
 	void DrawLit()    override;
+	void DrawOutline() override;   // 原神式アウトライン
 	void DrawDebug()  override;
 
 	float GetAttackRange() const override { return CubunConst::AttackRange; }

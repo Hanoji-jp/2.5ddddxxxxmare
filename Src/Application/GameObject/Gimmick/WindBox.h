@@ -19,6 +19,7 @@ public:
 	void Init(const WindBoxData& data);
 	void Update()     override;
 	void DrawLit()    override;
+	void DrawOutline() override;   // 原神式アウトライン
 	void DrawEffect() override;
 	void DrawDebug()  override;
 

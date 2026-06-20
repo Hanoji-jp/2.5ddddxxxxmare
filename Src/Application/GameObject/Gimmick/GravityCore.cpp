@@ -294,9 +294,23 @@ void GravityCore::DrawEffect()
 	if (m_type == CoreType::Rock)
 	{
 		auto& sm = KdShaderManager::Instance();
+		auto& shader = sm.m_StandardShader;
+
+		// ── アウトライン：一回り大きい暗い面を前面カリングで描く（背面がシルエット）──
+		//   加算にする前（不透明）に描き、この後の面が内側を上書きして縁だけ残す。
+		if (!m_triVerts.empty())
+		{
+			const Math::Matrix oWorld =
+				Math::Matrix::CreateScale(GravityCoreConst::OutlineScale) * m_mWorld;
+			shader.DrawVertices(m_triVerts, oWorld,
+				Math::Color(0.03f, 0.03f, 0.05f, 1.0f),
+				KdDepthStencilState::ZEnable,
+				D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
+				KdRasterizerState::CullFront);
+		}
+
 		// 加算ブレンドで描画 → 不透明な面で奥を埋めず、光を足すだけになる
 		sm.ChangeBlendState(KdBlendState::Add);
-		auto& shader = sm.m_StandardShader;
 
 		// 面は深度を書く（ZEnable）→ 前面の半球が裏側の線を隠す
 		if (!m_triVerts.empty())

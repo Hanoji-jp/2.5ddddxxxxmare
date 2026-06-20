@@ -1,8 +1,9 @@
-#include "../../../../Pch.h"
+﻿#include "../../../../Pch.h"
 #include "Enemy.h"
 #include "../../../../Application/Manager/ModelManager.h"
 #include "../../../../Application/Manager/PlanetGravityManager.h"
 #include "../../../../Application/Const/CollisionConst.h"
+#include "../../../../Application/Const/OutlineConst.h"
 
 void Enemy::InitModel(const char* _path)
 {
@@ -140,6 +141,15 @@ void Enemy::DrawLit()
 {
     if (!m_modelWork.IsEnable()) { return; }
     KdShaderManager::Instance().m_StandardShader.DrawModel(m_modelWork, m_mWorld);
+}
+
+void Enemy::DrawOutline()
+{
+    if (!m_modelWork.IsEnable()) { return; }
+    auto& shader = KdShaderManager::Instance().m_StandardShader;
+    shader.SetOutlineWidth(OutlineConst::Width);
+    const Math::Color c(OutlineConst::ColorMul, OutlineConst::ColorMul, OutlineConst::ColorMul, 1.0f);
+    shader.DrawModel(m_modelWork, m_mWorld, c, Math::Vector3::Zero);
 }
 
 bool Enemy::CheckEdgeAheadDir(const Math::Vector3& fwdDir) const
