@@ -11,6 +11,7 @@
 #include"../../Camera/CameraSettings.h"
 #include"../../Manager/ModelManager.h"
 #include"../../Manager/StageManager.h"
+#include"../../Util/TextFx.h"
 #include"../../../Framework/Utility/KdDebug/KdDebugGUI.h"
 #include"../../../Framework/Math/KdEasing.h"
 #include <fstream>
@@ -72,6 +73,12 @@ void GameScene::Event()
 	// エディタ画面ON時のみImGui表示（OFFで全ImGui非表示＝通常フルスクリーン）。Eventで毎フレーム反映
 	KdDebugGUI::Instance().SetGameViewport(m_editorScreen);
 
+	// プレイタイム計測（通常プレイ中のみ。ポーズ/会話/演出/死亡中は止める）
+	if (!IsUpdatePaused() && !m_introCutscene && !m_introLanding && !m_deathActive)
+	{
+		m_playTime += KdFPSController::GetDt();
+	}
+
 	// 重力矢印の流れ（重力方向へスクロール）
 	m_gravArrowScroll += KdFPSController::GetDt();
 	if (m_menuOpen) { UpdatePauseMenu(); return; }
@@ -88,14 +95,26 @@ void GameScene::Event()
 	{
 		m_clearTimer += KdFPSController::GetDt();
 
+		// クリア中はオブジェクト更新が止まるので、プレイヤーのアニメ/姿勢だけ手動で駆動
+		// （物理は動かさない＝その場で GetGravityCore ポーズ再生＋drawWorld更新）。
+		if (m_spPlayer)
+		{
+			m_spPlayer->UpdateClearPose(KdFPSController::GetDt());
+			// 取得したコアを GravityCoreBorn ボーンへ追従＝手に持っているように見せる
+			if (m_spHeldCore)
+			{
+				const Math::Matrix bw = m_spPlayer->GetBoneWorld("GravityCoreBorn");
+				m_spHeldCore->SetPos(Math::Vector3{ bw._41, bw._42, bw._43 });
+			}
+		}
+
 		// スター取得風カメラ：旋回→（決め）少し引く→ズーム→少し保持→もう一度引く（全部連続）
 		if (m_camera && m_spPlayer)
 		{
 			constexpr float kPi = 3.14159265f;
 			const float tt = m_clearTimer;
 
-			// 回転：オービット区間を easeOutBack（行き過ぎて戻る＝ドリフト/慣性）でスイープ。
-			// 目標角を一度オーバーシュートしてから滑り込むので、急ターンにならない。
+			// 回転：オービットを easeOutBack でスイープ＝「旋回してきてドリフト」（この仕様は維持）。
 			const float yp = std::clamp(tt / ClearConst::CamOrbitTime, 0.0f, 1.0f);
 			const float c1 = ClearConst::CamOrbitOvershoot;
 			const float c3 = c1 + 1.0f;
@@ -103,81 +122,58 @@ void GameScene::Event()
 			const float yawT = 1.0f + c3 * pm * pm * pm + c1 * pm * pm;   // easeOutBack
 			const float yawDeg = ClearConst::CamStartYawDeg + ClearConst::CamTotalOrbitDeg * yawT;
 
-			// フレーミング進行 ez：旋回中は中間まで控えめ → 旋回後に一気にスナップ（決め）。
-			// 旋回区間は smootherstep で MidFrac までゆるく寄せ、決め区間は easeOutBack で
-			// 1.0 を一度オーバーシュート（＝近くへ突っ込んで急減速＝ヒットストップ風）してから収まる。
-			float ez;
-			if (tt <= ClearConst::CamOrbitTime)
-			{
-				const float op = std::clamp(tt / ClearConst::CamOrbitTime, 0.0f, 1.0f);
-				const float ss = op * op * op * (op * (op * 6.0f - 15.0f) + 10.0f);   // smootherstep
-				ez = ClearConst::CamMidFrac * ss;                                     // 0 -> MidFrac
-			}
-			else
-			{
-				const float dp = std::clamp(
-					(tt - ClearConst::CamOrbitTime) / (ClearConst::CamDecideEnd - ClearConst::CamOrbitTime), 0.0f, 1.0f);
-				const float dpm = dp - 1.0f;
-				const float eb  = 1.0f + (ClearConst::CamDecideOvershoot + 1.0f) * dpm * dpm * dpm
-					+ ClearConst::CamDecideOvershoot * dpm * dpm;                      // easeOutBack（強オーバーシュート）
-				ez = std::lerp(ClearConst::CamMidFrac, 1.0f, eb);                     // MidFrac -> 1（突っ込む）
-			}
+
+			// フレーミング進行 ez：旋回中に最終フレーミングまで寄せ切る（smootherstep で 0→1）
+			const float op = std::clamp(tt / ClearConst::CamOrbitTime, 0.0f, 1.0f);
+			const float ez = op * op * op * (op * (op * 6.0f - 15.0f) + 10.0f);   // smootherstep
 			const float pitchDeg = std::lerp(ClearConst::CamStartPitchDeg, ClearConst::CamEndPitchDeg, ez);
 			const float focusUp  = std::lerp(ClearConst::CamStartFocusUp,  ClearConst::CamEndFocusUp,  ez);
 
-			// 決めのスナップ着地点で小フラッシュを1回（パンチを足す）
-			if (!m_clearDecideFlashed && tt >= ClearConst::CamDecideEnd)
+			// キメズームの着地で小フラッシュを1回（パンチを足す）
+			if (!m_clearDecideFlashed && tt >= ClearConst::CamZoomInEnd)
 			{
 				TriggerFlash(ClearConst::DecideFlash);
 				m_clearDecideFlashed = true;
 			}
 
-			// 距離：寄り（ez連動でスナップ＋突っ込み）→ 保持 → 引き
+			// 距離：旋回で寄せる → 旋回ドリフト直後にイージングで一気にキメズーム → 1秒止め → 引き
 			float distV;
-			if (tt <= ClearConst::CamDecideEnd)
-			{
-				distV = std::lerp(ClearConst::CamStartDist, ClearConst::CamEndDist, ez); // ezがオーバーシュートで突っ込む
-			}
-			else if (tt <= ClearConst::CamHoldEnd)
-			{
-				distV = ClearConst::CamEndDist;   // 決めを保持（ヒットストップ）
-			}
-			else
-			{
-				const float pp = std::clamp(
-					(tt - ClearConst::CamHoldEnd) / (ClearConst::CamPullEnd - ClearConst::CamHoldEnd), 0.0f, 1.0f);
-				const float ep = pp * pp * (3.0f - 2.0f * pp);
-				distV = std::lerp(ClearConst::CamEndDist, ClearConst::FadePullbackDist, ep);
-			}
-
-			// 傾き(roll, 度)：旋回中に先に左へ寝かせる → 寄せる瞬間に反対(右)へドリフトで振る → 保持 → 引きで水平へ
-			float roll = 0.0f;
 			if (tt <= ClearConst::CamOrbitTime)
 			{
-				// 旋回中に DecideTiltDeg(左) まで傾け切る（スナップ前にもう傾いている）
-				const float op = std::clamp(tt / ClearConst::CamOrbitTime, 0.0f, 1.0f);
-				const float ss = op * op * op * (op * (op * 6.0f - 15.0f) + 10.0f);   // smootherstep
-				roll = ClearConst::DecideTiltDeg * ss;
+				distV = std::lerp(ClearConst::CamStartDist, ClearConst::CamEndDist, ez); // 旋回で寄ってくる
 			}
-			else if (tt <= ClearConst::CamDecideEnd)
+			else if (tt <= ClearConst::CamZoomInEnd)
 			{
-				// 寄せの瞬間に左→右へ easeOutBack（行き過ぎて戻る＝ドリフト）で振り切る
-				const float rp = std::clamp(
-					(tt - ClearConst::CamOrbitTime) / (ClearConst::CamDecideEnd - ClearConst::CamOrbitTime), 0.0f, 1.0f);
-				const float rpm = rp - 1.0f;
-				const float eb  = 1.0f + (ClearConst::CamDecideOvershoot + 1.0f) * rpm * rpm * rpm
-					+ ClearConst::CamDecideOvershoot * rpm * rpm;     // easeOutBack
-				roll = std::lerp(ClearConst::DecideTiltDeg, ClearConst::DecideTiltSnapDeg, eb);
+				// キメズーム：旋回直後に smootherstep で一気に寄る
+				const float zp = std::clamp(
+					(tt - ClearConst::CamOrbitTime) / (ClearConst::CamZoomInEnd - ClearConst::CamOrbitTime), 0.0f, 1.0f);
+				const float ze = zp * zp * zp * (zp * (zp * 6.0f - 15.0f) + 10.0f);
+				distV = std::lerp(ClearConst::CamEndDist, ClearConst::CamZoomInDist, ze);
 			}
-			else if (tt <= ClearConst::CamHoldEnd)
+			else if (tt <= ClearConst::CamStopEnd)
 			{
-				roll = ClearConst::DecideTiltSnapDeg;   // 決めの間は右傾きを保持
+				distV = ClearConst::CamZoomInDist;   // 1秒止め（キメのあと完全静止）
 			}
 			else
 			{
-				// 引き：傾きを水平へ戻す
+				// 引き：カット直前まで止まらず引き続ける（マリギャラ風）。全区間を easeOut で連続移動。
+				const float pp = std::clamp(
+					(tt - ClearConst::CamStopEnd) / (ClearConst::CamPullEnd - ClearConst::CamStopEnd), 0.0f, 1.0f);
+				const float u = 1.0f - pp;
+				const float e = 1.0f - u * u;   // easeOut（止めから出て、最後まで動き続ける）
+				distV = std::lerp(ClearConst::CamZoomInDist, ClearConst::FadePullbackDist, e);
+			}
+
+			// 傾き(roll, 度)：ドリフト〜止めの間は軽く傾け → 引きで水平へ
+			float roll = 0.0f;
+			if (tt <= ClearConst::CamStopEnd)
+			{
+				roll = ClearConst::DecideTiltSnapDeg;
+			}
+			else
+			{
 				const float bp = std::clamp(
-					(tt - ClearConst::CamHoldEnd) / (ClearConst::CamPullEnd - ClearConst::CamHoldEnd), 0.0f, 1.0f);
+					(tt - ClearConst::CamStopEnd) / (ClearConst::CamPullEnd - ClearConst::CamStopEnd), 0.0f, 1.0f);
 				roll = ClearConst::DecideTiltSnapDeg * (1.0f - bp * bp * (3.0f - 2.0f * bp));
 			}
 
@@ -189,7 +185,7 @@ void GameScene::Event()
 
 			const Math::Vector3 focus = m_spPlayer->GetPos()
 				+ Math::Vector3(0.0f, focusUp, 0.0f);
-			const Math::Vector3 eye = focus + Math::Vector3(
+			Math::Vector3 eye = focus + Math::Vector3(
 				std::sinf(yaw) * cp, std::sinf(pitch), std::cosf(yaw) * cp) * distV;
 
 			Math::Vector3 f = focus - eye; f.Normalize();
@@ -1057,7 +1053,9 @@ void GameScene::Event()
 				if (gc->Intersects(coreHit, nullptr))
 				{
 					const Math::Vector3 corePos = gc->GetPos();
-					gc->Expire();
+					// Expire しない：取得後はプレイヤーのボーンに追従させて「持つ」演出に使う
+					m_spHeldCore = gc;
+					m_spPlayer->SetClearHold(true);
 
 					// 取得演出：プレイヤーを光らせる → クリアシーケンス開始
 					m_spPlayer->TriggerPickupGlow(Math::Color{
@@ -1198,7 +1196,7 @@ void GameScene::DrawSpriteExtra()
 		const float textRight = iconCX - baseSz * 0.5f - UIConst::CoinTextGap; // アイコン左端から少し左
 		const Math::Vector2 textPos(textRight - textW, iconCY - textH * 0.5f);
 		const Math::Color textCol(1.0f, 1.0f, 1.0f, 1.0f);
-		sprite.DrawFont(textPos, &textCol, "%s", buf);
+		TextFx::DrawShadowed(sprite, textPos, textCol, buf);
 	}
 
 	// ── HP：宝石ハート。左上に表示・被ダメで揺れる ──
@@ -1663,8 +1661,8 @@ void GameScene::DrawSpriteExtra()
 
 			if (m_irisMaskTex)
 			{
-				// 円が閉じていく：マスク四角のサイズを 開→0 へ（easeIn で最後にキュッと閉じる）
-				const float ec = a * a;                                  // easeInQuad
+				// 円が閉じていく：マスク四角のサイズを 開→0 へ（等速＝開始直後から閉じて見える）
+				const float ec = a;                                      // linear
 				const float openSz = ClearConst::IrisOpenScale * static_cast<float>(screenW);
 				const float s  = std::lerp(openSz, ClearConst::IrisCloseSize, ec);
 				const int   si = static_cast<int>(s);
@@ -1890,7 +1888,7 @@ void GameScene::DrawPauseMenu()
 			}
 		}
 		const Math::Vector2 pos(-textW * 0.5f, y - textH * 0.5f);
-		sprite.DrawFont(pos, &col, "%s", text);
+		TextFx::DrawShadowed(sprite, pos, col, text);
 	};
 
 	// ── レイアウト計算（中心原点・+Yが上）──
@@ -2996,6 +2994,31 @@ void GameScene::DrawCorelia()
 	const float screenW = static_cast<float>(bb->GetInfo().Width);
 	const float screenH = static_cast<float>(bb->GetInfo().Height);
 
+	// シャドウ＋アウトライン付きフォント描画
+	//  ① 右下へドロップシャドウ → ② 黒を8方向にずらして縁取り → ③ 本体を上に
+	const Math::Color outlineCol(CoreliaConst::OutR, CoreliaConst::OutG, CoreliaConst::OutB, CoreliaConst::OutA);
+	const Math::Color shadowCol (CoreliaConst::ShadowR, CoreliaConst::ShadowG, CoreliaConst::ShadowB, CoreliaConst::ShadowA);
+	auto drawOutlined = [&](std::shared_ptr<KdFontSprite>& fs, const Math::Vector2& pos, const Math::Color& mainCol)
+	{
+		if (!fs) { return; }
+		// ① ドロップシャドウ（右下＝+X, -Y）
+		sprite.DrawFont(fs,
+			Math::Vector2(pos.x + CoreliaConst::ShadowOffX, pos.y - CoreliaConst::ShadowOffY),
+			&shadowCol, 0);
+		// ② 縁取り（8方向）
+		const int t = CoreliaConst::OutlinePx;
+		for (int dy = -1; dy <= 1; ++dy)
+		{
+			for (int dx = -1; dx <= 1; ++dx)
+			{
+				if (dx == 0 && dy == 0) { continue; }
+				sprite.DrawFont(fs, Math::Vector2(pos.x + dx * t, pos.y + dy * t), &outlineCol, 0);
+			}
+		}
+		// ③ 本体
+		sprite.DrawFont(fs, pos, &mainCol, 0);
+	};
+
 	const int   bw = static_cast<int>(CoreliaConst::BoxWidth);
 	const int   bh = static_cast<int>(CoreliaConst::BoxHeight);
 	const int   cx = 0;   // 画面中央(横)
@@ -3016,24 +3039,51 @@ void GameScene::DrawCorelia()
 			static_cast<float>(cx) - bw * 0.5f + CoreliaConst::TextPadX,
 			static_cast<float>(cy) + bh * 0.5f + CoreliaConst::NameOffsetY);
 		auto fs = KdFontManager::Instance().CreateFontTexture(CoreliaConst::FontNo, CoreliaConst::SpeakerName, false);
-		sprite.DrawFont(fs, namePos, &edge, 0);
+		drawOutlined(fs, namePos, edge);
 	}
 
-	// 本文：SJIS を考慮して WrapChars 文字ごとに折り返し
+	// 本文：実ピクセル幅で折り返し（はみ出し防止）。'|' か改行で手動改行も可。
 	{
 		const std::string& text = m_convoText;
+
+		// 文字列の描画ピクセル幅を測る
+		auto measureWidth = [](const std::string& s) -> float
+		{
+			if (s.empty()) { return 0.0f; }
+			auto m = KdFontManager::Instance().CreateFontTexture(CoreliaConst::FontNo, s, false);
+			float w = 0.0f;
+			if (m)
+			{
+				for (const auto& d : m->GetTexList())
+				{
+					if (d && d->FontTex) { w += static_cast<float>(d->FontTex->GetInfo().Width); }
+				}
+			}
+			return w;
+		};
+
+		const float innerW = CoreliaConst::BoxWidth - CoreliaConst::TextPadX * 2.0f;
+
 		std::vector<std::string> lines;
 		std::string cur;
-		int cells = 0;
 		for (size_t i = 0; i < text.size(); )
 		{
 			const unsigned char b = static_cast<unsigned char>(text[i]);
+			// 手動改行（'|' か '\n'）
+			if (b == '|' || b == '\n') { lines.push_back(cur); cur.clear(); i += 1; continue; }
+
 			const bool lead = (b >= 0x81 && b <= 0x9F) || (b >= 0xE0 && b <= 0xFC);
-			const int n = (lead && i + 1 < text.size()) ? 2 : 1;
-			cur.append(text, i, n);
+			const int  n    = (lead && i + 1 < text.size()) ? 2 : 1;
+			const std::string ch = text.substr(i, n);
+
+			// 1文字足して幅オーバーなら、その前で折り返す
+			if (!cur.empty() && measureWidth(cur + ch) > innerW)
+			{
+				lines.push_back(cur);
+				cur.clear();
+			}
+			cur += ch;
 			i += n;
-			++cells;
-			if (cells >= CoreliaConst::WrapChars) { lines.push_back(cur); cur.clear(); cells = 0; }
 		}
 		if (!cur.empty()) { lines.push_back(cur); }
 
@@ -3045,7 +3095,7 @@ void GameScene::DrawCorelia()
 			if (!ln.empty())
 			{
 				auto fs = KdFontManager::Instance().CreateFontTexture(CoreliaConst::FontNo, ln, false);
-				sprite.DrawFont(fs, Math::Vector2(tx, ty), &textCol, 0);
+				drawOutlined(fs, Math::Vector2(tx, ty), textCol);
 			}
 			ty -= CoreliaConst::LineHeight;
 		}
@@ -3057,7 +3107,8 @@ void GameScene::DrawCorelia()
 			static_cast<float>(cx) + bw * 0.5f - 120.0f,
 			static_cast<float>(cy) - bh * 0.5f + 24.0f);
 		const Math::Color c(0.7f, 0.85f, 1.0f, 0.9f);
-		sprite.DrawFont(p, &c, "%s", CoreliaConst::ClosePrompt);
+		auto fs = KdFontManager::Instance().CreateFontTexture(CoreliaConst::FontNo, CoreliaConst::ClosePrompt, false);
+		drawOutlined(fs, p, c);
 	}
 }
 
@@ -3117,10 +3168,20 @@ void GameScene::StartStageClear(const Math::Vector3& corePos)
 	m_clearActive = true;
 	m_clearTimer  = 0.0f;
 	m_clearDecideFlashed = false;
+	m_clearYaw    = ClearConst::CamStartYawDeg;   // 振り子バネの初期角
+	m_clearYawVel = 0.0f;
 	(void)corePos;
+
+	// リザルト用データを StageManager へ渡す（StageSelect 帰還時に表示）
+	StageManager::Instance().SetResult(
+		StageManager::Instance().GetStageIndex() - 1,   // 0始まりの stageId
+		m_coinTotal, m_itemManager.GetRockCount(), m_deathCount, m_playTime);
 
 	if (m_spPlayer) { m_spPlayer->SetControlEnabled(false); }   // 操作ロック
 	TriggerFlash(ClearConst::FlashStrength);                    // 取得の白フラッシュ
+
+	// クリア演出は FOV を下げて望遠ぎみ（圧縮効果）にして劇的に見せる
+	if (m_camera) { m_camera->SetProjectionMatrix(ClearConst::CamFov); }
 }
 
 //----------------------------------------------------------
@@ -3257,6 +3318,9 @@ void GameScene::Respawn()
 	// コインが復活するのに合わせて取得カウントも戻す
 	m_coinTotal    = 0;
 	m_coinPopTimer = 0.0f;
+
+	// このランの経過時間もリセット（クリアタイムは「クリアした回の時間」）
+	m_playTime     = 0.0f;
 }
 
 void GameScene::RebuildEnemies()
@@ -3435,6 +3499,13 @@ GameScene::~GameScene()
 	// 破棄後にKdDebugGUIが死んだthisのDrawGui()を呼ぶのを防ぐ（StageSelect等への遷移時のクラッシュ対策）
 	KdDebugGUI::Instance().ClearGuiCallback();
 	KdDebugGUI::Instance().SetGameViewport(false);
+
+	// シングルトンが保持するステージ依存リソース（モデル/テクスチャ）を解放しておく。
+	// 次のステージ Load で再構築されるので、StageSelect 滞在中の常駐を減らせる。
+	PlanetGravityManager::Instance().ClearPlanets();
+	CoreliaManager::Instance().ClearNpcs();
+	DeadZoneManager::Instance().ClearZones();
+	ManualGravityZoneManager::Instance().ClearZones();
 }
 
 void GameScene::Init()

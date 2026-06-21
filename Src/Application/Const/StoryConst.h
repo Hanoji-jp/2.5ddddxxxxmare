@@ -1,4 +1,5 @@
 ﻿#pragma once
+#include "FontConst.h"
 
 //==========================================================
 // StoryConst.h
@@ -37,7 +38,7 @@ namespace StoryConst
 	//----------------------------------------------------------
 	constexpr int          FontNo      = 0;
 	constexpr int          FontHeight  = 30;
-	constexpr const char*  FontName    = "Arial";
+	constexpr const char*  FontName    = FontConst::GameFontName;
 	constexpr const char*  PromptText  = "PRESS ENTER";
 	constexpr const char*  SkipText    = "TAB : SKIP";
 	constexpr float        PromptYRatio = 0.42f;  // 画面下寄り（中心原点・+Y上）

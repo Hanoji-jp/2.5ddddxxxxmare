@@ -30,6 +30,14 @@ public:
 	// Glow タイプか（ゴール用 WarpHole を開くトリガー）
 	bool IsGlow() const { return m_type == CoreType::Glow; }
 
+	// 取得後にプレイヤーのボーンへ追従させる用（クリア演出）。
+	// 本体メッシュは m_mWorld で描くので平行移動も更新する（回転は前回値を保持）。
+	void SetPos(const Math::Vector3& p)
+	{
+		m_pos = p;
+		m_mWorld._41 = p.x; m_mWorld._42 = p.y; m_mWorld._43 = p.z;
+	}
+
 private:
 	void BakeMesh();           // Rock 用: ジッター球体を事前計算
 	void DrawGlowEffect();     // Glow 描画（DrawEffect から呼ぶ）

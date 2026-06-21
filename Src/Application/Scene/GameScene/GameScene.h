@@ -243,6 +243,10 @@ private:
 	bool  m_clearActive = false;
 	float m_clearTimer  = 0.0f;
 	bool  m_clearDecideFlashed = false;   // 決めスナップ時の小フラッシュ（1回だけ）
+	float m_playTime    = 0.0f;           // このランの経過時間（クリア時にリザルトへ渡す）
+	float m_clearYaw    = 0.0f;           // クリアカメラのyaw（バネ追従＝振り子ドリフト用）
+	float m_clearYawVel = 0.0f;           // 同 角速度
+	std::shared_ptr<GravityCore> m_spHeldCore;  // 取得して手に持っているコア（クリア演出中）
 	void StartStageClear(const Math::Vector3& corePos);
 
 	// ポーズメニュー状態

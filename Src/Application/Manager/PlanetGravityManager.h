@@ -135,6 +135,9 @@ public:
 	std::vector<PlanetData>& WorkPlanets() { return m_planets; }
 	void SetSelected(int _i)               { m_selectedIndex = _i; }
 
+	// シーン離脱時の後始末：保持している惑星（モデル/テクスチャ含む）を解放
+	void ClearPlanets() { m_planets.clear(); m_selectedIndex = -1; }
+
 private:
 	PlanetGravityManager()  { Load(); }
 	~PlanetGravityManager() {}

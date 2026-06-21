@@ -1,4 +1,5 @@
 ﻿#pragma once
+#include "FontConst.h"
 
 //==========================================================
 // StageSelectConst.h
@@ -92,7 +93,7 @@ namespace StageSelectConst
 
 	constexpr int          FontNo      = 0;
 	constexpr int          FontHeight  = 32;
-	constexpr const char*  FontName    = "Arial";
+	constexpr const char*  FontName    = FontConst::GameFontName;
 	constexpr const char*  TitleText   = "STAGE SELECT";
 	constexpr const char*  HintText    = "WASD : MOVE     ENTER : GO";
 	constexpr float        TitleYRatio = 0.40f;   // 上寄り

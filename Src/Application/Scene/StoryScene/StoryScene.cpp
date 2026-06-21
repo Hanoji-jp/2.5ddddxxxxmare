@@ -1,6 +1,7 @@
 ﻿#include "StoryScene.h"
 #include "../SceneManager.h"
 #include "../../Const/StoryConst.h"
+#include "../../Util/TextFx.h"
 
 using namespace StoryConst;
 
@@ -223,7 +224,7 @@ void StoryScene::DrawSpriteExtra()
 			}
 		}
 		const Math::Vector2 pos(-textW * 0.5f, -sh * PromptYRatio - textH * 0.5f);
-		sprite.DrawFont(pos, &col, "%s", PromptText);
+		TextFx::DrawShadowed(sprite, pos, col, PromptText);
 	}
 
 	// 「ESC : SKIP」（常時、控えめに表示）
@@ -241,6 +242,6 @@ void StoryScene::DrawSpriteExtra()
 			}
 		}
 		const Math::Vector2 pos(sw * 0.5f - textW - 16.0f, -sh * SkipYRatio - textH * 0.5f);
-		sprite.DrawFont(pos, &col, "%s", SkipText);
+		TextFx::DrawShadowed(sprite, pos, col, SkipText);
 	}
 }

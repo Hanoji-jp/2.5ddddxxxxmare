@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include <cstdio>
+#include <fstream>
 #include <filesystem>
 
 //==========================================================
@@ -23,6 +24,39 @@ public:
     void SetStageIndex(int _i) { m_stageIndex = (_i < 1) ? 1 : _i; }
     int  GetStageIndex() const { return m_stageIndex; }
 
+    //------------------------------------------------------
+    // Stage-clear result, carried from GameScene to StageSelect.
+    //------------------------------------------------------
+    struct StageResult
+    {
+        bool  pending = false;   // a fresh clear is waiting to be shown
+        int   stageId = 0;       // 0-based id (for stage-name lookup)
+        int   coins   = 0;       // coins collected in the run
+        int   rocks   = 0;       // rock items collected in the run
+        int   deaths  = 0;       // times died in the run
+        float time    = 0.0f;    // play time until clear (seconds)
+    };
+
+    void SetResult(int _stageId, int _coins, int _rocks, int _deaths, float _time)
+    {
+        m_result = { true, _stageId, _coins, _rocks, _deaths, _time };
+    }
+    // Read the result once; clears the pending flag so it only shows one time.
+    StageResult ConsumeResult()
+    {
+        StageResult r = m_result;
+        m_result.pending = false;
+        return r;
+    }
+
+    //------------------------------------------------------
+    // Lifetime totals (coins / rocks), saved across sessions.
+    //------------------------------------------------------
+    int  GetTotalCoins() const { return m_totalCoins; }
+    int  GetTotalRocks() const { return m_totalRocks; }
+    void AddTotalCoins(int n)  { m_totalCoins += n; SaveTotals(); }
+    void AddTotalRocks(int n)  { m_totalRocks += n; SaveTotals(); }
+
     // Stage data folder (with trailing slash), e.g. "Asset/Data/Stage01/".
     std::string Dir() const
     {
@@ -41,10 +75,34 @@ public:
     }
 
 private:
-    StageManager() = default;
+    StageManager() { LoadTotals(); }
     ~StageManager() = default;
     StageManager(const StageManager&)            = delete;
     StageManager& operator=(const StageManager&) = delete;
 
+    // Totals are saved in a single global file (not per-stage).
+    std::string TotalsPath() const { return "Asset/Data/totals.csv"; }
+
+    void LoadTotals()
+    {
+        std::ifstream ifs(TotalsPath());
+        if (!ifs) { return; }
+        char comma = ',';
+        ifs >> m_totalCoins >> comma >> m_totalRocks;
+        if (m_totalCoins < 0) { m_totalCoins = 0; }
+        if (m_totalRocks < 0) { m_totalRocks = 0; }
+    }
+    void SaveTotals() const
+    {
+        std::error_code ec;
+        std::filesystem::create_directories("Asset/Data/", ec);
+        std::ofstream ofs(TotalsPath());
+        if (!ofs) { return; }
+        ofs << m_totalCoins << ',' << m_totalRocks;
+    }
+
     int m_stageIndex = 1;
+    StageResult m_result;
+    int m_totalCoins = 0;
+    int m_totalRocks = 0;
 };

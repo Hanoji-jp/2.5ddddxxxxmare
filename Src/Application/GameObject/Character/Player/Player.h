@@ -91,6 +91,17 @@ public:
     // 演出用：体を +Z 正面へ向ける（クリア演出の決めポーズ用。描画のみ）
     void SetCutsceneFaceZ(bool on) { m_cutsceneFaceZ = on; }
 
+    // クリア演出：重力コア取得ポーズ（GetGravityCore アニメ）を再生する状態
+    void SetClearHold(bool on) { m_clearHold = on; }
+
+    // クリア演出：物理を動かさず、その場でアニメ(GetGravityCore)と姿勢だけ更新する。
+    // （クリア中はオブジェクト更新が止まるので GameScene から毎フレーム呼ぶ）
+    void UpdateClearPose(float dt);
+
+    // 指定ボーンのワールド行列を返す（コアを GravityCoreBorn ボーンへ追従させる用）。
+    // アニメ更新後（CalcNodeMatrices 済み）に呼ぶこと。
+    Math::Matrix GetBoneWorld(const std::string& boneName) const;
+
     // 導入演出ポーズ：パラソル等のノードを隠す（落下中の見た目用）
     void SetIntroPose(bool on);
 
@@ -179,6 +190,9 @@ private:
 
     // 演出用：体を +Z 正面へ固定（描画のみ）
     bool m_cutsceneFaceZ = false;
+
+    // クリア演出：重力コア取得ポーズ再生中
+    bool m_clearHold = false;
 
     // 攻撃モーション再生中フラグ（上半身 Attack 上書き管理用）
     bool m_isAttacking = false;

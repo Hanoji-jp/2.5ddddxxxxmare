@@ -6,6 +6,8 @@
 #include "../../GameObject/Effect/EffectBase.h"
 #include "../../Const/PlayerConst.h"
 #include "../../Const/CubunConst.h"
+#include "../../Const/FontConst.h"
+#include "../../Util/TextFx.h"
 
 namespace
 {
@@ -32,7 +34,7 @@ namespace
 	constexpr float        kStartShrink    = 0.85f;  // どれだけ縮むか(0.85=15%まで)
 	constexpr int          kFontNo         = 0;
 	constexpr int          kFontHeight     = 44;
-	constexpr const char*  kFontName       = "Arial";
+	constexpr const char*  kFontName       = FontConst::GameFontName;
 	constexpr const char*  kPromptText     = "PRESS ENTER";
 
 	// ── カメラ（-Z 側から +Z を見る＝+X が画面右で直感的）──
@@ -107,7 +109,11 @@ void TitleScene::Init()
 	m_cubun.SetModelData(CubunConst::ModelPath);
 	m_corelia.SetModelData(PlayerConst::ModelPath);
 	m_coreliaAnim.Init(&m_corelia);
-	m_coreliaAnim.ChangeAnimation("Fall", true, 0);   // 落下アニメ
+	// 落下アニメ。"Fall" が無い gltf（Mixamo由来は "Armature|mixamo.com|Layer0" 名）にも対応
+	if (!m_coreliaAnim.ChangeAnimation("Fall", true, 0))
+	{
+		m_coreliaAnim.ChangeAnimation("Armature|mixamo.com|Layer0", true, 0);
+	}
 	// 剣・傘・背中の剣を非表示
 	m_corelia.SetNodeVisible("HandledSword",  false);
 	m_corelia.SetNodeVisible("BackSword",     false);
@@ -449,6 +455,6 @@ void TitleScene::DrawSpriteExtra()
 			}
 		}
 		const Math::Vector2 pos(-textW * 0.5f, -sh * kPromptYRatio - textH * 0.5f);
-		sprite.DrawFont(pos, &col, "%s", kPromptText);
+		TextFx::DrawShadowed(sprite, pos, col, kPromptText);
 	}
 }

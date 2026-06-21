@@ -2,6 +2,7 @@
 
 #include "Scene/SceneManager.h"
 #include "Framework/Utility/ThreadPool/KdThreadPool.h"
+#include "Const/FontConst.h"
 
 // ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// /////
 // エントリーポイント
@@ -252,6 +253,8 @@ bool Application::Init(int w, int h)
 	// フォント初期化
 	//===================================================================
 	KdFontManager::Instance().Init(GetWindowHandle());
+	// 共通ゲームフォント(Kuramubon)を登録（以後 AddFont でファミリ名指定が効く）
+	KdFontManager::Instance().AddFontResource(FontConst::GameFontPath);
 	
 	//===================================================================
 	// スレッドプール初期化

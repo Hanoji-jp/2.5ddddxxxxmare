@@ -1,4 +1,5 @@
 ﻿#pragma once
+#include "FontConst.h"
 
 //==========================================================
 // PauseMenuConst.h
@@ -12,7 +13,7 @@ namespace PauseMenuConst
 	// フォント（他シーンと別番号にして衝突を避ける）
 	constexpr int          FontNo     = 1;
 	constexpr int          FontHeight = 40;
-	constexpr const char*  FontName   = "Arial";
+	constexpr const char*  FontName   = FontConst::GameFontName;
 
 	constexpr const char*  TitleText  = "- PAUSE -";
 

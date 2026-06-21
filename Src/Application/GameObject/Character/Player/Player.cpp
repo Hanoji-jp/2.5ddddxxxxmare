@@ -77,9 +77,14 @@ void Player::Update()
 
 		Character::Update();   // 重力（移動・当たり判定は PostUpdate 側）
 
+		// クリア演出：重力コア取得ポーズ。無ければ Idle にフォールバック
+		if (m_clearHold)
+		{
+			if (!ChangeAnimIfExist("GetGravityCore", false)) { ChangeAnim("Idle", true); }
+		}
 		// 状態に応じてアニメ（Fall / Idle）を設定してから更新
-		if (m_state == State::Fall) { if (!ChangeAnimIfExist("Fall", true)) { ChangeAnim("Idle", true); } }
-		else                        { ChangeAnim("Idle", true); }
+		else if (m_state == State::Fall) { if (!ChangeAnimIfExist("Fall", true)) { ChangeAnim("Idle", true); } }
+		else                             { ChangeAnim("Idle", true); }
 		m_animBlender.Update(m_modelWork, 1.0f);
 		return;
 	}
@@ -549,6 +554,39 @@ void Player::PostUpdate()
     }
 }
 
+void Player::UpdateClearPose(float dt)
+{
+    // 取得発光は減衰させる
+    UpdatePickupGlow(dt);
+
+    // GetGravityCore ポーズを再生（無ければIdle）。物理・移動・当たり判定は一切しない。
+    if (!ChangeAnimIfExist("GetGravityCore", false)) { ChangeAnim("Idle", true); }
+    m_animBlender.Update(m_modelWork, 1.0f);   // アニメ進行＋ノード行列再計算
+
+    // drawWorld：その場で、カメラ側(-Z)を向く固定姿勢（up=+Y, fwd=-Z, right=-X）。
+    const float scale = PlayerConst::ModelScale;
+    const Math::Matrix scaleMat = Math::Matrix::CreateScale(scale);
+    const Math::Matrix rot(
+        -1.0f, 0.0f,  0.0f, 0.0f,
+         0.0f, 1.0f,  0.0f, 0.0f,
+         0.0f, 0.0f, -1.0f, 0.0f,
+         0.0f, 0.0f,  0.0f, 1.0f);
+    const Math::Vector3 pos = GetPos();
+    const Math::Matrix trans = DirectX::XMMatrixTranslation(
+        pos.x, pos.y + PlayerConst::ModelOffsetY, pos.z);
+    m_drawWorld = scaleMat * rot * trans;
+}
+
+Math::Matrix Player::GetBoneWorld(const std::string& boneName) const
+{
+    // ノードのモデルローカル行列 × プレイヤーの描画ワールド = ワールド行列
+    if (const auto* node = m_modelWork.FindNode(boneName))
+    {
+        return node->m_worldTransform * m_drawWorld;
+    }
+    return m_drawWorld;
+}
+
 void Player::DrawLit()
 {
     if (m_modelWork.IsEnable())
@@ -853,6 +891,7 @@ void Player::Revive()
     m_hasParasol      = false;           // リスポーンでアイテムを元に戻すのに合わせ所持もリセット
     m_controlEnabled  = true;            // 入力を必ず有効化
     m_cutsceneSpin    = 0.0f;            // 演出回転をリセット
+    m_clearHold       = false;           // クリア取得ポーズをリセット
     m_cutsceneTumble  = Math::Vector3::Zero; // 多軸タンブルもリセット
     m_cutsceneFaceZ   = false;               // 決めポーズ向きもリセット
     m_pickupGlowTimer = 0.0f;            // 取得発光の残留を消す

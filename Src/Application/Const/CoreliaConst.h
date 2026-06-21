@@ -1,4 +1,5 @@
 ﻿#pragma once
+#include "FontConst.h"
 
 // Corelia hint NPC constants
 namespace CoreliaConst
@@ -44,8 +45,8 @@ namespace CoreliaConst
 
     // Font (Japanese capable face)
     constexpr int         FontNo     = 2;
-    constexpr const char* FontName   = "Meiryo";
-    constexpr int         FontHeight = 28;
+    constexpr const char* FontName   = FontConst::GameFontName;
+    constexpr int         FontHeight = 48;
 
     // ---- Conversation camera ----
     constexpr float ConvoFocusToNpc = 0.55f;  // lerp player->npc for camera focus
@@ -53,14 +54,23 @@ namespace CoreliaConst
     constexpr float ConvoZoomLerp   = 0.12f;  // zoom in/out smoothing per frame
 
     // ---- Dialogue box (sprite, center-origin, +Y up) ----
-    constexpr float BoxWidth   = 760.0f;
-    constexpr float BoxHeight  = 180.0f;
+    constexpr float BoxWidth   = 820.0f;
+    constexpr float BoxHeight  = 230.0f;
     constexpr float BoxMargin  = 60.0f;   // from bottom of screen
     constexpr float TextPadX   = 40.0f;
-    constexpr float TextPadY   = 36.0f;
+    constexpr float TextPadY   = 64.0f;
     constexpr float NameOffsetY = 20.0f;  // name tag above the box
-    constexpr int   WrapChars  = 28;      // wrap hint to this many (full-width) chars per line
-    constexpr float LineHeight = 38.0f;
+    constexpr int   WrapChars  = 14;      // wrap hint to this many (full-width) chars per line
+    constexpr float LineHeight = 58.0f;
+
+    // Text outline (drawn by offsetting a dark copy in 8 directions)
+    constexpr int   OutlinePx = 2;        // outline thickness (pixels)
+    constexpr float OutR = 0.0f, OutG = 0.0f, OutB = 0.0f, OutA = 0.9f;
+
+    // Drop shadow (offset toward bottom-right; center-origin +Y up so down = -Y)
+    constexpr float ShadowOffX = 5.0f;    // to the right
+    constexpr float ShadowOffY = 5.0f;    // downward (applied as -Y)
+    constexpr float ShadowR = 0.0f, ShadowG = 0.0f, ShadowB = 0.0f, ShadowA = 0.5f;
 
     // Box colors (RGBA)
     constexpr float BoxR = 0.05f, BoxG = 0.10f, BoxB = 0.18f, BoxA = 0.85f;

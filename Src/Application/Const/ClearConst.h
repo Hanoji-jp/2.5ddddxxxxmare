@@ -11,6 +11,10 @@ namespace ClearConst
     // White flash strength on pickup.
     constexpr float FlashStrength = 1.0f;
 
+    // Camera FOV during the clear sequence (lower = telephoto / compressed = more dramatic).
+    // Normal game FOV is 60.
+    constexpr float CamFov = 38.0f;
+
     // --- Star-get camera (dynamic: whoosh-in + sweep up & around) ---
     // Distance: far -> near (push in)
     constexpr float CamStartDist     = 16.0f;
@@ -39,8 +43,8 @@ namespace ClearConst
     // 0..OrbitPhaseEnd : orbit.  OrbitPhaseEnd..1 : the decide move.
     constexpr float OrbitPhaseEnd  = 0.55f;
     constexpr float CamMidDist     = 9.5f;    // distance at the end of the orbit
-    constexpr float DecideTiltDeg  = -12.0f;  // pre-zoom tilt established during the orbit (negative = left)
-    constexpr float DecideTiltSnapDeg = 14.0f; // opposite-side tilt swung to during the snap-zoom (positive = right)
+    constexpr float DecideTiltDeg  = -6.0f;   // tilt while swaying left (negative = left)
+    constexpr float DecideTiltSnapDeg = 7.0f; // tilt while swaying right (positive = right)
     constexpr float DecidePullback = 3.0f;    // slight pull-back hump during the decide
 
     // After GetTime: pull the camera back while fading out.
@@ -58,25 +62,51 @@ namespace ClearConst
     // --- Decide snap (the "kime"): during orbit stay loose, then SNAP in fast ---
     // How far the framing progresses during the orbit (0..1). Lower = bigger snap left for the decide.
     constexpr float CamMidFrac      = 0.55f;
-    // Decide snap end time (fast). Orbit end (CamOrbitTime) -> here = the punch-in window.
-    constexpr float CamDecideEnd    = 2.6f;
+    // Decide snap end time. Orbit end (CamOrbitTime) -> here = the drift/zoom-in window.
+    // Quick drift+settle so the following "stop" pause reads clearly.
+    constexpr float CamDecideEnd    = 2.7f;
     // Decide snap overshoot (punch past then settle = recoil/hitstop feel). Larger = punchier.
     constexpr float CamDecideOvershoot = 1.1f;
     // Small white flash fired at the decide snap moment for extra impact.
     constexpr float DecideFlash     = 0.28f;
 
-    constexpr float CamHoldEnd   = 3.3f;   // hold at EndDist until here
-    constexpr float CamPullEnd   = 6.2f;   // pull back ends -> return to StageSelect
-    // Iris close window: starts with the pull-back, finishes a bit before the cut
-    // so it can hold full black for a moment (no half-open flash at the switch).
-    constexpr float FadeBeginT   = 3.3f;   // = CamHoldEnd (close in sync with the pull-back)
-    constexpr float FadeEndT     = 5.7f;   // fully closed here, then hold black until CamPullEnd
+    // Reverse drift = a pendulum (damped sine) that carries the orbit drift's momentum.
+    // After the orbit drift, the yaw swings to the opposite side, overshoots back,
+    // smaller, ... decaying to center. A sine never dwells at the turn = no choppiness.
+    constexpr float CamPendAmp   = 22.0f;  // pendulum amplitude (deg) at the start
+    constexpr float CamPendOmega = 5.2f;   // angular freq (rad/s). Bigger = faster swings
+    constexpr float CamPendDecay = 1.6f;   // decay rate (bigger = settles faster / fewer swings)
+    constexpr float CamYawLeanScale = 0.5f; // roll lean per degree of swing offset
+    constexpr float CamYawLeanMax   = 10.0f; // max roll lean (deg)
+
+    constexpr float CamSwayEnd   = 3.0f;   // (timing ref for the zoom start)
+    // Lateral positional slide for the drift (world units). The camera trucks sideways
+    // with inertia (left -> right -> center), so the player slides across the frame.
+    constexpr float CamDriftDist      = 4.5f;
+    // Inertia overshoot for each drift segment (easeOutBack): slides past then settles.
+    constexpr float CamDriftOvershoot = 1.6f;
+
+    // Kime zoom: right after the orbit drift, push in quickly (eased).
+    constexpr float CamZoomInEnd  = 2.4f;  // zoom-in ends here (starts at CamOrbitTime)
+    constexpr float CamZoomInDist = 5.0f;  // distance at the zoom-in peak (smaller = closer)
+
+    // Stop: hold still for ~1 second after the kime zoom (the beat before the pull).
+    constexpr float CamStopEnd   = 3.4f;   // = CamZoomInEnd + 1.0s
+
+    // Pull back: the camera keeps pulling continuously the whole time (Mario-Galaxy style),
+    // never stops until the cut. CamPullEnd is the scene cut.
+    constexpr float CamPullEnd   = 6.5f;   // pull spans [CamStopEnd, CamPullEnd], then cut
+
+    // Iris: starts when the pull starts, closes over ~3s while the camera keeps pulling.
+    constexpr float FadeBeginT   = 3.4f;   // = CamStopEnd (iris starts with the pull)
+    constexpr float FadeEndT     = 6.4f;   // ~3s transition; camera still pulling until here
 
     // --- Iris mask transition (Mario-style closing circle) ---
     // Black texture with a transparent circular hole in the center.
     constexpr const char* IrisMaskPath = "Asset/Texture/Transition/IrisMask.png";
-    // Mask quad size at fully-open (multiple of screen width). Big = scene fully visible.
-    constexpr float IrisOpenScale  = 3.2f;
+    // Mask quad size at fully-open (multiple of screen width). ~1.3 = circle just covers
+    // the screen at the start, so the close is visible immediately (not a delayed shrink).
+    constexpr float IrisOpenScale  = 1.35f;
     // Mask quad size at fully-closed (pixels). 0 = closes to a point.
     constexpr float IrisCloseSize  = 0.0f;
 }
