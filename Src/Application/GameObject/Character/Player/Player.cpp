@@ -436,11 +436,22 @@ void Player::PostUpdate()
                 modelRight = Math::Vector3{ 0.0f, 0.0f, 1.0f };
         }
 
+        // 演出：クリアの決めポーズで体を +Z 正面へ向ける（描画のみ）
+        Math::Vector3 useUp    = up;
+        Math::Vector3 useFwd   = modelFwd;
+        Math::Vector3 useRight = modelRight;
+        if (m_cutsceneFaceZ)
+        {
+            useUp    = { 0.0f, 1.0f, 0.0f };
+            useFwd   = { 0.0f, 0.0f, 1.0f };
+            useRight = { 1.0f, 0.0f, 0.0f };
+        }
+
         const Math::Matrix rot(
-            modelRight.x, modelRight.y, modelRight.z, 0.0f,
-            up.x,         up.y,         up.z,         0.0f,
-            modelFwd.x,   modelFwd.y,   modelFwd.z,   0.0f,
-            0.0f,         0.0f,         0.0f,          1.0f);
+            useRight.x, useRight.y, useRight.z, 0.0f,
+            useUp.x,    useUp.y,    useUp.z,    0.0f,
+            useFwd.x,   useFwd.y,   useFwd.z,   0.0f,
+            0.0f,       0.0f,       0.0f,        1.0f);
 
         // 等方スケール行列（Traveling 中のみ縦伸び、着地時はスクワッシュ）
         const float stretchY = GetWarpStretch() ? WarpHoleConst::WarpStretchScale : 1.0f;
@@ -489,12 +500,14 @@ void Player::PostUpdate()
             m_drawWorld = drawNoTrans;
         }
 
-        // ── 演出用タンブル（描画のみ。ワールドZ軸まわりにロール）──
-        if (std::abs(m_cutsceneSpin) > 0.0001f)
+        // ── 演出用タンブル（描画のみ）。多軸(pitch/yaw/roll)＋従来のZロールを合成 ──
+        if (std::abs(m_cutsceneSpin) > 0.0001f || m_cutsceneTumble.LengthSquared() > 1e-8f)
         {
             const Math::Vector3 drawPos = { m_drawWorld._41, m_drawWorld._42, m_drawWorld._43 };
-            const Math::Matrix  spinRot = Math::Matrix::CreateFromAxisAngle(
-                Math::Vector3{ 0.0f, 0.0f, 1.0f }, m_cutsceneSpin);
+            const Math::Matrix  spinRot = Math::Matrix::CreateFromYawPitchRoll(
+                m_cutsceneTumble.y,                      // yaw (Y)
+                m_cutsceneTumble.x,                      // pitch (X)
+                m_cutsceneTumble.z + m_cutsceneSpin);    // roll (Z)
             Math::Matrix drawNoTrans = m_drawWorld;
             drawNoTrans._41 = 0.0f; drawNoTrans._42 = 0.0f; drawNoTrans._43 = 0.0f;
             drawNoTrans = drawNoTrans * spinRot;
@@ -840,10 +853,40 @@ void Player::Revive()
     m_hasParasol      = false;           // リスポーンでアイテムを元に戻すのに合わせ所持もリセット
     m_controlEnabled  = true;            // 入力を必ず有効化
     m_cutsceneSpin    = 0.0f;            // 演出回転をリセット
+    m_cutsceneTumble  = Math::Vector3::Zero; // 多軸タンブルもリセット
+    m_cutsceneFaceZ   = false;               // 決めポーズ向きもリセット
     m_pickupGlowTimer = 0.0f;            // 取得発光の残留を消す
     m_damageFlashTimer = 0;             // 被ダメ赤フラッシュをリセット
+    SetIntroPose(false);                 // 隠していたパラソル等を元に戻す
+    // 重力・接地状態をリセット（次フレームで最寄り惑星を取り直せるように）
+    m_isGround           = false;
+    m_currentPlanetIndex = -1;
+    m_pCurrentPlanet     = nullptr;
+    SetInitialGravityDir(ManualGravityDir::None);
+    m_upDir              = { 0.0f, 1.0f, 0.0f };
+    m_upDirVisual        = { 0.0f, 1.0f, 0.0f };
     m_animBlender.ClearUpperBodyAnim();
     ChangeAnim("Idle", true);
+}
+
+// 着地のつぶれ演出を発動（ズサーバタンの「バタン」）
+void Player::TriggerLandingSquash()
+{
+    m_squashTimer = JuiceConst::SquashDuration;
+}
+
+// 導入演出ポーズ：パラソル等のノードを隠す（落下中の見た目用）
+void Player::SetIntroPose(bool on)
+{
+    const char* hideNodes[] = { "ClosedParasol", "OpenedParasol", "HandledSword" };
+    auto& nodes = m_modelWork.WorkNodes();
+    for (auto& n : nodes)
+    {
+        for (const char* hn : hideNodes)
+        {
+            if (n.m_name == hn) { n.m_visible = !on; break; }   // on=隠す
+        }
+    }
 }
 
 void Player::Heal(int amount)

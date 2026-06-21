@@ -7,6 +7,7 @@
 #include"../../Const/GravityArrowConst.h"
 #include"../../Const/EditorPickConst.h"
 #include"../../Const/IntroConst.h"
+#include"../../Const/ClearConst.h"
 #include"../../Camera/CameraSettings.h"
 #include"../../Manager/ModelManager.h"
 #include"../../Manager/StageManager.h"
@@ -79,8 +80,144 @@ void GameScene::Event()
 	UpdateCorelia();
 	if (m_convoActive) { return; }
 
-	// ── 導入カットシーン（Stage1：投げ出され→落下きりもみ→着地）──
-	if (m_introCutscene) { UpdateIntroCutscene(); }
+	// ── 導入カットシーン（Stage1：落下きりもみ→ズサーバタン着地）──
+	if (m_introCutscene || m_introLanding) { UpdateIntroCutscene(); }
+
+	// ── ステージクリア演出（ゴールコア取得→周回カメラ→暗転→StageSelectへ）──
+	if (m_clearActive)
+	{
+		m_clearTimer += KdFPSController::GetDt();
+
+		// スター取得風カメラ：旋回→（決め）少し引く→ズーム→少し保持→もう一度引く（全部連続）
+		if (m_camera && m_spPlayer)
+		{
+			constexpr float kPi = 3.14159265f;
+			const float tt = m_clearTimer;
+
+			// 回転：オービット区間を easeOutBack（行き過ぎて戻る＝ドリフト/慣性）でスイープ。
+			// 目標角を一度オーバーシュートしてから滑り込むので、急ターンにならない。
+			const float yp = std::clamp(tt / ClearConst::CamOrbitTime, 0.0f, 1.0f);
+			const float c1 = ClearConst::CamOrbitOvershoot;
+			const float c3 = c1 + 1.0f;
+			const float pm = yp - 1.0f;
+			const float yawT = 1.0f + c3 * pm * pm * pm + c1 * pm * pm;   // easeOutBack
+			const float yawDeg = ClearConst::CamStartYawDeg + ClearConst::CamTotalOrbitDeg * yawT;
+
+			// フレーミング進行 ez：旋回中は中間まで控えめ → 旋回後に一気にスナップ（決め）。
+			// 旋回区間は smootherstep で MidFrac までゆるく寄せ、決め区間は easeOutBack で
+			// 1.0 を一度オーバーシュート（＝近くへ突っ込んで急減速＝ヒットストップ風）してから収まる。
+			float ez;
+			if (tt <= ClearConst::CamOrbitTime)
+			{
+				const float op = std::clamp(tt / ClearConst::CamOrbitTime, 0.0f, 1.0f);
+				const float ss = op * op * op * (op * (op * 6.0f - 15.0f) + 10.0f);   // smootherstep
+				ez = ClearConst::CamMidFrac * ss;                                     // 0 -> MidFrac
+			}
+			else
+			{
+				const float dp = std::clamp(
+					(tt - ClearConst::CamOrbitTime) / (ClearConst::CamDecideEnd - ClearConst::CamOrbitTime), 0.0f, 1.0f);
+				const float dpm = dp - 1.0f;
+				const float eb  = 1.0f + (ClearConst::CamDecideOvershoot + 1.0f) * dpm * dpm * dpm
+					+ ClearConst::CamDecideOvershoot * dpm * dpm;                      // easeOutBack（強オーバーシュート）
+				ez = std::lerp(ClearConst::CamMidFrac, 1.0f, eb);                     // MidFrac -> 1（突っ込む）
+			}
+			const float pitchDeg = std::lerp(ClearConst::CamStartPitchDeg, ClearConst::CamEndPitchDeg, ez);
+			const float focusUp  = std::lerp(ClearConst::CamStartFocusUp,  ClearConst::CamEndFocusUp,  ez);
+
+			// 決めのスナップ着地点で小フラッシュを1回（パンチを足す）
+			if (!m_clearDecideFlashed && tt >= ClearConst::CamDecideEnd)
+			{
+				TriggerFlash(ClearConst::DecideFlash);
+				m_clearDecideFlashed = true;
+			}
+
+			// 距離：寄り（ez連動でスナップ＋突っ込み）→ 保持 → 引き
+			float distV;
+			if (tt <= ClearConst::CamDecideEnd)
+			{
+				distV = std::lerp(ClearConst::CamStartDist, ClearConst::CamEndDist, ez); // ezがオーバーシュートで突っ込む
+			}
+			else if (tt <= ClearConst::CamHoldEnd)
+			{
+				distV = ClearConst::CamEndDist;   // 決めを保持（ヒットストップ）
+			}
+			else
+			{
+				const float pp = std::clamp(
+					(tt - ClearConst::CamHoldEnd) / (ClearConst::CamPullEnd - ClearConst::CamHoldEnd), 0.0f, 1.0f);
+				const float ep = pp * pp * (3.0f - 2.0f * pp);
+				distV = std::lerp(ClearConst::CamEndDist, ClearConst::FadePullbackDist, ep);
+			}
+
+			// 傾き(roll, 度)：旋回中に先に左へ寝かせる → 寄せる瞬間に反対(右)へドリフトで振る → 保持 → 引きで水平へ
+			float roll = 0.0f;
+			if (tt <= ClearConst::CamOrbitTime)
+			{
+				// 旋回中に DecideTiltDeg(左) まで傾け切る（スナップ前にもう傾いている）
+				const float op = std::clamp(tt / ClearConst::CamOrbitTime, 0.0f, 1.0f);
+				const float ss = op * op * op * (op * (op * 6.0f - 15.0f) + 10.0f);   // smootherstep
+				roll = ClearConst::DecideTiltDeg * ss;
+			}
+			else if (tt <= ClearConst::CamDecideEnd)
+			{
+				// 寄せの瞬間に左→右へ easeOutBack（行き過ぎて戻る＝ドリフト）で振り切る
+				const float rp = std::clamp(
+					(tt - ClearConst::CamOrbitTime) / (ClearConst::CamDecideEnd - ClearConst::CamOrbitTime), 0.0f, 1.0f);
+				const float rpm = rp - 1.0f;
+				const float eb  = 1.0f + (ClearConst::CamDecideOvershoot + 1.0f) * rpm * rpm * rpm
+					+ ClearConst::CamDecideOvershoot * rpm * rpm;     // easeOutBack
+				roll = std::lerp(ClearConst::DecideTiltDeg, ClearConst::DecideTiltSnapDeg, eb);
+			}
+			else if (tt <= ClearConst::CamHoldEnd)
+			{
+				roll = ClearConst::DecideTiltSnapDeg;   // 決めの間は右傾きを保持
+			}
+			else
+			{
+				// 引き：傾きを水平へ戻す
+				const float bp = std::clamp(
+					(tt - ClearConst::CamHoldEnd) / (ClearConst::CamPullEnd - ClearConst::CamHoldEnd), 0.0f, 1.0f);
+				roll = ClearConst::DecideTiltSnapDeg * (1.0f - bp * bp * (3.0f - 2.0f * bp));
+			}
+
+			m_spPlayer->SetCutsceneFaceZ(tt >= ClearConst::CamOrbitTime);
+
+			const float pitch = DirectX::XMConvertToRadians(pitchDeg);
+			const float yaw   = DirectX::XMConvertToRadians(yawDeg);
+			const float cp    = std::cosf(pitch);
+
+			const Math::Vector3 focus = m_spPlayer->GetPos()
+				+ Math::Vector3(0.0f, focusUp, 0.0f);
+			const Math::Vector3 eye = focus + Math::Vector3(
+				std::sinf(yaw) * cp, std::sinf(pitch), std::cosf(yaw) * cp) * distV;
+
+			Math::Vector3 f = focus - eye; f.Normalize();
+			Math::Vector3 r = Math::Vector3::Up.Cross(f); r.Normalize();
+			Math::Vector3 u = f.Cross(r);
+
+			// 前方軸まわりの傾き（ロール）を適用
+			const float rollRad = DirectX::XMConvertToRadians(roll);
+			const float cr  = std::cosf(rollRad);
+			const float srl = std::sinf(rollRad);
+			const Math::Vector3 rRoll = r * cr + u * srl;
+			const Math::Vector3 uRoll = u * cr - r * srl;
+			r = rRoll;
+			u = uRoll;
+			Math::Matrix world;
+			world._11 = r.x; world._12 = r.y; world._13 = r.z; world._14 = 0.0f;
+			world._21 = u.x; world._22 = u.y; world._23 = u.z; world._24 = 0.0f;
+			world._31 = f.x; world._32 = f.y; world._33 = f.z; world._34 = 0.0f;
+			world._41 = eye.x; world._42 = eye.y; world._43 = eye.z; world._44 = 1.0f;
+			m_camera->SetCameraMatrix(world);
+		}
+
+		if (m_clearTimer >= ClearConst::CamPullEnd)
+		{
+			SceneManager::Instance().SetNextScene(SceneManager::SceneType::StageSelect);
+		}
+		return;   // クリア中はゲーム進行を止める
+	}
 
 	// ── 死亡シーケンス（暗転→復活→明転）。ネストの外で必ず毎フレーム実行する ──
 	if (m_spPlayer)
@@ -297,49 +434,49 @@ void GameScene::Event()
 		m_camera->SetCameraMatrix(world);
 	}
 
-	// ── 導入カットシーン：マリギャラ風シネマティックカメラ ──
-	//    斜め＆引き＆高所から入り、降下に合わせて回り込み＋ズームイン。
-	//    終端は通常ゲームカメラの姿勢へ収束させて繋ぎ目を消す。
-	if (m_introCutscene && m_camera && m_spPlayer)
+	// ── 導入カットシーン：下から見上げて降下を見せ、着地した瞬間から通常カメラへ戻す ──
+	if ((m_introCutscene || m_introLanding) && m_camera && m_spPlayer)
 	{
 		const auto& cs = CameraSettings::Instance();
-		const float dur = (IntroConst::Duration > 0.0f) ? IntroConst::Duration : 1.0f;
-		const float p   = std::clamp(m_introTimer / dur, 0.0f, 1.0f);
-		const float e   = p * p * (3.0f - 2.0f * p);   // smoothstep（ゆっくり入って収束）
-
-		// 降下するプレイヤーを注視
-		const Math::Vector3 focus = m_spPlayer->GetPos();
-
-		// 角度・高さ・注視高さは「ドラマチック → 通常側面ビュー」へ収束（繋ぎ目消し）
-		const float yaw    = std::lerp(DirectX::XMConvertToRadians(IntroConst::CamStartYawDeg), 0.0f, e);
-		const float height = std::lerp(IntroConst::CamStartHeight, cs.OffsetY,      e);
-		const float lookUp = std::lerp(IntroConst::CamStartLookUp, cs.LookAtHeight, e);
-
-		// 距離は山なり：遠 → 急接近(ビューン) → 不時着寸前に引く
 		const float landDist = std::fabs(cs.OffsetZ);
-		const float pull     = IntroConst::CamPullBackStart;
-		float dist;
-		if (p < pull)
+
+		const Math::Vector3 focus = m_spPlayer->GetPos();   // プレイヤーを注視
+
+		// 各姿勢の視点：上からの覗き込み／通常カメラ
+		const Math::Vector3 eyeAbove = focus + Math::Vector3(0.0f, IntroConst::CamAboveHeight, -IntroConst::CamAboveBack);
+		const Math::Vector3 eyeNorm  = focus + Math::Vector3(cs.OffsetX, cs.OffsetY, -landDist);
+		const Math::Vector3 lookNorm = focus + Math::Vector3(cs.LookAheadX, cs.LookAtHeight, 0.0f);
+
+		Math::Vector3 eye, look;
+		if (m_introCutscene)
 		{
-			// ズームイン：easeOutで最初だけ速く（ビューン）
-			const float t   = (pull > 0.0f) ? (p / pull) : 1.0f;
-			const float ein = 1.0f - (1.0f - t) * (1.0f - t) * (1.0f - t);
-			dist = std::lerp(IntroConst::CamStartDist, IntroConst::CamCloseDist, ein);
+			// 落下中：ずっと下から見上げ → 着地しそうになったら上から覗くへ（lerpで寄せて止める）
+			const float dur = (IntroConst::Duration > 0.0f) ? IntroConst::Duration : 1.0f;
+			const float p   = std::clamp(m_introTimer / dur, 0.0f, 1.0f);
+			const float ein = 1.0f - (1.0f - p) * (1.0f - p);   // easeOut
+			const float dist = std::lerp(IntroConst::CamStartDist, IntroConst::CamCloseDist, ein);
+
+			// 下から覗く（真下＋少し手前-Z）
+			const Math::Vector3 eyeBelow = focus + Math::Vector3(0.0f, -dist, -dist * 0.25f);
+
+			// 着地しそう(UprightStart以降)で 下→上 へsmoothstepでブレンドして止める
+			float a = 0.0f;
+			if (p >= IntroConst::UprightStart)
+			{
+				const float ta = (p - IntroConst::UprightStart) / (1.0f - IntroConst::UprightStart);
+				a = ta * ta * (3.0f - 2.0f * ta);
+			}
+			eye  = Math::Vector3::Lerp(eyeBelow, eyeAbove, a);
+			look = focus;
 		}
 		else
 		{
-			// 着地前の引き：近 → 通常距離へ
-			const float t   = (p - pull) / (1.0f - pull);
-			const float eio = t * t * (3.0f - 2.0f * t);
-			dist = std::lerp(IntroConst::CamCloseDist, landDist, eio);
+			// 地面に着地した！ → 上から覗く姿勢から通常カメラへ戻す
+			const float lt = std::clamp(m_introLandTimer / IntroConst::LandRecoverTime, 0.0f, 1.0f);
+			const float le = lt * lt * (3.0f - 2.0f * lt);   // smoothstep
+			eye  = Math::Vector3::Lerp(eyeAbove, eyeNorm,  le);
+			look = Math::Vector3::Lerp(focus,    lookNorm, le);
 		}
-
-		// 終端で eye = focus + (OffsetX, OffsetY, -|OffsetZ|) ＝ 通常カメラと一致
-		const Math::Vector3 eye = focus + Math::Vector3(
-			std::sinf(yaw) * dist + cs.OffsetX * e,
-			height,
-			-std::cosf(yaw) * dist);
-		const Math::Vector3 look = focus + Math::Vector3(cs.LookAheadX * e, lookUp, 0.0f);
 
 		Math::Vector3 f = look - eye; f.Normalize();
 		Math::Vector3 r = Math::Vector3::Up.Cross(f); r.Normalize();
@@ -797,6 +934,8 @@ void GameScene::Event()
 				m_introCutscene = false;
 				m_spPlayer->SetControlEnabled(true);
 				m_spPlayer->SetCutsceneSpin(0.0f);
+				m_spPlayer->SetCutsceneTumble(Math::Vector3::Zero);
+				m_spPlayer->SetIntroPose(false);
 			}
 		}
 
@@ -909,7 +1048,7 @@ void GameScene::Event()
 		}
 		m_itemManager.Refresh();
 
-		// ── Glow コア取得 → その位置にゴール用 WarpHole を開く ──
+		// ── Glow コア取得 → 即ステージクリア（マリギャラ風）──
 		{
 			const KdCollider::SphereInfo coreHit = m_spPlayer->GetPickupHitBox().GetSphereInfo();
 			for (auto& gc : m_gravityCores)
@@ -919,13 +1058,12 @@ void GameScene::Event()
 				{
 					const Math::Vector3 corePos = gc->GetPos();
 					gc->Expire();
-					SpawnGoalWarpHole(corePos);
 
-					// 取得演出：プレイヤーを光らせ、メインバーストが終わるまで停止
-					TriggerHitStop(SparkleConst::PickupBurstLife);
+					// 取得演出：プレイヤーを光らせる → クリアシーケンス開始
 					m_spPlayer->TriggerPickupGlow(Math::Color{
 						GravityCoreConst::GlowFaceR, GravityCoreConst::GlowFaceG,
 						GravityCoreConst::GlowFaceB, 1.0f });
+					StartStageClear(corePos);
 				}
 			}
 		}
@@ -1509,6 +1647,65 @@ void GameScene::DrawSpriteExtra()
 		if (m_introFadeAlpha < 0.0f) { m_introFadeAlpha = 0.0f; }
 	}
 
+	// ── ステージクリア：カメラの引きと並行してアイリス暗転（マリオ風の閉じる円）→ StageSelect へ ──
+	if (m_clearActive)
+	{
+		float a = 0.0f;
+		if (m_clearTimer > ClearConst::FadeBeginT)
+		{
+			a = std::clamp((m_clearTimer - ClearConst::FadeBeginT)
+				/ (ClearConst::FadeEndT - ClearConst::FadeBeginT), 0.0f, 1.0f);
+		}
+		if (a > 0.0f)
+		{
+			auto& sprite = KdShaderManager::Instance().m_spriteShader;
+			const Math::Color black(0.0f, 0.0f, 0.0f, 1.0f);
+
+			if (m_irisMaskTex)
+			{
+				// 円が閉じていく：マスク四角のサイズを 開→0 へ（easeIn で最後にキュッと閉じる）
+				const float ec = a * a;                                  // easeInQuad
+				const float openSz = ClearConst::IrisOpenScale * static_cast<float>(screenW);
+				const float s  = std::lerp(openSz, ClearConst::IrisCloseSize, ec);
+				const int   si = static_cast<int>(s);
+
+				// 中央にアイリスマスク（中心が透明な穴・外周が黒）。線形補間で穴の縁を滑らかに
+				sprite.Begin(true);
+				sprite.DrawTex(m_irisMaskTex.get(), 0, 0, si, si, nullptr, &black);
+
+				// マスク四角の外側を黒帯で埋める（縮小しても画面端が透けないように）。
+				// 黒帯はマスク四角の縁に seam ぶん食い込ませて、丸め誤差の隙間（白線）を消す。
+				const float halfW = screenW * 0.5f;
+				const float halfH = screenH * 0.5f;
+				constexpr float seam = 2.0f;                       // 重ね幅(px)
+				const float he    = std::max(0.0f, s * 0.5f - seam); // 黒帯の内側境界
+				const int   over  = screenW;                       // 画面外まで余裕を持って覆う
+				if (he < halfH)
+				{
+					const int cy = static_cast<int>((he + halfH) * 0.5f);
+					const int hy = static_cast<int>((halfH - he) * 0.5f) + 1;
+					sprite.DrawBox(0,  cy, screenW + over, hy, &black, true); // 上帯
+					sprite.DrawBox(0, -cy, screenW + over, hy, &black, true); // 下帯
+				}
+				if (he < halfW)
+				{
+					const int cx = static_cast<int>((he + halfW) * 0.5f);
+					const int hx = static_cast<int>((halfW - he) * 0.5f) + 1;
+					const int hy = static_cast<int>(he) + 1;
+					sprite.DrawBox( cx, 0, hx, hy, &black, true);            // 右帯
+					sprite.DrawBox(-cx, 0, hx, hy, &black, true);            // 左帯
+				}
+				sprite.End();
+			}
+			else
+			{
+				// フォールバック：従来のベタ黒フェード
+				const Math::Color fade(0.0f, 0.0f, 0.0f, a);
+				sprite.DrawBox(0, 0, screenW, screenH, &fade, true);
+			}
+		}
+	}
+
 	// ── 死亡演出オーバーレイ（赤→黒に暗転 → 黒画面で残機が1つ減る → 明転）──
 	if (m_deathActive)
 	{
@@ -1906,10 +2103,25 @@ void GameScene::DrawGui()
 		ImGui::Separator();
 		if (ImGui::Button("Save All"))
 		{
+			// 全エディタ/マネージャのデータを一括保存
+			PlanetGravityManager::Instance().Save();
 			ManualGravityZoneManager::Instance().Save();
 			DeadZoneManager::Instance().Save();
 			CoreliaManager::Instance().Save();
-			KdDebugGUI::Instance().AddLog("[Editor] Saved zones / dead zones / corelia.\n");
+			m_windBoxEditor.Save();
+			m_spikeBoxEditor.Save();
+			m_gravityCoreEditor.Save();
+			m_movingFloorEditor.Save();
+			m_roomEditor.Save();
+			m_checkpointEditor.Save();
+			m_warpHoleEditor.Save();
+			m_enemyEditor.Save();
+			m_itemManager.Save();          // コイン
+			m_itemManager.SaveParasols();  // パラソル
+			SaveSpawn();                   // スポーン＋導入開始位置
+			SaveSunLight();                // 太陽光
+			CameraSettings::Instance().Save();
+			KdDebugGUI::Instance().AddLog("[Editor] Saved ALL (planets/zones/items/spawn/etc.)\n");
 		}
 		ImGui::SameLine();
 		if (ImGui::Button("Reload All"))
@@ -2897,6 +3109,21 @@ void GameScene::SpawnHealPlus(int count)
 }
 
 //----------------------------------------------------------
+// ステージクリア開始（ゴールコア取得＝即クリア）
+//----------------------------------------------------------
+void GameScene::StartStageClear(const Math::Vector3& corePos)
+{
+	if (m_clearActive) { return; }
+	m_clearActive = true;
+	m_clearTimer  = 0.0f;
+	m_clearDecideFlashed = false;
+	(void)corePos;
+
+	if (m_spPlayer) { m_spPlayer->SetControlEnabled(false); }   // 操作ロック
+	TriggerFlash(ClearConst::FlashStrength);                    // 取得の白フラッシュ
+}
+
+//----------------------------------------------------------
 // 導入カットシーン（Stage1限定）：開始位置→スポーンへスクリプト移動で着地
 //----------------------------------------------------------
 void GameScene::StartIntroCutscene()
@@ -2911,43 +3138,91 @@ void GameScene::StartIntroCutscene()
 	m_spPlayer->SetControlEnabled(false);
 	m_spPlayer->SetVelocity(Math::Vector3::Zero);
 	m_spPlayer->SetGravityScale(0.0f);
+	m_spPlayer->SetIntroPose(true);          // パラソル等を隠す（落下中の見た目）
+	m_spPlayer->SetCutsceneTumble(Math::Vector3::Zero);
 }
 
 void GameScene::UpdateIntroCutscene()
 {
-	if (!m_spPlayer) { m_introCutscene = false; return; }
+	if (!m_spPlayer) { m_introCutscene = false; m_introLanding = false; return; }
 
 	const float dt = KdFPSController::GetDt();
-	m_introTimer += dt;
 
-	const float dur = (IntroConst::Duration > 0.0f) ? IntroConst::Duration : 1.0f;
-	float p = std::clamp(m_introTimer / dur, 0.0f, 1.0f);
-
-	// 横は等速、縦はsmoothstep（最後やわらかく着地）で開始位置→スポーンへ
-	const float ph = p;
-	const float pv = p * p * (3.0f - 2.0f * p);
-	Math::Vector3 pos;
-	pos.x = std::lerp(m_introStartPos.x, m_spawnPos.x, ph);
-	pos.z = std::lerp(m_introStartPos.z, m_spawnPos.z, ph);
-	pos.y = std::lerp(m_introStartPos.y, m_spawnPos.y, pv);
-	m_spPlayer->SetPos(pos);
-	m_spPlayer->SetVelocity(Math::Vector3::Zero);
-
-	// きりもみ回転（描画のみのロール）
-	m_introSpin += IntroConst::SpinSpeed * dt;
-	m_spPlayer->SetCutsceneSpin(m_introSpin);
-
-	if (p >= 1.0f)
+	// ── 降下フェーズ：開始位置→スポーンへ ──
+	if (m_introCutscene)
 	{
-		// 着地：スポーンに収めて操作開始（物理復帰）
-		m_introCutscene = false;
-		m_spPlayer->SetPos(m_spawnPos);
+		m_introTimer += dt;
+		const float dur = (IntroConst::Duration > 0.0f) ? IntroConst::Duration : 1.0f;
+		const float p   = std::clamp(m_introTimer / dur, 0.0f, 1.0f);
+
+		// 横は等速、縦はsmoothstep（最後やわらかく接地）
+		const float ph = p;
+		const float pv = p * p * (3.0f - 2.0f * p);
+		Math::Vector3 pos;
+		pos.x = std::lerp(m_introStartPos.x, m_spawnPos.x, ph);
+		pos.z = std::lerp(m_introStartPos.z, m_spawnPos.z, ph);
+		pos.y = std::lerp(m_introStartPos.y, m_spawnPos.y, pv);
+		m_spPlayer->SetPos(pos);
 		m_spPlayer->SetVelocity(Math::Vector3::Zero);
-		m_spPlayer->SetControlEnabled(true);
-		m_spPlayer->SetCutsceneSpin(0.0f);
-		m_spPlayer->SetGravityScale(1.0f);
-		m_airTime = 0.0f;
-		TriggerFlash(IntroConst::LandFlash);
+
+		// 頭から落下→着地直前に頭を上へ起こす（XY平面の落下なのでZロールで姿勢を作る）
+		Math::Vector3 fall2D = m_spawnPos - m_introStartPos; fall2D.z = 0.0f;
+		if (fall2D.LengthSquared() > 1e-6f) { fall2D.Normalize(); }
+		else { fall2D = { 0.0f, -1.0f, 0.0f }; }
+		const float headRoll = std::atan2f(-fall2D.x, fall2D.y);   // 頭(+Y)を落下方向へ向ける角度
+		float ru = (p < IntroConst::UprightStart)
+			? 0.0f : (p - IntroConst::UprightStart) / (1.0f - IntroConst::UprightStart);
+		ru = std::clamp(ru, 0.0f, 1.0f);
+		const float rue  = ru * ru * (3.0f - 2.0f * ru);            // smoothstep
+		const float roll = std::lerp(headRoll, 0.0f, rue);          // 頭から → 頭上へ
+		m_spPlayer->SetCutsceneTumble(Math::Vector3(0.0f, 0.0f, roll));
+
+		if (p >= 1.0f)
+		{
+			// 接地！ → ズサー…バタンの着地リアクションへ
+			m_introCutscene  = false;
+			m_introLanding   = true;
+			m_introLandTimer = 0.0f;
+
+			// 横滑り方向＝水平の進行方向
+			Math::Vector3 d = m_spawnPos - m_introStartPos; d.y = 0.0f;
+			if (d.LengthSquared() > 1e-6f) { d.Normalize(); }
+			m_landSkidDir = d;
+
+			m_spPlayer->SetPos(m_spawnPos);
+			m_spPlayer->SetVelocity(Math::Vector3::Zero);
+			m_spPlayer->SetCutsceneSpin(0.0f);
+			m_spPlayer->SetCutsceneTumble(Math::Vector3::Zero);
+			// パラソルは引きずり(スキッド)中も隠したまま。操作復帰時に戻す
+			m_spPlayer->TriggerLandingSquash();       // バタン（つぶれ）
+			if (m_pCamera) { m_pCamera->TriggerShake(IntroConst::LandShake); }  // 着地の揺れ
+			TriggerFlash(IntroConst::LandFlash);
+			m_airTime = 0.0f;
+		}
+		return;
+	}
+
+	// ── 着地リアクション：ズサーっと前へ滑って止まる ──
+	if (m_introLanding)
+	{
+		m_introLandTimer += dt;
+		const float lt = std::clamp(m_introLandTimer / IntroConst::LandRecoverTime, 0.0f, 1.0f);
+		const float eo = 1.0f - (1.0f - lt) * (1.0f - lt);   // easeOut（最初速く滑って減速）
+		Math::Vector3 pos = m_spawnPos + m_landSkidDir * (IntroConst::SkidDist * eo);
+		pos.y = m_spawnPos.y;
+		m_spPlayer->SetPos(pos);
+		m_spPlayer->SetVelocity(Math::Vector3::Zero);
+
+		if (lt >= 1.0f)
+		{
+			// 復帰：死→復活と同じ状態に通す（最初のスポーンでも惑星に正しく捕まるように）
+			m_introLanding = false;
+			const Math::Vector3 landedPos = m_spPlayer->GetPos();
+			m_spPlayer->Revive();              // 状態を完全初期化（操作ON・速度0・Idle・パラソル復帰）
+			m_spPlayer->SetPos(landedPos);     // 着地位置は維持
+			m_spPlayer->SetGravityScale(1.0f);
+			m_airTime = 0.0f;
+		}
 	}
 }
 
@@ -3155,6 +3430,13 @@ void GameScene::RebuildGravityCores()
 	}
 }
 
+GameScene::~GameScene()
+{
+	// 破棄後にKdDebugGUIが死んだthisのDrawGui()を呼ぶのを防ぐ（StageSelect等への遷移時のクラッシュ対策）
+	KdDebugGUI::Instance().ClearGuiCallback();
+	KdDebugGUI::Instance().SetGameViewport(false);
+}
+
 void GameScene::Init()
 {
 	// カメラ（BaseSceneのm_cameraに所有権を渡し、観察用ポインタだけ保持）
@@ -3171,7 +3453,11 @@ void GameScene::Init()
 	// リスポーン座標の初期値をスポーン座標と揃える
 	m_respawnPos = m_spawnPos;
 
-	// 導入カットシーン（Stage1だけ：投げ出され→落下→着地で操作開始）
+	// 惑星をこのステージのマップへ先に読み込む（導入カットシーンの着地判定に必要）
+	PlanetGravityManager::Instance().Load();
+	PlanetGravityManager::Instance().MarkWorldDirty();
+
+	// 導入カットシーン（Stage1だけ：上空から降下→着地で操作開始）
 	// ただし惑星（着地できる地面）が1つも無いステージではスキップ（空中で固定カメラが止まるため）
 	if (StageManager::Instance().GetStageIndex() == IntroConst::Stage &&
 		!PlanetGravityManager::Instance().GetPlanets().empty())
@@ -3214,10 +3500,7 @@ void GameScene::Init()
 	}
 	m_roomEditor.ClearDirty();
 
-	// 惑星はシングルトン（初回アクセス時に旧ステージで読込済み）なので、
-	// 現在のステージのマップへ明示的に読み直す
-	PlanetGravityManager::Instance().Load();
-	PlanetGravityManager::Instance().MarkWorldDirty();
+	// （惑星は導入カットシーン判定のため上で読込済み）
 
 	// 手動重力ゾーン読み込み
 	ManualGravityZoneManager::Instance().Load();
@@ -3263,6 +3546,10 @@ void GameScene::Init()
 
 	// ポーズメニュー用フォント
 	KdFontManager::Instance().AddFont(PauseMenuConst::FontNo, PauseMenuConst::FontName, PauseMenuConst::FontHeight);
+
+	// クリア暗転用アイリスマスク（マリオ風の閉じる円）
+	m_irisMaskTex = std::make_shared<KdTexture>();
+	m_irisMaskTex->Load(ClearConst::IrisMaskPath);
 
 	// コアリア残機アイコン（仮画像）を読み込み
 	m_lifeIconTex = std::make_shared<KdTexture>();

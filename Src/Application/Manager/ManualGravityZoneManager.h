@@ -62,6 +62,10 @@ public:
 	// プレイヤーがNormalGravityゾーン内にいるか（true時はgravDirOutに方向を返す）
 	bool IsInNormalGravityZone(const Math::Vector3& _pos, Math::Vector3& gravDirOut) const;
 
+	// 実際に ManualGravity ゾーンの中にいるか（ゾーンが無ければ false）。
+	// ※ 惑星重力の抑制判定用。CanUseManualGravity は「ゾーン無し＝どこでも可」で true を返すため別物。
+	bool IsInsideManualZone(const Math::Vector3& _pos) const;
+
 	// エリア追加
 	void AddZone(const ManualGravityZone& _zone) { m_zones.push_back(_zone); }
 

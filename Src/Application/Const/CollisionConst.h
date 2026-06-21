@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 namespace CollisionConst
 {
@@ -55,7 +55,7 @@ namespace CollisionConst
 
     // 床判定：プレイヤー中心だけでなく体の幅ぶん外側にもレイを撒くサンプル半径。
     // 端で中心レイが外れても、体が床にかかっていれば接地できる（端めり込み防止）。
-    constexpr float GroundSampleRadius      = 0.4f;
+    constexpr float GroundSampleRadius      = 0.5f;
 
     // Box床判定：hitDist がこれ未満（レイ起点のすぐ直下）はBox内部誤検出として除外
     // GroundRayOffset - GroundSnapDist より小さければ内側からのヒット
@@ -77,4 +77,3 @@ namespace CollisionConst
     constexpr float BodyUpperOffset     = 1.0f;  // 上側の球：足元(m_upDir)からのオフセット
     constexpr int   PenetrationIterations = 3;   // 複数接触の収束反復回数
 }
-

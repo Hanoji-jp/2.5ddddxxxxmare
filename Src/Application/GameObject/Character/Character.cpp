@@ -104,14 +104,17 @@ void Character::ApplyGravity()
     const float dt60 = KdFPSController::GetDt() * 60.0f;
     m_prevPlanetIndex = m_currentPlanetIndex;
     // 着地中は現在の惑星を固定。空中のときだけ支配惑星に乗り換える
+    // （着地中に隣Boxへ乗り換えると、その下に地面が無く isGround を失うため）
     if (!m_isGround)
     {
         m_currentPlanetIndex = gravResult.dominantPlanetIdx;
         m_pCurrentPlanet     = PlanetGravityManager::Instance().GetPlanet(m_currentPlanetIndex);
     }
 
+    // 惑星重力の抑制は「実際にManualGravityゾーン内」のときだけ。
+    // CanUseManualGravity はゾーン無し＝どこでもtrueを返すので、抑制判定には使わない
     const bool inManualZone = !m_ignoreGravityZones
-        && ManualGravityZoneManager::Instance().CanUseManualGravity(GetPos());
+        && ManualGravityZoneManager::Instance().IsInsideManualZone(GetPos());
     const bool hasManual    = (m_manualGravityDir != ManualGravityDir::None);
 
     // ── ケース① ゾーン外 + 手動あり + 惑星圏内 → 惑星に捕まる、手動リセット ──
@@ -176,8 +179,14 @@ void Character::ApplyGravity()
             return;
         }
 
-        const Math::Vector3 gravDir  = gravResult.totalGravityDir;
-        const Math::Vector3 targetUp = -gravDir;
+        // 着地中に「今立っている惑星」以外が支配的でも、向き・地面を維持する。
+        // （L字入隅で隣の壁Boxが支配的になっても、床に立っている間は傾けず・落とさない）
+        const bool onDominantPlanet = (gravResult.dominantPlanetIdx == m_currentPlanetIndex);
+        if (m_isGround && !onDominantPlanet) { return; }
+
+        // 支配惑星の上方向を使う（合成だと L字入隅で対角45°に挟まるため）。
+        const Math::Vector3 targetUp = gravResult.dominantUpDir;
+        const Math::Vector3 gravDir  = -targetUp;
 
         // m_upDir は着地中も常に更新（球面上で向きを合わせ続ける必要がある）
         m_upDir = targetUp;
@@ -187,13 +196,6 @@ void Character::ApplyGravity()
             m_upDirVisual = Math::Vector3::Transform({ 0.0f, 1.0f, 0.0f },
                 Math::Matrix::CreateFromQuaternion(Math::Quaternion::Slerp(fromQ, toQ, PlanetConst::UpDirSlerpSpeed)));
             m_upDirVisual.Normalize();
-        }
-
-        if (m_isGround)
-        {
-            // 着地中も visual upDir の Slerp は継続（途中で止めると傾いたまま固定される）
-            const bool onDominantPlanet = (gravResult.dominantPlanetIdx == m_currentPlanetIndex);
-            if (!onDominantPlanet) { return; }
         }
 
         const float radialVel = m_velocity.Dot(gravDir);
@@ -514,13 +516,10 @@ void Character::CheckGround()
     // これにより地面と壁(CheckWall)が同じ箱コライダーの縁を共有するため、
     // 端での「持ち上げ⇄押し出し」の食い違い（端めり込み）が起きない。
     if (m_pCurrentPlanet
-        && m_pCurrentPlanet->Shape == PlanetShape::Box
-        && m_pCurrentPlanet->pCollider)
+        && m_pCurrentPlanet->Shape == PlanetShape::Box)
     {
         // ジャンプ直後（m_upDir方向に速度あり）はスキップ
         if (m_velocity.Dot(m_upDir) > 0.1f) { return; }
-
-        const PlanetData& p = *m_pCurrentPlanet;
 
         // 体の幅ぶん外側にもレイを撒く（中心1本だと端で外れて沈むため）
         const Math::Vector3 worldFwd = (std::abs(m_upDir.z) < 0.9f)
@@ -535,56 +534,105 @@ void Character::CheckGround()
             fwdAxis   * sr, fwdAxis   * -sr,
         };
 
-        for (const Math::Vector3& off : sampleOffsets)
+        // 足元のどの Box 惑星でも接地できるよう、全 Box 惑星を調べる。
+        // （壁際で隣の壁Boxが dominant になっても、立っている床Boxを見落とさない）
+        const auto& planets = PlanetGravityManager::Instance().GetPlanets();
+        for (const auto& p : planets)
         {
-            const Math::Vector3 rayStart = pos + off + m_upDir * CollisionConst::GroundRayOffset;
-            const KdCollider::RayInfo ray(
-                KdCollider::TypeGround, rayStart, -m_upDir, CollisionConst::GroundRayLength);
+            if (p.Shape != PlanetShape::Box || !p.pCollider) { continue; }
 
-            std::list<KdCollider::CollisionResult> results;
-            if (!p.pCollider->Intersects(ray, p.mWorld, &results)) { continue; }
-
-            // 立っている面（法線が m_upDir と揃う面）の最も手前のヒットを採用。
-            // レイの m_overlapDistance は (rayLen - hitDist) なので大きいほど手前。
-            const KdCollider::CollisionResult* pBest = nullptr;
-            for (const auto& r : results)
+            for (const Math::Vector3& off : sampleOffsets)
             {
-                if (r.m_hitNDir.Dot(m_upDir) < 0.7f) { continue; }
-                if (!pBest || r.m_overlapDistance > pBest->m_overlapDistance) { pBest = &r; }
-            }
-            if (!pBest) { continue; }
+                const Math::Vector3 rayStart = pos + off + m_upDir * CollisionConst::GroundRayOffset;
+                const KdCollider::RayInfo ray(
+                    KdCollider::TypeGround, rayStart, -m_upDir, CollisionConst::GroundRayLength);
 
-            // ヒット面の種別（±X / ±Y）からキャップ有無を判定（旧ロジックと一致）
-            const Math::Vector3& n = pBest->m_hitNDir;
-            bool hasCap = false;
-            if      (n.y >  0.5f) { hasCap = true; }  // 上面：常にキャップ
-            else if (n.y < -0.5f) { hasCap = !p.bNormalGravity && p.BoxFaceGravityBottom == BoxFaceGravityMode::Inward; }
-            else if (n.x >  0.5f) { hasCap = !p.bNormalGravity && p.BoxFaceGravityRight  == BoxFaceGravityMode::Inward; }
-            else if (n.x < -0.5f) { hasCap = !p.bNormalGravity && p.BoxFaceGravityLeft   == BoxFaceGravityMode::Inward; }
+                std::list<KdCollider::CollisionResult> results;
+                if (!p.pCollider->Intersects(ray, p.mWorld, &results)) { continue; }
 
-            const float capSurface = hasCap ? (PlanetConst::GrassCapThickness * 2.0f) : 0.0f;
-            // キャップ外面からの符号付き距離：正=外側に浮き、負=めり込み
-            // 上面は m_upDir に垂直な平面なので、横オフセットしても距離は中心と同じ。
-            const float distToSurface = (pos - pBest->m_hitPos).Dot(m_upDir) - capSurface;
+                // 立っている面（法線が m_upDir と揃う面）の最も手前のヒットを採用。
+                const KdCollider::CollisionResult* pBest = nullptr;
+                for (const auto& r : results)
+                {
+                    if (r.m_hitNDir.Dot(m_upDir) < 0.7f) { continue; }
+                    if (!pBest || r.m_overlapDistance > pBest->m_overlapDistance) { pBest = &r; }
+                }
+                if (!pBest) { continue; }
 
-            if (distToSurface <=  CollisionConst::GroundSnapDist &&
-                distToSurface >= -CollisionConst::GroundSnapDist)
-            {
-                SetPos(pos - m_upDir * distToSurface);
+                // ヒット面の種別（±X / ±Y）からキャップ有無を判定
+                const Math::Vector3& n = pBest->m_hitNDir;
+                bool hasCap = false;
+                if      (n.y >  0.5f) { hasCap = true; }  // 上面：常にキャップ
+                else if (n.y < -0.5f) { hasCap = !p.bNormalGravity && p.BoxFaceGravityBottom == BoxFaceGravityMode::Inward; }
+                else if (n.x >  0.5f) { hasCap = !p.bNormalGravity && p.BoxFaceGravityRight  == BoxFaceGravityMode::Inward; }
+                else if (n.x < -0.5f) { hasCap = !p.bNormalGravity && p.BoxFaceGravityLeft   == BoxFaceGravityMode::Inward; }
 
-                // 面法線（沈み込み）方向の速度成分を除去
-                const float normalComp = m_velocity.Dot(m_upDir);
-                if (normalComp < 0.0f) { m_velocity -= m_upDir * normalComp; }
+                const float capSurface = hasCap ? (PlanetConst::GrassCapThickness * 2.0f) : 0.0f;
+                const float distToSurface = (pos - pBest->m_hitPos).Dot(m_upDir) - capSurface;
 
-                m_isGround = true;
-                m_airGravitySwitchCount = 0;
-                return;
+                if (distToSurface <=  CollisionConst::GroundSnapDist &&
+                    distToSurface >= -CollisionConst::GroundSnapDist)
+                {
+                    SetPos(pos - m_upDir * distToSurface);
+
+                    // 面法線（沈み込み）方向の速度成分を除去
+                    const float normalComp = m_velocity.Dot(m_upDir);
+                    if (normalComp < 0.0f) { m_velocity -= m_upDir * normalComp; }
+
+                    // 実際に立っている Box を現在惑星にする（dominant が隣Boxでも上書き）
+                    m_currentPlanetIndex = static_cast<int>(&p - &planets[0]);
+                    m_pCurrentPlanet     = &p;
+
+                    m_isGround = true;
+                    m_airGravitySwitchCount = 0;
+                    return;
+                }
             }
         }
 
         // 通常は Box 惑星が担当するので Sphere/マップには落ちない
         // 天井歩き（skipDownwardSnap）の場合は、マップ天井検出のために落ちる
         if (!skipDownwardSnap) { return; }
+    }
+
+    // ---- ②-A 球惑星（放射状）─ 中心距離ベースの解析判定（すり抜け防止）----
+    // レイ＆メッシュに頼らず、中心からの距離で必ず押し出すのでトンネリングしない。
+    if (!skipDownwardSnap
+        && m_pCurrentPlanet
+        && m_pCurrentPlanet->Shape == PlanetShape::Sphere
+        && !m_pCurrentPlanet->bNormalGravity)
+    {
+        const PlanetData& p = *m_pCurrentPlanet;
+        const float dx = pos.x - p.Position.x;
+        const float dy = pos.y - p.Position.y;
+        const float d  = std::sqrtf(dx * dx + dy * dy);
+        if (d < 0.001f) { return; }
+        const Math::Vector3 outDir = { dx / d, dy / d, 0.0f };
+
+        // ジャンプ直後（外向き速度）はスキップ
+        if (m_velocity.Dot(outDir) > 0.001f) { return; }
+
+        // 立つ半径（GroundRadius）に足を合わせる。表面より内側＝めり込みは必ず押し出す
+        const float standDist = p.GroundRadius;
+        if (d <= standDist + CollisionConst::GroundSnapDist)
+        {
+            Math::Vector3 corrected = p.Position + outDir * standDist;
+            corrected.z = pos.z;   // 2.5D：Zは維持
+            SetPos(corrected);
+
+            // 内向き（落下）速度を消す
+            const float inwardVel = m_velocity.Dot(-outDir);
+            if (inwardVel > 0.0f) { m_velocity += outDir * inwardVel; }
+
+            if (m_prevPlanetIndex != m_currentPlanetIndex)
+            {
+                const float radial = m_velocity.Dot(outDir);
+                m_velocity = outDir * radial;
+            }
+            m_isGround = true;
+            m_airGravitySwitchCount = 0;
+        }
+        return;
     }
 
     // ---- ② Sphere等の惑星 ─ レイキャスト方式 ----

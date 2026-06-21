@@ -47,7 +47,7 @@ class GameScene : public BaseScene
 public :
 
 	GameScene()  { Init(); }
-	~GameScene() {}
+	~GameScene();
 
 private:
 
@@ -70,7 +70,7 @@ private:
 	bool IsUpdatePaused() const override
 	{
 		const bool unbuiltStage = PlanetGravityManager::Instance().GetPlanets().empty();
-		return m_menuOpen || m_convoActive || (m_editorMode && m_editorFreeze) || unbuiltStage;
+		return m_menuOpen || m_convoActive || (m_editorMode && m_editorFreeze) || unbuiltStage || m_clearActive;
 	}
 	void UpdatePauseMenu();   // メニュー操作（Event から呼ぶ）
 	void DrawPauseMenu();     // メニュー描画（DrawSpriteExtra から呼ぶ）
@@ -162,7 +162,7 @@ private:
 	struct EditEntry
 	{
 		Math::Vector3                              pos;        // 現在位置
-		std::function<void(const Math::Vector3&)>  setPos;     // 位置を設定（dirty 反映込み）
+		std::function<void(const Math::Vector3&)>  setPos;     // 位置を設定（dirty 反映込み）siss
 		std::function<void()>                      dup;        // 複製
 		std::function<void()>                      select;     // 該当エディタの選択indexを同期
 		std::string                                label;      // 表示名
@@ -232,8 +232,18 @@ private:
 	bool            m_introCutscene = false;
 	float           m_introTimer    = 0.0f;   // 経過時間
 	float           m_introSpin     = 0.0f;   // タンブル回転角
+	// 着地リアクション（ズサー…バタン）
+	bool            m_introLanding   = false;
+	float           m_introLandTimer = 0.0f;
+	Math::Vector3   m_landSkidDir    = {};    // 横滑り方向（水平）
 	void StartIntroCutscene();
 	void UpdateIntroCutscene();
+
+	// ステージクリア（ゴールコア取得＝即クリア→演出→StageSelectへ）
+	bool  m_clearActive = false;
+	float m_clearTimer  = 0.0f;
+	bool  m_clearDecideFlashed = false;   // 決めスナップ時の小フラッシュ（1回だけ）
+	void StartStageClear(const Math::Vector3& corePos);
 
 	// ポーズメニュー状態
 	bool            m_menuOpen        = false;
@@ -294,7 +304,8 @@ private:
 	Math::Vector3           m_spawnPos       = { SpawnConst::DefaultX, SpawnConst::DefaultY, SpawnConst::DefaultZ };
 
 	// 導入カットシーンの「飛んでくる」開始位置（エディタで設定・保存。ここからスポーンへ投げる）
-	Math::Vector3           m_introStartPos  = { SpawnConst::DefaultX + 25.0f, SpawnConst::DefaultY + 70.0f, SpawnConst::DefaultZ };
+	// 斜め上空から頭から突っ込んでくる（横ずれ＋高さ）
+	Math::Vector3           m_introStartPos  = { SpawnConst::DefaultX - 700.0f, SpawnConst::DefaultY + 1500.0f, SpawnConst::DefaultZ };
 
 	// チェックポイントリスト＋現在有効なリスポーン座標
 	std::vector<std::shared_ptr<Checkpoint>> m_checkpoints;
@@ -302,6 +313,9 @@ private:
 
 	// HP UI
 	std::shared_ptr<HpUI>   m_spHpUI;
+
+	// クリア暗転用アイリスマスク（中央が透明な穴・外周が黒。マリオ風の閉じる暗転）
+	std::shared_ptr<KdTexture> m_irisMaskTex;
 
 	// コアリア残機アイコン（死亡暗転画面に中央表示）
 	std::shared_ptr<KdTexture> m_lifeIconTex;

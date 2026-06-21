@@ -85,6 +85,18 @@ public:
     // 吹っ飛ばされてくるくる回る表現などに使う（ワールドZ軸まわりのロール）。
     void SetCutsceneSpin(float radians) { m_cutsceneSpin = radians; }
 
+    // 演出用：多軸タンブル（描画のみ）。x=pitch, y=yaw, z=roll(rad)。いろんな軸でくるくる回す
+    void SetCutsceneTumble(const Math::Vector3& anglesXYZ) { m_cutsceneTumble = anglesXYZ; }
+
+    // 演出用：体を +Z 正面へ向ける（クリア演出の決めポーズ用。描画のみ）
+    void SetCutsceneFaceZ(bool on) { m_cutsceneFaceZ = on; }
+
+    // 導入演出ポーズ：パラソル等のノードを隠す（落下中の見た目用）
+    void SetIntroPose(bool on);
+
+    // 着地のつぶれ演出を発動（ズサーバタンの「バタン」）
+    void TriggerLandingSquash();
+
     // 演出用：重力スケール（1.0=通常、小さいほどゆっくり落ちて滞空が長い）
     void SetGravityScale(float s) { m_gravityScale = s; }
 
@@ -161,6 +173,12 @@ private:
 
     // 演出用タンブル回転角（描画のみ。ワールドZ軸ロール）
     float m_cutsceneSpin = 0.0f;
+
+    // 演出用多軸タンブル（描画のみ）。x=pitch, y=yaw, z=roll
+    Math::Vector3 m_cutsceneTumble = { 0.0f, 0.0f, 0.0f };
+
+    // 演出用：体を +Z 正面へ固定（描画のみ）
+    bool m_cutsceneFaceZ = false;
 
     // 攻撃モーション再生中フラグ（上半身 Attack 上書き管理用）
     bool m_isAttacking = false;

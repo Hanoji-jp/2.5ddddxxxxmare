@@ -60,6 +60,25 @@ bool ManualGravityZoneManager::CanUseManualGravity(const Math::Vector3& _pos) co
 	return false;
 }
 
+bool ManualGravityZoneManager::IsInsideManualZone(const Math::Vector3& _pos) const
+{
+	// ゾーンが無い場合は false（惑星重力を抑制しない）
+	for (const auto& zone : m_zones)
+	{
+		if (!zone.bEnabled) { continue; }
+		if (zone.Type != ZoneType::ManualGravity) { continue; }
+
+		const Math::Vector3 localPos = _pos - zone.Center;
+		if (std::abs(localPos.x) <= zone.HalfExtents.x &&
+			std::abs(localPos.y) <= zone.HalfExtents.y &&
+			std::abs(localPos.z) <= zone.HalfExtents.z)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 bool ManualGravityZoneManager::IsInNormalGravityZone(const Math::Vector3& _pos, Math::Vector3& gravDirOut) const
 {
 	for (const auto& zone : m_zones)
