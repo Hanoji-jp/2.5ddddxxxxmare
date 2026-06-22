@@ -8,6 +8,7 @@
 #include"../../Const/EditorPickConst.h"
 #include"../../Const/IntroConst.h"
 #include"../../Const/ClearConst.h"
+#include"../../Const/FontConst.h"
 #include"../../Camera/CameraSettings.h"
 #include"../../Manager/ModelManager.h"
 #include"../../Manager/StageManager.h"
@@ -103,10 +104,15 @@ void GameScene::Event()
 			// 取得したコアを GravityCoreBorn ボーンへ追従＝手に持っているように見せる
 			if (m_spHeldCore)
 			{
+				m_spHeldCore->Update();   // グロー/星エフェクトを進める（クリア中は通常更新が止まるため）
 				const Math::Matrix bw = m_spPlayer->GetBoneWorld("GravityCoreBorn");
 				m_spHeldCore->SetPos(Math::Vector3{ bw._41, bw._42, bw._43 });
 			}
 		}
+
+		// クリア中はオブジェクト更新(PostUpdate)が止まるので、エフェクトを手動で進める
+		KdEffekseerManager::GetInstance().Update();
+		m_itemManager.UpdatePickupEffects();   // キメの星バーストを進める
 
 		// スター取得風カメラ：旋回→（決め）少し引く→ズーム→少し保持→もう一度引く（全部連続）
 		if (m_camera && m_spPlayer)
@@ -129,11 +135,19 @@ void GameScene::Event()
 			const float pitchDeg = std::lerp(ClearConst::CamStartPitchDeg, ClearConst::CamEndPitchDeg, ez);
 			const float focusUp  = std::lerp(ClearConst::CamStartFocusUp,  ClearConst::CamEndFocusUp,  ez);
 
-			// キメズームの着地で小フラッシュを1回（パンチを足す）
+			// キメズームの着地で小フラッシュ＋コア中心に星バースト（1回だけ）
 			if (!m_clearDecideFlashed && tt >= ClearConst::CamZoomInEnd)
 			{
 				TriggerFlash(ClearConst::DecideFlash);
 				m_clearDecideFlashed = true;
+
+				if (m_spHeldCore)
+				{
+					const Math::Color burstCol(
+						GravityCoreConst::GlowFaceR, GravityCoreConst::GlowFaceG,
+						GravityCoreConst::GlowFaceB, 1.0f);
+					m_itemManager.SpawnBurstAt(m_spHeldCore->GetPos(), burstCol, PickupBurst::Style::Ring);
+				}
 			}
 
 			// 距離：旋回で寄せる → 旋回ドリフト直後にイージングで一気にキメズーム → 1秒止め → 引き
@@ -183,8 +197,16 @@ void GameScene::Event()
 			const float yaw   = DirectX::XMConvertToRadians(yawDeg);
 			const float cp    = std::cosf(pitch);
 
+			// キメに向かってカメラを上げる：focusUp を kime ズーム中に加算（その後保持）
+			float kimeRaise = 0.0f;
+			if (tt > ClearConst::CamOrbitTime)
+			{
+				const float kp = std::clamp(
+					(tt - ClearConst::CamOrbitTime) / (ClearConst::CamZoomInEnd - ClearConst::CamOrbitTime), 0.0f, 1.0f);
+				kimeRaise = ClearConst::CamKimeRaise * (kp * kp * (3.0f - 2.0f * kp));   // smoothstep
+			}
 			const Math::Vector3 focus = m_spPlayer->GetPos()
-				+ Math::Vector3(0.0f, focusUp, 0.0f);
+				+ Math::Vector3(0.0f, focusUp + kimeRaise, ClearConst::CamFocusZAdd);
 			Math::Vector3 eye = focus + Math::Vector3(
 				std::sinf(yaw) * cp, std::sinf(pitch), std::cosf(yaw) * cp) * distV;
 
@@ -1163,7 +1185,7 @@ void GameScene::DrawSpriteExtra()
 
 	// ── コイン（収集物）カウンター：右上にアイコン＋数字（取得時にポップ）──
 	// ※ 死亡暗転・ポーズ暗幕より先に描いて、それらが上に乗るようにする
-	if (!m_editorMode && !m_menuOpen && m_coinIconTex)
+	if (!m_editorMode && !m_menuOpen && !m_clearActive && m_coinIconTex)
 	{
 		auto& sprite = KdShaderManager::Instance().m_spriteShader;
 
@@ -1200,7 +1222,7 @@ void GameScene::DrawSpriteExtra()
 	}
 
 	// ── HP：宝石ハート。左上に表示・被ダメで揺れる ──
-	if (!m_editorMode && !m_menuOpen && m_spPlayer)
+	if (!m_editorMode && !m_menuOpen && !m_clearActive && m_spPlayer)
 	{
 		auto& sprite = KdShaderManager::Instance().m_spriteShader;
 
@@ -1534,7 +1556,7 @@ void GameScene::DrawSpriteExtra()
 	}
 
 	// ── 回復「＋」マーク：上昇しながらフェード（プレイヤー位置・HP UI位置） ──
-	if (!m_editorMode && !m_menuOpen && !m_healPluses.empty())
+	if (!m_editorMode && !m_menuOpen && !m_clearActive && !m_healPluses.empty())
 	{
 		auto& sprite = KdShaderManager::Instance().m_spriteShader;
 		const float dt = KdFPSController::GetDt();
@@ -1562,7 +1584,7 @@ void GameScene::DrawSpriteExtra()
 	}
 
 	// ── 重力コンパス（左下）：重力の「下」方向＋切替可否 ──
-	if (!m_editorMode && !m_menuOpen && m_spPlayer)
+	if (!m_editorMode && !m_menuOpen && !m_clearActive && m_spPlayer)
 	{
 		auto& sprite = KdShaderManager::Instance().m_spriteShader;
 
@@ -1643,6 +1665,68 @@ void GameScene::DrawSpriteExtra()
 			&introOverlay, true);
 		m_introFadeAlpha -= JuiceConst::IntroFadeSpeed * kDt;
 		if (m_introFadeAlpha < 0.0f) { m_introFadeAlpha = 0.0f; }
+	}
+
+	// ── ステージクリア：キメの瞬間に「ステージクリアー！」をポップ表示（ワールド座標アンカー）──
+	if (m_clearActive && m_clearTimer >= ClearConst::BannerStartT && m_spPlayer)
+	{
+		// プレイヤー頭上のワールド位置 → スクリーンへ投影
+		const Math::Vector3 anchor = m_spPlayer->GetPos()
+			+ m_spPlayer->GetUpDir() * ClearConst::BannerWorldUp;
+		const Math::Matrix vp = KdShaderManager::Instance().GetCameraCB().mView
+			* KdShaderManager::Instance().GetCameraCB().mProj;
+		const Math::Vector4 clip = Math::Vector4::Transform(
+			Math::Vector4(anchor.x, anchor.y, anchor.z, 1.0f), vp);
+
+		if (clip.w > 0.001f)   // カメラ後方なら描かない
+		{
+			const float sx = (clip.x / clip.w) * screenW * 0.5f;   // 中心原点・+Xが右
+			const float sy = (clip.y / clip.w) * screenH * 0.5f;   // +Yが上
+
+			auto& sprite = KdShaderManager::Instance().m_spriteShader;
+			auto fs = KdFontManager::Instance().CreateFontTexture(
+				ClearConst::BannerFontNo, ClearConst::BannerText, false);
+			if (fs)
+			{
+				// 出現アニメ：フェードイン＋下からせり上がり（easeOutBackで軽くオーバーシュート）
+				const float tp = std::clamp(
+					(m_clearTimer - ClearConst::BannerStartT) / ClearConst::BannerPopTime, 0.0f, 1.0f);
+				const float c1 = 1.70158f;                       // easeOutBack 係数
+				const float u  = tp - 1.0f;
+				const float eb = 1.0f + (c1 + 1.0f) * u * u * u + c1 * u * u;   // easeOutBack
+				const float rise = ClearConst::BannerRisePx * (1.0f - eb);      // 下→定位置
+				const float alpha = tp;
+
+				// テキスト寸法を測ってアンカー位置に中央寄せ
+				float tw = 0.0f, th = 0.0f;
+				for (const auto& d : fs->GetTexList())
+				{
+					if (d && d->FontTex)
+					{
+						tw += static_cast<float>(d->FontTex->GetInfo().Width);
+						th  = std::max(th, static_cast<float>(d->FontTex->GetInfo().Height));
+					}
+				}
+				const Math::Vector2 pos(sx - tw * 0.5f, sy - th * 0.5f + rise);
+
+				// 影 → 縁取り(8方向) → 本体
+				const Math::Color shadow(0.0f, 0.0f, 0.0f, ClearConst::BannerShadowA * alpha);
+				sprite.DrawFont(fs, Math::Vector2(
+					pos.x + ClearConst::BannerShadowOff, pos.y - ClearConst::BannerShadowOff), &shadow, 0);
+				const Math::Color outline(ClearConst::BannerOutR, ClearConst::BannerOutG, ClearConst::BannerOutB, alpha);
+				const int t = ClearConst::BannerOutlinePx;
+				for (int dy = -1; dy <= 1; ++dy)
+				{
+					for (int dx = -1; dx <= 1; ++dx)
+					{
+						if (dx == 0 && dy == 0) { continue; }
+						sprite.DrawFont(fs, Math::Vector2(pos.x + dx * t, pos.y + dy * t), &outline, 0);
+					}
+				}
+				const Math::Color main(ClearConst::BannerR, ClearConst::BannerG, ClearConst::BannerB, alpha);
+				sprite.DrawFont(fs, pos, &main, 0);
+			}
+		}
 	}
 
 	// ── ステージクリア：カメラの引きと並行してアイリス暗転（マリオ風の閉じる円）→ StageSelect へ ──
@@ -2004,6 +2088,12 @@ void GameScene::DrawOutlineExtra()
 
 void GameScene::DrawEffectExtra()
 {
+	// 導入の落下トレイル（カメラを向く連結リボン＝彗星の尾）
+	if (m_introCutscene && m_introTrail.size() >= 2)
+	{
+		DrawIntroTrail();
+	}
+
 	// アイテム周りの星きらめき（半透明・発光のためエフェクトパスで描画）
 	m_itemManager.DrawEffect();
 
@@ -2015,6 +2105,173 @@ void GameScene::DrawEffectExtra()
 
 	// エディタ：選択中オブジェクト＋軸ギズモ（シーンRTに描いてGameウィンドウに表示）
 	if (m_editorMode) { DrawSelectionMarker(); }
+}
+
+//----------------------------------------------------------
+// 落下トレイル：位置履歴をカメラを向く連結リボン（彗星の尾）として描く。
+// 頭ほど太く明るく、尾ほど細く透明に。外周を透明にして柔らかい発光に。
+//----------------------------------------------------------
+void GameScene::DrawIntroTrail()
+{
+	// 先端は必ずプレイヤーの現在の描画位置に合わせる（フレーム間のズレで先端に隙間が出るのを防ぐ）
+	std::vector<Math::Vector3> hist;
+	hist.reserve(m_introTrail.size() + 1);
+	if (m_spPlayer)
+	{
+		const Math::Vector3 head = m_spPlayer->GetDrawWorld().Translation();
+		hist.push_back(head);
+		// 先頭の履歴がほぼ同じ位置なら重複を避ける
+		if (m_introTrail.empty() || (m_introTrail[0] - head).LengthSquared() > 1e-4f)
+		{
+			for (const auto& p : m_introTrail) { hist.push_back(p); }
+		}
+		else
+		{
+			for (size_t k = 1; k < m_introTrail.size(); ++k) { hist.push_back(m_introTrail[k]); }
+		}
+	}
+	else
+	{
+		hist = m_introTrail;
+	}
+
+	const int hn = static_cast<int>(hist.size());
+	if (hn < 2) { return; }
+
+	// 履歴点が落下速度ぶん飛び飛びなので、Catmull-Romで間を補間して密な連続線にする
+	std::vector<Math::Vector3> pts;
+	{
+		const int sub = (IntroConst::TrailSubdiv > 0) ? IntroConst::TrailSubdiv : 1;
+		auto at = [&](int i) -> const Math::Vector3&
+		{
+			return hist[std::clamp(i, 0, hn - 1)];
+		};
+		pts.reserve(static_cast<size_t>(hn - 1) * sub + 1);
+		for (int i = 0; i < hn - 1; ++i)
+		{
+			const Math::Vector3& p0 = at(i - 1);
+			const Math::Vector3& p1 = at(i);
+			const Math::Vector3& p2 = at(i + 1);
+			const Math::Vector3& p3 = at(i + 2);
+			for (int s = 0; s < sub; ++s)
+			{
+				const float t  = static_cast<float>(s) / static_cast<float>(sub);
+				const float t2 = t * t;
+				const float t3 = t2 * t;
+				// Catmull-Rom
+				const Math::Vector3 p =
+					(p1 * 2.0f
+					+ (p2 - p0) * t
+					+ (p0 * 2.0f - p1 * 5.0f + p2 * 4.0f - p3) * t2
+					+ (p1 * 3.0f - p0 - p2 * 3.0f + p3) * t3) * 0.5f;
+				pts.push_back(p);
+			}
+		}
+		pts.push_back(hist[hn - 1]);
+	}
+
+	const int n = static_cast<int>(pts.size());
+	if (n < 2) { return; }
+
+	// 色 → 頂点カラー(uint, ABGR) パッカー
+	auto pack = [](float r, float g, float b, float a) -> unsigned int
+	{
+		const auto cv = [](float v) { return static_cast<unsigned int>(std::clamp(v, 0.0f, 1.0f) * 255.0f); };
+		return (cv(a) << 24) | (cv(b) << 16) | (cv(g) << 8) | cv(r);
+	};
+
+	const Math::Vector3 camPos = KdShaderManager::Instance().GetCameraCB().CamPos;
+
+	// 各点のカメラ向き横方向(side)・幅・長さフェードを求める。
+	// 視線と尾が平行になって side が潰れる箇所は直前の向きを引き継いで隙間を防ぐ。
+	std::vector<Math::Vector3> side(n);
+	std::vector<float>         hw(n);
+	std::vector<float>         lf(n);   // 1(頭)→0(尾)
+	Math::Vector3 prevSide(1.0f, 0.0f, 0.0f);
+	for (int i = 0; i < n; ++i)
+	{
+		Math::Vector3 tan;
+		if (i == 0)            { tan = pts[0] - pts[1]; }
+		else if (i == n - 1)   { tan = pts[n - 2] - pts[n - 1]; }
+		else                   { tan = pts[i - 1] - pts[i + 1]; }
+		if (tan.LengthSquared() < 1e-8f) { tan = Math::Vector3(0.0f, 1.0f, 0.0f); }
+		tan.Normalize();
+
+		Math::Vector3 view = camPos - pts[i];
+		if (view.LengthSquared() < 1e-8f) { view = Math::Vector3(0.0f, 0.0f, -1.0f); }
+		view.Normalize();
+
+		Math::Vector3 s = tan.Cross(view);
+		if (s.LengthSquared() < 1e-6f) { s = prevSide; }   // 潰れる箇所は前の向きを維持
+		else
+		{
+			s.Normalize();
+			if (s.Dot(prevSide) < 0.0f) { s = -s; }        // 反転して捻れるのを防ぐ
+		}
+		prevSide = s;
+		side[i]  = s;
+
+		lf[i] = 1.0f - static_cast<float>(i) / static_cast<float>(n - 1);
+		hw[i] = IntroConst::TrailWidth * (IntroConst::TrailTailMul + (1.0f - IntroConst::TrailTailMul) * lf[i]);
+	}
+
+	std::vector<KdPolygon::Vertex> verts;
+	verts.reserve(static_cast<size_t>(n - 1) * 18);
+	auto addQuad = [&](const Math::Vector3& a, unsigned int ca, const Math::Vector3& b, unsigned int cb,
+	                   const Math::Vector3& c, unsigned int cc, const Math::Vector3& d, unsigned int cd)
+	{
+		KdPolygon::Vertex v0{}, v1{}, v2{}, v3{}, v4{}, v5{};
+		v0.pos = a; v0.color = ca;  v1.pos = b; v1.color = cb;  v2.pos = c; v2.color = cc;
+		verts.push_back(v0); verts.push_back(v1); verts.push_back(v2);
+		v3.pos = c; v3.color = cc;  v4.pos = b; v4.color = cb;  v5.pos = d; v5.color = cd;
+		verts.push_back(v3); verts.push_back(v4); verts.push_back(v5);
+	};
+
+	for (int i = 0; i < n - 1; ++i)
+	{
+		const int j = i + 1;
+		const float aI = IntroConst::TrailAlpha * lf[i] * lf[i];
+		const float aJ = IntroConst::TrailAlpha * lf[j] * lf[j];
+		const Math::Vector3 cI = pts[i];
+		const Math::Vector3 cJ = pts[j];
+
+		const unsigned int edge = pack(0, 0, 0, 0.0f);   // 外周＝透明
+		const unsigned int gI = pack(IntroConst::TrailColR, IntroConst::TrailColG, IntroConst::TrailColB, aI);
+		const unsigned int gJ = pack(IntroConst::TrailColR, IntroConst::TrailColG, IntroConst::TrailColB, aJ);
+
+		// 外周(透明)→中心(発光)→外周(透明) のグラデ帯（控えめ・白コアは入れない）
+		addQuad(cI + side[i] * hw[i], edge, cI, gI, cJ + side[j] * hw[j], edge, cJ, gJ);
+		addQuad(cI, gI, cI - side[i] * hw[i], edge, cJ, gJ, cJ - side[j] * hw[j], edge);
+	}
+
+	auto& sm = KdShaderManager::Instance();
+	sm.ChangeBlendState(KdBlendState::Add);
+	sm.ChangeDepthStencilState(KdDepthStencilState::ZWriteDisable);
+	sm.m_StandardShader.SetDissolve(0.0f);
+
+	// ① 控えめなリボン（芯）
+	sm.m_StandardShader.DrawVertices(verts, Math::Matrix::Identity,
+		Math::Color(1, 1, 1, 1),
+		KdDepthStencilState::ZWriteDisable,
+		D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+	// ② 柔らかいglow画像を経路に沿ってかぶせて、リボンをぼかし馴染ませる（目立たせない）
+	if (m_introTrailTex)
+	{
+		for (int i = n - 1; i >= 0; --i)
+		{
+			const float a  = IntroConst::TrailGlowAlpha * lf[i] * lf[i];
+			if (a <= 0.0f) { continue; }
+			const float sz = IntroConst::TrailGlowSize
+				* (IntroConst::TrailTailMul + (1.0f - IntroConst::TrailTailMul) * lf[i]);
+			const Math::Color   col{ IntroConst::TrailColR, IntroConst::TrailColG, IntroConst::TrailColB, a };
+			const Math::Vector3 em { IntroConst::TrailColR * a, IntroConst::TrailColG * a, IntroConst::TrailColB * a };
+			EffectBase::DrawBillboard(m_introTrailPoly, pts[i], sz, 0.0f, col, em);
+		}
+	}
+
+	sm.UndoDepthStencilState();
+	sm.UndoBlendState();
 }
 
 void GameScene::UpdateDuringHitStop()
@@ -3173,9 +3430,11 @@ void GameScene::StartStageClear(const Math::Vector3& corePos)
 	(void)corePos;
 
 	// リザルト用データを StageManager へ渡す（StageSelect 帰還時に表示）
+	const int clearedStageId = StageManager::Instance().GetStageIndex() - 1;   // 0始まり
 	StageManager::Instance().SetResult(
-		StageManager::Instance().GetStageIndex() - 1,   // 0始まりの stageId
-		m_coinTotal, m_itemManager.GetRockCount(), m_deathCount, m_playTime);
+		clearedStageId, m_coinTotal, m_itemManager.GetRockCount(), m_deathCount, m_playTime);
+	// ステージ別の記録（クリア済み・最高コイン・ベストタイム）を更新・保存
+	StageManager::Instance().RecordClear(clearedStageId, m_coinTotal, m_playTime);
 
 	if (m_spPlayer) { m_spPlayer->SetControlEnabled(false); }   // 操作ロック
 	TriggerFlash(ClearConst::FlashStrength);                    // 取得の白フラッシュ
@@ -3226,6 +3485,13 @@ void GameScene::UpdateIntroCutscene()
 		m_spPlayer->SetPos(pos);
 		m_spPlayer->SetVelocity(Math::Vector3::Zero);
 
+		// 落下トレイル：位置履歴を先頭(最新)へ積む。古い分は末尾から捨てる
+		m_introTrail.insert(m_introTrail.begin(), pos);
+		if (static_cast<int>(m_introTrail.size()) > IntroConst::TrailLen)
+		{
+			m_introTrail.pop_back();
+		}
+
 		// 頭から落下→着地直前に頭を上へ起こす（XY平面の落下なのでZロールで姿勢を作る）
 		Math::Vector3 fall2D = m_spawnPos - m_introStartPos; fall2D.z = 0.0f;
 		if (fall2D.LengthSquared() > 1e-6f) { fall2D.Normalize(); }
@@ -3244,6 +3510,7 @@ void GameScene::UpdateIntroCutscene()
 			m_introCutscene  = false;
 			m_introLanding   = true;
 			m_introLandTimer = 0.0f;
+			m_introTrail.clear();   // 落下トレイルは着地で消す
 
 			// 横滑り方向＝水平の進行方向
 			Math::Vector3 d = m_spawnPos - m_introStartPos; d.y = 0.0f;
@@ -3319,8 +3586,10 @@ void GameScene::Respawn()
 	m_coinTotal    = 0;
 	m_coinPopTimer = 0.0f;
 
-	// このランの経過時間もリセット（クリアタイムは「クリアした回の時間」）
-	m_playTime     = 0.0f;
+	// プレイタイムはリセットしない：クリアタイムは「ステージ入場〜クリアまでの
+	// 総プレイ時間」。死亡→復活してもタイマーは継続する（死亡中は元々加算が
+	// 止まるので、死亡演出ぶんは含まれない）。回数制限オーバーのリトライは
+	// GameScene 自体が作り直されるため、その時だけ 0 から始まる。
 }
 
 void GameScene::RebuildEnemies()
@@ -3577,6 +3846,9 @@ void GameScene::Init()
 	ManualGravityZoneManager::Instance().Load();
 	DeadZoneManager::Instance().Load();
 
+	// クリア演出のキメ文字「ステージクリアー！」用フォント
+	KdFontManager::Instance().AddFont(ClearConst::BannerFontNo, FontConst::GameFontName, ClearConst::BannerFontH);
+
 	// コアリア（ヒントNPC）：日本語フォント登録＋配置/ヒント読み込み
 	KdFontManager::Instance().AddFont(CoreliaConst::FontNo, CoreliaConst::FontName, CoreliaConst::FontHeight);
 	CoreliaManager::Instance().Load();
@@ -3621,6 +3893,14 @@ void GameScene::Init()
 	// クリア暗転用アイリスマスク（マリオ風の閉じる円）
 	m_irisMaskTex = std::make_shared<KdTexture>();
 	m_irisMaskTex->Load(ClearConst::IrisMaskPath);
+
+	// 導入の落下トレイルに重ねる柔らかいglow素材
+	m_introTrailTex = std::make_shared<KdTexture>();
+	if (m_introTrailTex->Load(IntroConst::TrailTex))
+	{
+		m_introTrailPoly.SetMaterial(m_introTrailTex);
+		m_introTrailPoly.SetScale(1.0f);
+	}
 
 	// コアリア残機アイコン（仮画像）を読み込み
 	m_lifeIconTex = std::make_shared<KdTexture>();

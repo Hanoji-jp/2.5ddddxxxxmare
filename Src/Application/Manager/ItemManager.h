@@ -62,6 +62,13 @@ public:
 	// GameScene から直接 Update するためのアクセサ
 	std::list<std::shared_ptr<ParasolItem>>& WorkParasols() { return m_parasols; }
 
+	// 任意の位置に星バーストを出す（クリアのキメ演出など外部から使う）
+	void SpawnBurstAt(const Math::Vector3& pos, const Math::Color& baseColor,
+		PickupBurst::Style style = PickupBurst::Style::Full)
+	{
+		PlayPickupEffect(pos, baseColor, style);
+	}
+
 	static constexpr const char* SavePath = "Asset/Data/coins.csv";
 
 private:

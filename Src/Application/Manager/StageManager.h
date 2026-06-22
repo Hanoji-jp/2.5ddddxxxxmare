@@ -2,6 +2,7 @@
 #include <string>
 #include <cstdio>
 #include <fstream>
+#include <array>
 #include <filesystem>
 
 //==========================================================
@@ -57,6 +58,35 @@ public:
     void AddTotalCoins(int n)  { m_totalCoins += n; SaveTotals(); }
     void AddTotalRocks(int n)  { m_totalRocks += n; SaveTotals(); }
 
+    //------------------------------------------------------
+    // Per-stage best records (cleared / best coins / best time), saved across sessions.
+    //------------------------------------------------------
+    static constexpr int kMaxStages = 16;
+    struct StageRecord
+    {
+        bool  cleared   = false;
+        int   bestCoins = 0;
+        float bestTime  = 0.0f;   // 0 = no record yet
+    };
+
+    const StageRecord& GetRecord(int stageId) const
+    {
+        static const StageRecord empty;
+        if (stageId < 0 || stageId >= kMaxStages) { return empty; }
+        return m_records[stageId];
+    }
+
+    // Call on stage clear: marks cleared and keeps the best coins/time.
+    void RecordClear(int stageId, int coins, float time)
+    {
+        if (stageId < 0 || stageId >= kMaxStages) { return; }
+        StageRecord& r = m_records[stageId];
+        r.cleared = true;
+        if (coins > r.bestCoins) { r.bestCoins = coins; }
+        if (r.bestTime <= 0.0f || time < r.bestTime) { r.bestTime = time; }
+        SaveRecords();
+    }
+
     // Stage data folder (with trailing slash), e.g. "Asset/Data/Stage01/".
     std::string Dir() const
     {
@@ -75,7 +105,7 @@ public:
     }
 
 private:
-    StageManager() { LoadTotals(); }
+    StageManager() { LoadTotals(); LoadRecords(); }
     ~StageManager() = default;
     StageManager(const StageManager&)            = delete;
     StageManager& operator=(const StageManager&) = delete;
@@ -101,8 +131,39 @@ private:
         ofs << m_totalCoins << ',' << m_totalRocks;
     }
 
+    std::string RecordsPath() const { return "Asset/Data/stage_records.csv"; }
+
+    void LoadRecords()
+    {
+        std::ifstream ifs(RecordsPath());
+        if (!ifs) { return; }
+        // one line per stage (in stageId order): "cleared,bestCoins,bestTime"
+        for (int i = 0; i < kMaxStages; ++i)
+        {
+            int c = 0, coins = 0; float t = 0.0f; char comma = ',';
+            if (!(ifs >> c >> comma >> coins >> comma >> t)) { break; }
+            m_records[i].cleared   = (c != 0);
+            m_records[i].bestCoins = (coins < 0) ? 0 : coins;
+            m_records[i].bestTime  = (t < 0.0f) ? 0.0f : t;
+        }
+    }
+    void SaveRecords() const
+    {
+        std::error_code ec;
+        std::filesystem::create_directories("Asset/Data/", ec);
+        std::ofstream ofs(RecordsPath());
+        if (!ofs) { return; }
+        for (int i = 0; i < kMaxStages; ++i)
+        {
+            ofs << (m_records[i].cleared ? 1 : 0) << ','
+                << m_records[i].bestCoins << ','
+                << m_records[i].bestTime << '\n';
+        }
+    }
+
     int m_stageIndex = 1;
     StageResult m_result;
     int m_totalCoins = 0;
     int m_totalRocks = 0;
+    std::array<StageRecord, kMaxStages> m_records{};
 };

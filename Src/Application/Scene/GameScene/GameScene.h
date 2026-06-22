@@ -238,6 +238,7 @@ private:
 	Math::Vector3   m_landSkidDir    = {};    // 横滑り方向（水平）
 	void StartIntroCutscene();
 	void UpdateIntroCutscene();
+	void DrawIntroTrail();    // 落下トレイル（カメラを向く連結リボン）を描く
 
 	// ステージクリア（ゴールコア取得＝即クリア→演出→StageSelectへ）
 	bool  m_clearActive = false;
@@ -320,6 +321,11 @@ private:
 
 	// クリア暗転用アイリスマスク（中央が透明な穴・外周が黒。マリオ風の閉じる暗転）
 	std::shared_ptr<KdTexture> m_irisMaskTex;
+
+	// 導入の落下トレイル（控えめなリボン＋柔らかいglow画像オーバーレイ＝彗星の尾）
+	std::shared_ptr<KdTexture> m_introTrailTex;   // 柔らかい丸グロー（かぶせ用）
+	KdSquarePolygon            m_introTrailPoly;
+	std::vector<Math::Vector3> m_introTrail;   // 位置履歴（[0]=最新＝頭）
 
 	// コアリア残機アイコン（死亡暗転画面に中央表示）
 	std::shared_ptr<KdTexture> m_lifeIconTex;

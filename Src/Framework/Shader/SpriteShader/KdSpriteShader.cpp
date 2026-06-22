@@ -396,6 +396,161 @@ void KdSpriteShader::DrawBox(int x, int y, int extentX, int extentY, const Math:
 	if (!bBgn)End();
 }
 
+// 角丸の塗りつぶしボックス
+void KdSpriteShader::DrawRoundedBox(int x, int y, int extentX, int extentY, float radius,
+	const Math::Color* color, int cornerSegs)
+{
+	bool bBgn = m_isBegin;
+	if (!bBgn)Begin();
+
+	// 白テクスチャ
+	KdDirect3D::Instance().WorkDevContext()->PSSetShaderResources(0, 1, KdDirect3D::Instance().GetWhiteTex()->WorkSRViewAddress());
+
+	if (color) { m_cb0.Work().Color = *color; }
+	m_cb0.Write();
+
+	const float ex = static_cast<float>(extentX);
+	const float ey = static_cast<float>(extentY);
+	float r = radius;
+	const float maxR = (ex < ey) ? ex : ey;
+	if (r > maxR) { r = maxR; }
+	if (r < 0.0f) { r = 0.0f; }
+	if (cornerSegs < 1) { cornerSegs = 1; }
+
+	const float cx = static_cast<float>(x);
+	const float cy = static_cast<float>(y);
+	const float kQuarter = 1.57079632679f;
+
+	// 4つの角の中心と、その角の開始角度（反時計回り）
+	const float ccx[4] = { cx + ex - r, cx - ex + r, cx - ex + r, cx + ex - r };
+	const float ccy[4] = { cy + ey - r, cy + ey - r, cy - ey + r, cy - ey + r };
+	const float a0 [4] = { 0.0f, kQuarter, kQuarter * 2.0f, kQuarter * 3.0f };
+
+	// 外周点を作る（角ごとに弧を分割）
+	std::vector<Math::Vector3> peri;
+	peri.reserve(static_cast<size_t>(cornerSegs + 1) * 4);
+	for (int c = 0; c < 4; ++c)
+	{
+		for (int s = 0; s <= cornerSegs; ++s)
+		{
+			const float ang = a0[c] + kQuarter * (static_cast<float>(s) / static_cast<float>(cornerSegs));
+			peri.push_back({ ccx[c] + std::cosf(ang) * r, ccy[c] + std::sinf(ang) * r, 0.0f });
+		}
+	}
+
+	// 中心からの三角ファン → TRIANGLELIST
+	const Math::Vector3 center{ cx, cy, 0.0f };
+	const size_t n = peri.size();
+	std::vector<Vertex> verts;
+	verts.reserve(n * 3);
+	for (size_t i = 0; i < n; ++i)
+	{
+		verts.push_back({ center,          {0, 0} });
+		verts.push_back({ peri[i],         {0, 0} });
+		verts.push_back({ peri[(i + 1) % n], {0, 0} });
+	}
+
+	KdDirect3D::Instance().DrawVertices(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
+		static_cast<int>(verts.size()), verts.data(), sizeof(Vertex));
+
+	if (!bBgn)End();
+}
+
+void KdSpriteShader::DrawRoundedTex(const KdTexture* tex, int x, int y, int extentX, int extentY, float radius,
+	const Math::Color* color, int cornerSegs)
+{
+	if (tex == nullptr) { return; }
+
+	bool bBgn = m_isBegin;
+	if (!bBgn)Begin();
+
+	// テクスチャ(ShaderResourceView)セット
+	KdDirect3D::Instance().WorkDevContext()->PSSetShaderResources(0, 1, tex->WorkSRViewAddress());
+
+	if (color) { m_cb0.Work().Color = *color; }
+	m_cb0.Write();
+
+	const float ex = static_cast<float>(extentX);
+	const float ey = static_cast<float>(extentY);
+	float r = radius;
+	const float maxR = (ex < ey) ? ex : ey;
+	if (r > maxR) { r = maxR; }
+	if (r < 0.0f) { r = 0.0f; }
+	if (cornerSegs < 1) { cornerSegs = 1; }
+
+	const float cx = static_cast<float>(x);
+	const float cy = static_cast<float>(y);
+	const float kQuarter = 1.57079632679f;
+
+	// 4つの角の中心と、その角の開始角度（反時計回り）
+	const float ccx[4] = { cx + ex - r, cx - ex + r, cx - ex + r, cx + ex - r };
+	const float ccy[4] = { cy + ey - r, cy + ey - r, cy - ey + r, cy - ey + r };
+	const float a0 [4] = { 0.0f, kQuarter, kQuarter * 2.0f, kQuarter * 3.0f };
+
+	// アスペクト比を無視して全面を埋める（cover：縦横比を保ったまま中央クロップ）。
+	// 画像と枠の比が違っても歪まず、はみ出した分だけ切り取られる。
+	float uScale = 1.0f, vScale = 1.0f;   // 0〜1 のうち実際に使うUV幅（残りはクロップ）
+	{
+		const float tw = static_cast<float>(tex->GetInfo().Width);
+		const float th = static_cast<float>(tex->GetInfo().Height);
+		if (tw > 0.0f && th > 0.0f && ex > 0.0f && ey > 0.0f)
+		{
+			const float boxAspect = ex / ey;   // 枠の横/縦
+			const float texAspect = tw / th;   // 画像の横/縦
+			if (texAspect > boxAspect) { uScale = boxAspect / texAspect; }  // 画像が横長→左右をクロップ
+			else                       { vScale = texAspect / boxAspect; }  // 画像が縦長→上下をクロップ
+		}
+	}
+	const float uMin = 0.5f - uScale * 0.5f;
+	const float vMin = 0.5f - vScale * 0.5f;
+
+	// 位置→UV（枠全体を基準に0〜1 → coverのサブ矩形へ写像。+Yが上なので上端でV=0）
+	const float left = cx - ex;
+	const float top  = cy + ey;
+	auto toUV = [&](const Math::Vector3& p) -> Math::Vector2
+	{
+		const float u01 = (p.x - left) / (2.0f * ex);
+		const float v01 = (top - p.y) / (2.0f * ey);
+		return { uMin + u01 * uScale, vMin + v01 * vScale };
+	};
+
+	// 外周点を作る（角ごとに弧を分割）
+	std::vector<Math::Vector3> peri;
+	peri.reserve(static_cast<size_t>(cornerSegs + 1) * 4);
+	for (int c = 0; c < 4; ++c)
+	{
+		for (int s = 0; s <= cornerSegs; ++s)
+		{
+			const float ang = a0[c] + kQuarter * (static_cast<float>(s) / static_cast<float>(cornerSegs));
+			peri.push_back({ ccx[c] + std::cosf(ang) * r, ccy[c] + std::sinf(ang) * r, 0.0f });
+		}
+	}
+
+	// 中心からの三角ファン → TRIANGLELIST（各頂点にUVを付与）
+	const Math::Vector3 center{ cx, cy, 0.0f };
+	const Math::Vector2 centerUV{ 0.5f, 0.5f };
+	const size_t n = peri.size();
+	std::vector<Vertex> verts;
+	verts.reserve(n * 3);
+	for (size_t i = 0; i < n; ++i)
+	{
+		const Math::Vector3& p0 = peri[i];
+		const Math::Vector3& p1 = peri[(i + 1) % n];
+		verts.push_back({ center, centerUV });
+		verts.push_back({ p0,     toUV(p0) });
+		verts.push_back({ p1,     toUV(p1) });
+	}
+
+	KdDirect3D::Instance().DrawVertices(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
+		static_cast<int>(verts.size()), verts.data(), sizeof(Vertex));
+
+	// セットしたテクスチャを解除しておく
+	ID3D11ShaderResourceView* srv = nullptr;
+	KdDirect3D::Instance().WorkDevContext()->PSSetShaderResources(0, 1, &srv);
+
+	if (!bBgn)End();
+}
+
 // 切り抜き範囲を設定する
 // ・rect			… 範囲
 

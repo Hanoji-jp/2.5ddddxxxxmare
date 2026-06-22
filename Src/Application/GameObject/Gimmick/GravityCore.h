@@ -42,6 +42,8 @@ private:
 	void BakeMesh();           // Rock 用: ジッター球体を事前計算
 	void DrawGlowEffect();     // Glow 描画（DrawEffect から呼ぶ）
 	void DrawGlowBright();     // Glow bloom（DrawBright から呼ぶ）
+	void UpdateShadow();       // 真下へレイ → 地面位置・法線を求める（位置変化時のみ）
+	void DrawShadow();         // 地面に柔らかい暗い円（ブロブシャドウ）を描く
 
 	// ── 共通 ─────────────────────────────────────────────
 	Math::Vector3 m_pos       = {};
@@ -65,4 +67,12 @@ private:
 	KdSquarePolygon            m_glowPoly;
 	std::shared_ptr<KdTexture> m_glowTex;
 	Math::Color                m_coreColor{ 1.0f, 1.0f, 1.0f, 1.0f }; // タイプ別の本体色
+
+	// ── 地面に落とす影（ブロブシャドウ）──
+	bool          m_shadowValid    = false;          // 真下に地面が見つかったか
+	bool          m_shadowComputed = false;          // 一度でも計算したか
+	Math::Vector3 m_shadowPos      = {};             // 地面のヒット位置
+	Math::Vector3 m_shadowNormal   = { 0.0f, 1.0f, 0.0f }; // 地面の法線
+	Math::Vector3 m_shadowFromPos  = {};             // 前回計算したコア位置（移動検出用）
+	float         m_shadowHeight   = 0.0f;           // コア〜地面の距離
 };

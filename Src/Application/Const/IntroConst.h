@@ -55,4 +55,16 @@ namespace IntroConst
     constexpr float CamAboveBack    = 8.0f;   // eye offset toward -Z (slightly in front)
     constexpr float CamPullBackStart = 0.62f; // progress (0..1) where the pull-back begins
     // (the pull-back ends at the normal gameplay distance = |CameraSettings.OffsetZ|)
+
+    // --- Falling trail (faint ribbon + soft glow image overlay = comet streak) ---
+    constexpr const char* TrailTex = "Asset/Effect/Particle03.png"; // soft round glow (overlay)
+    constexpr int   TrailLen      = 24;     // history points (length of the tail)
+    constexpr int   TrailSubdiv   = 6;      // interpolated points between history points (smooths the line)
+    constexpr float TrailWidth    = 1.0f;   // ribbon half-width near the head (world units)
+    constexpr float TrailTailMul  = 0.15f;  // width multiplier at the tail (taper)
+    constexpr float TrailAlpha    = 0.28f;  // faint ribbon (kept subtle so the glow blends it)
+    constexpr float TrailColR = 0.6f, TrailColG = 0.82f, TrailColB = 1.0f; // bluish comet
+    // soft glow image laid over the ribbon to blur/soften it (less conspicuous)
+    constexpr float TrailGlowSize  = 2.4f;  // glow billboard size near the head (overlay)
+    constexpr float TrailGlowAlpha = 0.18f; // overlay alpha at the head (subtle)
 }

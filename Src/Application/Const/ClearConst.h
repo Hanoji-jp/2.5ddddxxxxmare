@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 // Stage clear sequence (collect the goal core = instant clear, Mario-Galaxy style).
 namespace ClearConst
 {
@@ -25,6 +25,13 @@ namespace ClearConst
     // Focus height: low -> high (player lifts the core up)
     constexpr float CamStartFocusUp  = 0.8f;
     constexpr float CamEndFocusUp    = 3.2f;
+    // Constant +Z offset applied to the focus (and thus the whole orbit) the WHOLE time.
+    // Shifts the framing along +Z so the character fits; from above the orbit becomes an
+    // egg/oval offset toward +Z. Tune the value/sign to taste.
+    constexpr float CamFocusZAdd     = -4.0f;
+    // Raise the focus (look higher) toward the kime so the head fits. Ramps in during
+    // the kime zoom [CamOrbitTime, CamZoomInEnd] then holds.
+    constexpr float CamKimeRaise     = 1.6f;
     // Orbit one full loop (Bezier eased). End yaw = 180 + 360 = 540 (= 180),
     // so the final eye sits on the -Z side looking toward +Z (behind the player),
     // and the player faces +Z too (hero shot looking into +Z).
@@ -100,6 +107,22 @@ namespace ClearConst
     // Iris: starts when the pull starts, closes over ~3s while the camera keeps pulling.
     constexpr float FadeBeginT   = 3.4f;   // = CamStopEnd (iris starts with the pull)
     constexpr float FadeEndT     = 6.4f;   // ~3s transition; camera still pulling until here
+
+    // --- 「ステージクリアー！」のキメ文字バナー ---
+    // キメ（decide flash＝CamZoomInEnd）の瞬間にポップして出す。
+    constexpr const char* BannerText    = "ステージクリアー！";
+    constexpr int   BannerFontNo  = 8;             // 未使用フォントスロット
+    constexpr int   BannerFontH   = 80;            // 大きめ
+    constexpr float BannerStartT  = CamZoomInEnd;  // キメの瞬間に出す
+    constexpr float BannerPopTime = 0.35f;         // 出現アニメ（フェード＋せり上がり）の時間
+    constexpr float BannerWorldUp = 4.0f;          // プレイヤー頭上のワールド高さ（アンカー位置）
+    constexpr float BannerRisePx  = 48.0f;         // 下からせり上がる距離(px)
+    constexpr int   BannerOutlinePx = 3;           // 縁取りの太さ(px)
+    // 色：金色の本体＋濃い縁＋影
+    constexpr float BannerR = 1.0f,  BannerG = 0.86f, BannerB = 0.22f;
+    constexpr float BannerOutR = 0.12f, BannerOutG = 0.05f, BannerOutB = 0.0f;
+    constexpr float BannerShadowA = 0.5f;
+    constexpr float BannerShadowOff = 5.0f;        // 影のオフセット(px)
 
     // --- Iris mask transition (Mario-style closing circle) ---
     // Black texture with a transparent circular hole in the center.

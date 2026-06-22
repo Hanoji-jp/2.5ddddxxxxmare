@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 // Stage-clear result shown on StageSelect: zoom the camera onto the player
 // (the marker standing on the cleared box) and pop a panel beside it.
 // Layout: top gold banner ("STAGE N CLEAR!") + three stat cards (TIME/COINS/DEATHS) + ENTER.
@@ -6,10 +6,10 @@ namespace ResultConst
 {
     // --- Camera zoom (overview <-> closeup of the marker) ---
     constexpr float ZoomSpeed   = 2.2f;    // per second
-    constexpr float CamEyeOffX  = 3.0f;    // closeup eye offset from the marker
-    constexpr float CamEyeOffY  = 2.6f;
-    constexpr float CamEyeOffZ  = -6.5f;
-    constexpr float CamFocusUp  = 1.2f;    // look slightly above the marker base
+    constexpr float CamEyeOffX  = 4.8f;    // closeup eye offset from the marker
+    constexpr float CamEyeOffY  = 4.2f;
+    constexpr float CamEyeOffZ  = -10.4f;
+    constexpr float CamFocusUp  = 1.8f;    // look slightly above the marker base
     // Pan the camera to the right (added to both eye & target X) so the player
     // sits on the LEFT of the frame, leaving room for a wider window on the right.
     constexpr float CamPanX     = 4.5f;
@@ -56,12 +56,12 @@ namespace ResultConst
     constexpr float DotOffR = 0.4f, DotOffG = 0.45f, DotOffB = 0.55f, DotOffA = 0.6f;
 
     // --- Text ---
-    constexpr const char* ClearWord  = "CLEAR!";
-    constexpr const char* TimeLabel  = "TIME";
-    constexpr const char* CoinLabel  = "COINS";
-    constexpr const char* DeathLabel = "DEATHS";
-    constexpr const char* NextHint   = "ENTER : NEXT";
-    constexpr const char* CloseHint  = "ENTER : OK";
+    constexpr const char* ClearWord  = "クリア！";
+    constexpr const char* TimeLabel  = "タイム";
+    constexpr const char* CoinLabel  = "コイン";
+    constexpr const char* DeathLabel = "ミス";
+    constexpr const char* NextHint   = "ENTER：つぎへ";
+    constexpr const char* CloseHint  = "ENTER：とじる";
 
     // --- Pages (1:message 2:time 3:coins 4:rocks) ---
     constexpr int Pages = 4;

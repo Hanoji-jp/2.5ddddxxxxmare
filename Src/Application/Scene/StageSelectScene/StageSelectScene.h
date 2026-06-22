@@ -2,6 +2,7 @@
 
 #include "../BaseScene/BaseScene.h"
 #include "../../GameObject/Character/AnimBlender.h"
+#include "../../Util/UiButton.h"
 
 //==========================================================
 // StageSelectScene
@@ -43,7 +44,6 @@ private:
 	KdModelWork m_nodeModel;   // 箱（ステージノード・共有）
 	KdModelWork m_marker;      // プレイヤー（カーソル）
 	AnimBlender m_markerAnim;
-	KdModelWork m_bgPlanet;    // 背景惑星
 
 	// グロー素材
 	std::shared_ptr<KdTexture> m_dotTex;
@@ -58,6 +58,7 @@ private:
 	float m_timer     = 0.0f;
 	float m_introFade = 1.0f;   // 開始の黒フェード
 	bool  m_entering  = false;  // 決定→入場中
+	float m_enterAnim = 0.0f;   // 入場演出の経過秒（ぴょん→縮んで箱へ）
 	float m_fadeAlpha = 0.0f;
 	bool  m_prevW = false, m_prevA = false, m_prevS = false, m_prevD = false; // キーのエッジ検出
 	bool  m_advPrev   = false;  // 決定キーのエッジ検出
@@ -65,6 +66,19 @@ private:
 	// グリッド構成（行×列）
 	static constexpr int kCols = 3;
 	static constexpr int kRows = 2;
+
+	// ── ステージ選択のワンクッション（決定でカメラが寄って詳細表示）──
+	bool  m_selecting   = false;   // 詳細画面表示中（カメラが選択ノードへ寄る）
+	float m_selZoom     = 0.0f;    // 0=俯瞰, 1=寄り
+	bool  m_selBackPrev = false;   // 戻るキーのエッジ検出
+	int   m_selChoice   = 0;       // 詳細画面の選択肢（0=GO, 1=BACK）。A/Dで切替
+	UiButton m_btnGo;             // GO ボタン
+	UiButton m_btnBack;           // BACK ボタン
+	std::vector<std::shared_ptr<KdTexture>> m_stageThumbs;   // stageId別のサムネ画像（無ければnullptr）
+	void  DrawSelectPanel();       // 選択ステージの詳細（名前/説明/クリア/最高コイン/ベストタイム）
+	// 角丸フレーム（金縁＋背景）を1回で描く共通ヘルパー
+	void  DrawRoundedFrame(float cx, float cy, float halfW, float halfH, float radius,
+		const Math::Color& body, const Math::Color& edge);
 
 	// ── クリア後リザルト（カメラをプレイヤーへ寄せて横にパネル）──
 	bool  m_resultActive  = false;   // リザルト表示中（入力は決定でしか抜けない）
@@ -108,6 +122,8 @@ private:
 
 	// ヘルパー
 	Math::Vector3 MarkerPos() const;     // 補間込みのマーカー位置
+	float         MarkerDrawYaw() const; // 描画用の向き（ズーム中はカメラを向く）
+	float         MarkerDrawScale() const; // 描画用スケール（入場演出で縮む）
 	void          StartMove(int target); // 指定ノードへホップ開始
 	void          DrawResultPanel();     // リザルトパネル描画
 };

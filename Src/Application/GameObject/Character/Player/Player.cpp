@@ -563,6 +563,12 @@ void Player::UpdateClearPose(float dt)
     if (!ChangeAnimIfExist("GetGravityCore", false)) { ChangeAnim("Idle", true); }
     m_animBlender.Update(m_modelWork, 1.0f);   // アニメ進行＋ノード行列再計算
 
+    // クリアポーズ中は持ち物を非表示（剣は背中へ収める。傘は開閉どちらも隠す）
+    m_modelWork.SetNodeVisible("HandledSword",  false);
+    m_modelWork.SetNodeVisible("BackSword",     true);
+    m_modelWork.SetNodeVisible("OpenedParasol", false);
+    m_modelWork.SetNodeVisible("ClosedParasol", false);
+
     // drawWorld：その場で、カメラ側(-Z)を向く固定姿勢（up=+Y, fwd=-Z, right=-X）。
     const float scale = PlayerConst::ModelScale;
     const Math::Matrix scaleMat = Math::Matrix::CreateScale(scale);

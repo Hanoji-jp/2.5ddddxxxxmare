@@ -93,6 +93,17 @@ namespace GravityCoreConst
 	// 取得時に開くゴール用 WarpHole の出口を、入口(コア位置)から up 方向にどれだけ離すか
 	constexpr float GoalWarpExitUp  = 30.0f;
 
+	// ── 地面に落とす影（ブロブシャドウ）──────────────────
+	// コアの真下（重力方向）へレイを撃ち、当たった地面に柔らかい暗い円を描く
+	constexpr float ShadowRayRange   = 40.0f;  // 真下レイの探索距離
+	constexpr float ShadowMaxHeight  = 14.0f;  // この高さ以上で影はほぼ消える
+	constexpr float ShadowRadiusMul  = 1.25f;  // 影の半径 = radius * これ（接地時）
+	constexpr float ShadowShrink     = 0.45f;  // 高いほど影が縮む量（0=縮まない, 1=最大）
+	constexpr float ShadowAlpha      = 0.45f;  // 接地時の中心の濃さ
+	constexpr int   ShadowSegs       = 24;     // 円の分割数（大きいほど滑らか）
+	constexpr float ShadowLift       = 0.05f;  // 面から少し浮かせて Z-fight 回避
+	constexpr float ShadowMoveEps    = 0.01f;  // この距離以上動いたら影を再計算
+
 	// ── カリング ────────────────────────────────────────
 	constexpr float CullingRadiusMul = 2.0f;  // radius * この係数 = m_cullingRadius
 

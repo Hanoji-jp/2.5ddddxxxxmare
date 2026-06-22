@@ -3,6 +3,7 @@
 #include "../../../Framework/Utility/KdFPSController.h"
 #include "../../../Framework/Shader/KdShaderManager.h"
 #include "../../Const/GravityCoreConst.h"
+#include "../../Manager/PlanetGravityManager.h"
 
 static constexpr float kTwoPi = 6.28318530718f;
 static constexpr float kPi    = 3.14159265359f;
@@ -77,6 +78,7 @@ void GravityCore::Init(const Math::Vector3& pos, float radius, CoreType type)
 		m_glowPoly.SetMaterial(m_glowTex);
 		m_glowPoly.SetScale(1.0f);
 	}
+
 
 	// Glow コアは取得判定コライダー（TypeEvent）を持つ → 触れるとゴールが開く
 	if (m_type == CoreType::Glow)
@@ -260,6 +262,113 @@ void GravityCore::Update()
 
 	// 星きらめき更新＋Effekseer位置追従
 	m_effect.Update(m_pos, dt);
+
+	// 影：位置が変わった時（初回含む）だけ地面を探し直す
+	if (!m_shadowComputed ||
+		(m_pos - m_shadowFromPos).LengthSquared() > GravityCoreConst::ShadowMoveEps * GravityCoreConst::ShadowMoveEps)
+	{
+		UpdateShadow();
+		m_shadowComputed = true;
+		m_shadowFromPos  = m_pos;
+	}
+}
+
+//==========================================================
+// UpdateShadow ─ コアの真下（重力方向）へレイを撃って地面を探す
+//==========================================================
+void GravityCore::UpdateShadow()
+{
+	m_shadowValid = false;
+
+	auto& pgm = PlanetGravityManager::Instance();
+
+	// 重力方向＝下向き（惑星の影響が無ければワールド下）
+	const GravityInfluenceResult inf = pgm.ComputeGravityInfluence(m_pos);
+	Math::Vector3 down = inf.hasInfluence ? inf.totalGravityDir : Math::Vector3(0.0f, -1.0f, 0.0f);
+	if (down.LengthSquared() < 1e-8f) { down = Math::Vector3(0.0f, -1.0f, 0.0f); }
+	down.Normalize();
+
+	const KdCollider::RayInfo ray(KdCollider::TypeGround, m_pos, down, GravityCoreConst::ShadowRayRange);
+
+	float bestDist = FLT_MAX;
+	for (const auto& pl : pgm.GetPlanets())
+	{
+		if (!pl.pCollider) { continue; }
+		std::list<KdCollider::CollisionResult> results;
+		if (!pl.pCollider->Intersects(ray, pl.mWorld, &results)) { continue; }
+		for (const auto& r : results)
+		{
+			const float dist = (r.m_hitPos - m_pos).Length();
+			if (dist >= bestDist) { continue; }
+			bestDist = dist;
+			m_shadowPos = r.m_hitPos;
+			Math::Vector3 n = r.m_hitNDir;
+			if (n.LengthSquared() < 1e-6f) { n = -down; }   // 面法線が無ければ重力の逆向き
+			n.Normalize();
+			m_shadowNormal = n;
+			m_shadowHeight = dist;
+			m_shadowValid  = true;
+		}
+	}
+}
+
+//==========================================================
+// DrawShadow ─ 地面に柔らかい暗い円（中心濃く外周透明）を描く
+//==========================================================
+void GravityCore::DrawShadow()
+{
+	if (!m_shadowValid) { return; }
+
+	const float ht   = std::clamp(m_shadowHeight / GravityCoreConst::ShadowMaxHeight, 0.0f, 1.0f);
+	const float fade = 1.0f - ht;                 // 高いほど薄く
+	if (fade <= 0.0f) { return; }
+
+	const float rad   = m_radius * GravityCoreConst::ShadowRadiusMul
+					  * (1.0f - GravityCoreConst::ShadowShrink * ht);   // 高いほど小さく
+	const float alpha = GravityCoreConst::ShadowAlpha * fade;
+
+	// 法線から円の基底（接線・従法線）を作る
+	Math::Vector3 n = m_shadowNormal;
+	Math::Vector3 t = (std::fabs(n.y) < 0.99f)
+		? Math::Vector3(0.0f, 1.0f, 0.0f).Cross(n)
+		: Math::Vector3(1.0f, 0.0f, 0.0f).Cross(n);
+	t.Normalize();
+	Math::Vector3 b = n.Cross(t);
+	b.Normalize();
+
+	const Math::Vector3 center = m_shadowPos + n * GravityCoreConst::ShadowLift;
+
+	const unsigned int cCol = GcColorToUint({ 0.0f, 0.0f, 0.0f, alpha }); // 中心：濃い
+	const unsigned int eCol = GcColorToUint({ 0.0f, 0.0f, 0.0f, 0.0f });  // 外周：透明
+
+	const int segs = GravityCoreConst::ShadowSegs;
+	m_triVerts.clear();
+	m_triVerts.reserve(static_cast<size_t>(segs) * 3);
+	for (int i = 0; i < segs; ++i)
+	{
+		const float a0 = kTwoPi * static_cast<float>(i)     / static_cast<float>(segs);
+		const float a1 = kTwoPi * static_cast<float>(i + 1) / static_cast<float>(segs);
+		const Math::Vector3 p0 = center + (t * std::cosf(a0) + b * std::sinf(a0)) * rad;
+		const Math::Vector3 p1 = center + (t * std::cosf(a1) + b * std::sinf(a1)) * rad;
+
+		KdPolygon::Vertex vc{}, v0{}, v1{};
+		vc.pos = center; vc.color = cCol;
+		v0.pos = p0;     v0.color = eCol;
+		v1.pos = p1;     v1.color = eCol;
+		m_triVerts.push_back(vc);
+		m_triVerts.push_back(v0);
+		m_triVerts.push_back(v1);
+	}
+
+	auto& sm = KdShaderManager::Instance();
+	sm.ChangeBlendState(KdBlendState::Alpha);
+	sm.m_StandardShader.SetDissolve(0.0f);
+	sm.m_StandardShader.DrawVertices(m_triVerts, Math::Matrix::Identity,
+		Math::Color(1, 1, 1, 1),
+		KdDepthStencilState::ZWriteDisable,
+		D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
+		KdRasterizerState::CullNone);
+	sm.UndoBlendState();
 }
 
 //==========================================================
@@ -267,6 +376,9 @@ void GravityCore::Update()
 //==========================================================
 void GravityCore::DrawEffect()
 {
+	// 地面に落とす影（コア本体より先に描いて下に敷く）
+	DrawShadow();
+
 	// 星きらめきエフェクト（タイプ問わず常時）
 	m_effect.DrawEffect(m_pos);
 
@@ -490,6 +602,7 @@ void GravityCore::DrawGlowEffect()
 			Math::Color(1, 1, 1, 1),
 			KdDepthStencilState::ZWriteDisable);
 	}
+
 }
 
 //==========================================================

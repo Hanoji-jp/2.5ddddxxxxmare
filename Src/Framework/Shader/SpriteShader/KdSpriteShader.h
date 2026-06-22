@@ -128,6 +128,25 @@ public:
 	// ・fill			… 塗りつぶし
 	void DrawBox(int x, int y, int extentX, int extentY, const Math::Color* color = &kWhiteColor, bool fill = true);
 
+	// 角丸の塗りつぶしボックス（中心(x,y)・ハーフサイズextentX/Y）。
+	// ・radius		… 角の丸み半径(px)。min(extentX,extentY)でクランプ
+	// ・cornerSegs	… 各角の分割数（大きいほど滑らか）
+	void DrawRoundedBox(int x, int y, int extentX, int extentY, float radius,
+		const Math::Color* color = &kWhiteColor, int cornerSegs = 6);
+
+	// 角丸テクスチャ（中心(x,y)・ハーフサイズextentX/Y）。テクスチャを角丸枠内に貼る。
+	// UVは枠全体に 0〜1 でフィットさせる（中央配置）。
+	// ・radius		… 角の丸み半径(px)。min(extentX,extentY)でクランプ
+	// ・cornerSegs	… 各角の分割数（大きいほど滑らか）
+	void DrawRoundedTex(const KdTexture* tex, int x, int y, int extentX, int extentY, float radius,
+		const Math::Color* color = &kWhiteColor, int cornerSegs = 6);
+	void DrawRoundedTex(const std::weak_ptr<KdTexture> tex, int x, int y, int extentX, int extentY, float radius,
+		const Math::Color* color = &kWhiteColor, int cornerSegs = 6)
+	{
+		if (tex.expired()) { return; }
+		DrawRoundedTex(tex.lock().get(), x, y, extentX, extentY, radius, color, cornerSegs);
+	}
+
 	// 切り抜き範囲を設定する
 	// ・rect			… 範囲
 	void SetScissorRect(const Math::Rectangle& rect);

@@ -91,11 +91,16 @@ namespace StageSelectConst
 	constexpr float IntroFadeSpeed = 1.2f;   // 開始の黒フェードイン
 	constexpr float FadeOutSpeed   = 1.8f;   // 決定時の白フェード（GameSceneへ繋ぐ）
 
+	// GO 入場演出：ぴょんとジャンプ→縮みながら箱の中へ沈んで入る
+	constexpr float EnterHopTime   = 0.45f;  // 入場アニメの時間(秒)
+	constexpr float EnterHopHeight = 1.8f;   // ジャンプの高さ
+	constexpr float EnterSink      = 1.3f;   // 箱の中へ沈む量(px相当の高さ)
+
 	constexpr int          FontNo      = 0;
 	constexpr int          FontHeight  = 32;
 	constexpr const char*  FontName    = FontConst::GameFontName;
-	constexpr const char*  TitleText   = "STAGE SELECT";
-	constexpr const char*  HintText    = "WASD : MOVE     ENTER : GO";
+	constexpr const char*  TitleText   = "ステージセレクト";
+	constexpr const char*  HintText    = "WASD：いどう　　ENTER：けってい";
 	constexpr float        TitleYRatio = 0.40f;   // 上寄り
 	constexpr float        HintYRatio  = 0.42f;   // 下寄り
 
@@ -105,14 +110,58 @@ namespace StageSelectConst
 	//----------------------------------------------------------
 	constexpr const char* StageNames[] =
 	{
-		"STAGE 1 - GREEN PLANET",
-		"STAGE 2 - (WIP)",
-		"STAGE 3 - (WIP)",
-		"STAGE 4 - (WIP)",
-		"STAGE 5 - (WIP)",
-		"STAGE 6 - (WIP)",
+		"ステージ１　みどりのほし",
+		"ステージ２（準備中）",
+		"ステージ３（準備中）",
+		"ステージ４（準備中）",
+		"ステージ５（準備中）",
+		"ステージ６（準備中）",
 	};
 	constexpr int         StageNameCount    = static_cast<int>(sizeof(StageNames) / sizeof(StageNames[0]));
-	constexpr const char* StageNameFallback = "STAGE ?";
+	constexpr const char* StageNameFallback = "ステージ ？";
 	constexpr float       StageNameYRatio   = 0.26f;   // 見出しの少し下に表示
+
+	// ステージ説明（仮。stageId で参照、範囲外は空）
+	constexpr const char* StageDescs[] =
+	{
+		"Reclaim the gravity core!",
+		"(coming soon)",
+		"(coming soon)",
+		"(coming soon)",
+		"(coming soon)",
+		"(coming soon)",
+	};
+	constexpr int StageDescCount = static_cast<int>(sizeof(StageDescs) / sizeof(StageDescs[0]));
+
+	// 選択詳細（画面下部の情報バー）の文言・レイアウト
+	constexpr const char* SelClearedMark   = "クリア済み";
+	constexpr const char* SelNotClearedMark = "未クリア";
+	constexpr const char* SelBestCoinLabel = "さいこうコイン";
+	constexpr const char* SelBestTimeLabel = "ベストタイム";
+	constexpr const char* SelNoTime        = "--:--.--";
+	constexpr const char* SelHint          = "ENTER：すすむ　　TAB：もどる";
+	constexpr const char* SelGoHint        = "ENTER：すすむ";
+	constexpr const char* SelBackHint      = "TAB：もどる";
+	constexpr float       SelHintGap       = 28.0f;   // GO枠とBACK枠の間隔(px)
+
+	// 下部情報バー
+	constexpr float SelBarH       = 140.0f;  // バー高さ(px)
+	constexpr float SelBarWFrac   = 0.94f;   // バー幅 = 画面幅 * これ
+	constexpr float SelBarMargin  = 36.0f;   // 画面下端からの余白(px)
+	constexpr float SelBarPad     = 40.0f;   // バー内の左右余白(px)
+	constexpr float SelBarA       = 0.85f;   // バー背景アルファ
+	constexpr float SelHintAboveBar = 18.0f; // バーの上に出すヒントの隙間(px)
+	// GO/BACK ヒントの個別枠
+	constexpr float SelHintBoxPadX = 48.0f;  // テキスト左右の余白(px)
+	constexpr float SelHintBoxH    = 68.0f;  // 枠の高さ(px)
+	constexpr float SelHintBoxA    = 0.85f;  // 枠背景アルファ
+	constexpr float SelHintBoxRadius = 20.0f; // 角丸半径(px)
+
+	// ステージのサムネ画像（スコアバーの角丸ボックス内に背景として敷く）
+	// 画像は "Asset/Texture/StageThumb/Stage01.png"（stageId+1 の2桁）規約で読む。
+	// 画像が無いステージは従来どおりの単色背景のまま。
+	constexpr const char* ThumbPathFmt   = "Asset/Texture/StageThumb/Stage%02d.png";
+	constexpr int   ThumbCornerSegs      = 8;     // 角の分割数（滑らかさ）
+	constexpr float SelBarImgAlpha       = 1.0f;  // 背景画像の不透明度（1=そのままの明るさ）
+	constexpr float SelBarScrimAlpha     = 0.0f; // 画像の上に重ねる暗幕（文字可読性用。小さいほど明るい）
 }
