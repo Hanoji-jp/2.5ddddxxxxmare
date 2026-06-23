@@ -61,6 +61,7 @@ namespace PlayerConst
     // ダッシュ倍率（Shift 長押し）
     constexpr float DashSpeedMul     = 1.85f;  // 移動速度の倍率
     constexpr float DashAccelMul     = 1.6f;   // 加速度の倍率
+    constexpr float DashJumpSpeedMul = 0.75f;  // ダッシュジャンプ中の空中速度倍率（地上の3/4＝飛びすぎ防止）
     constexpr float DashAnimSpeedMul = 1.7f;   // アニメ再生速度の倍率
 
     // 傘スロー落下の重力スケール（1.0=通常、小さいほど遅い）

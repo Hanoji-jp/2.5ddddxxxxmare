@@ -759,6 +759,8 @@ void PlanetGravityManager::DrawLit() const
 			// Left/Right の Y 拡張
 			const float lrHalfY      = p.BoxHalfExtents.y + (extBottom + extTop) * 0.5f;
 			const float lrOffY       = (extTop - extBottom) * 0.5f;  // 上が大きければ上にずれる
+			// Z 拡張（Z面にキャップは無いので両側 overhang ぶん均等にはみ出す＝移動床と同じ感じ）
+			const float capHalfZ     = p.BoxHalfExtents.z + overhang;
 
 			// 面ごとの情報：外向き法線・モード・キャップスケール・配置オフセット
 			struct CapFaceInfo
@@ -774,22 +776,22 @@ void PlanetGravityManager::DrawLit() const
 				// 上面
 				{ p.BoxFaceGravityTop,
 				  { 0.0f,  1.0f, 0.0f },
-				  { topBotHalfX, capHalfY, p.BoxHalfExtents.z },
+				  { topBotHalfX, capHalfY, capHalfZ },
 				  { topBotOffX, p.BoxHalfExtents.y + capHalfY, 0.0f } },
 				// 下面
 				{ p.BoxFaceGravityBottom,
 				  { 0.0f, -1.0f, 0.0f },
-				  { topBotHalfX, capHalfY, p.BoxHalfExtents.z },
+				  { topBotHalfX, capHalfY, capHalfZ },
 				  { topBotOffX, -(p.BoxHalfExtents.y + capHalfY), 0.0f } },
 				// 右面
 				{ p.BoxFaceGravityRight,
 				  { 1.0f, 0.0f, 0.0f },
-				  { capHalfY, lrHalfY, p.BoxHalfExtents.z },
+				  { capHalfY, lrHalfY, capHalfZ },
 				  { p.BoxHalfExtents.x + capHalfY, lrOffY, 0.0f } },
 				// 左面
 				{ p.BoxFaceGravityLeft,
 				  {-1.0f, 0.0f, 0.0f },
-				  { capHalfY, lrHalfY, p.BoxHalfExtents.z },
+				  { capHalfY, lrHalfY, capHalfZ },
 				  { -(p.BoxHalfExtents.x + capHalfY), lrOffY, 0.0f } },
 			};
 

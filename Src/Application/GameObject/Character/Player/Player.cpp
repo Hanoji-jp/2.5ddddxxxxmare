@@ -680,12 +680,20 @@ void Player::Move()
     m_isDashing = m_isGround && (GetAsyncKeyState(VK_SHIFT) & 0x8000);
     m_animSpeed = m_isDashing ? PlayerConst::DashAnimSpeedMul : 1.0f;
 
-    const float speed = m_isDashing
+    // 着地したらダッシュジャンプ状態を解除
+    if (m_isGround) { m_dashJumping = false; }
+
+    // 空中でも「ダッシュジャンプ中」ならダッシュ速度を維持＝飛距離が伸びる
+    const bool airDash = (!m_isGround && m_dashJumping);
+    const bool useDash = m_isDashing || airDash;
+    float speed = useDash
         ? PlayerConst::MoveSpeed    * PlayerConst::DashSpeedMul
         : PlayerConst::MoveSpeed;
-    const float accel = m_isDashing
+    const float accel = useDash
         ? PlayerConst::Acceleration * PlayerConst::DashAccelMul
         : PlayerConst::Acceleration;
+    // 空中ダッシュは飛びすぎないよう地上の3/4に抑える（バランス調整）
+    if (airDash) { speed *= PlayerConst::DashJumpSpeedMul; }
 
     // 入力取得（Z軸移動なし）
     Math::Vector3 input = { 0.0f, 0.0f, 0.0f };
@@ -775,6 +783,7 @@ void Player::Jump()
         m_velocity += jumpVec;
         m_isGround   = false;
         m_state      = State::Jump;
+        m_dashJumping = m_isDashing;   // ダッシュジャンプなら空中もダッシュ速度を維持（飛距離↑）
     }
 }
 
@@ -859,6 +868,7 @@ bool Player::ChangeAnimIfExist(const std::string& _animName, bool _isLoop)
 
 void Player::TakeDamage(int _damage)
 {
+    if (!m_damageEnabled)      { return; }   // 演出中（見せカメラ等）は無効
     if (IsDead())              { return; }   // 死体は被ダメージしない
     if (m_invincibleTimer > 0) { return; }
     Character::TakeDamage(_damage);
@@ -993,6 +1003,7 @@ void Player::LookAtHead(const Math::Vector3& target)
 
 void Player::TakeDamageFrom(int _damage, const Math::Vector3& sourcePos)
 {
+    if (!m_damageEnabled)      { return; }   // 演出中（見せカメラ等）は無効
     if (IsDead())              { return; }   // 死体はノックバック・被ダメージしない
     if (m_invincibleTimer > 0) { return; }
     Character::TakeDamage(_damage);

@@ -53,6 +53,9 @@ void WindBox::Init(const WindBoxData& data)
 	m_pCollider->RegisterCollisionShape(WindBoxConst::ColNodeName, m_boxModel,
 		KdCollider::TypeGround | KdCollider::TypeBump);
 
+	// 描画と当たり判定で共用するワールド行列を先に確定（押し出しは球vsOBBで別途行う）
+	m_worldMat = BuildWorldMatrix();
+
 	// プロペラノードの初期ローカル行列を丸ごと保存
 	const KdModelWork::Node* propNode = m_boxModel->FindWorkNode(WindBoxConst::PropellerNodeName);
 	if (propNode)
@@ -142,11 +145,18 @@ void WindBox::DrawLit()
 		propNode->m_localTransform = spinZ * m_propellerInitLocal;
 	}
 
-	// ── ワールド行列を構築 ──────────────────────────────────
-	// モデルの +Y → windDir になるよう回転させる
-	// 非等方スケール：エディタ size を自然サイズ（XZ=1, Y=0.5）に合わせる
-	//   X/Z 方向スケール = halfSize.x / ModelNaturalXZ
-	//   Y   方向スケール = halfSize.y / ModelNaturalY
+	// ── ワールド行列を構築（描画・当たり判定で共用）──
+	m_worldMat = BuildWorldMatrix();
+
+	KdShaderManager::Instance().m_StandardShader.DrawModel(*m_boxModel, m_worldMat);
+}
+
+//----------------------------------------------------------
+// 描画・当たり判定で共用するワールド行列を構築。
+// モデルの +Y → windDir になるよう回転させ、size に合わせて非等方スケール。
+//----------------------------------------------------------
+Math::Matrix WindBox::BuildWorldMatrix() const
+{
 	const float scaleXZ = m_halfSize.x / WindBoxConst::ModelNaturalXZ;
 	const float scaleY  = m_halfSize.y / WindBoxConst::ModelNaturalY;
 	const Math::Matrix scaleMat = Math::Matrix::CreateScale(scaleXZ, scaleY, scaleXZ);
@@ -157,7 +167,6 @@ void WindBox::DrawLit()
 	Math::Matrix  rotMat;
 	if (rotAxis.LengthSquared() < 1e-6f)
 	{
-		// 同方向 or 真逆
 		rotMat = (localUp.Dot(m_windDir) >= 0.0f)
 			? Math::Matrix::Identity
 			: Math::Matrix::CreateRotationZ(DirectX::XM_PI);
@@ -169,10 +178,7 @@ void WindBox::DrawLit()
 		rotMat = Math::Matrix::CreateFromAxisAngle(rotAxis, angle);
 	}
 
-	// Scale → Rotate → Translate
-	m_worldMat = scaleMat * rotMat * Math::Matrix::CreateTranslation(m_center);
-
-	KdShaderManager::Instance().m_StandardShader.DrawModel(*m_boxModel, m_worldMat);
+	return scaleMat * rotMat * Math::Matrix::CreateTranslation(m_center);
 }
 
 //----------------------------------------------------------

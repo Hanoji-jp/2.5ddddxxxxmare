@@ -1,4 +1,4 @@
-#include "../../../Pch.h"
+﻿#include "../../../Pch.h"
 #include "HpUI.h"
 #include "../Character/Character.h"
 
@@ -32,7 +32,7 @@ void HpUI::DrawGui()
 	ImGui::Begin("##HpUI", nullptr,
 		ImGuiWindowFlags_NoTitleBar |
 		ImGuiWindowFlags_NoResize   |
-		ImGuiWindowFlags_NoMove     |
+		ImGuiWindowFlags_NoMove    |
 		ImGuiWindowFlags_NoInputs   |
 		ImGuiWindowFlags_NoScrollbar);
 

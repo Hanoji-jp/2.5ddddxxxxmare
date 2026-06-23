@@ -14,9 +14,12 @@
 class StarBurstEffect : public KdGameObject
 {
 public:
+	// countMul : 粒数の倍率（1.0=既定）。scaleMul : 大きさ・飛散速度の倍率。
 	void Spawn(const Math::Vector3&              pos,
 			   const Math::Vector3&              upDir,
-			   const std::shared_ptr<KdModelData>& modelData);
+			   const std::shared_ptr<KdModelData>& modelData,
+			   float countMul = 1.0f,
+			   float scaleMul = 1.0f);
 
 	void Update()     override;
 	void DrawEffect() override;

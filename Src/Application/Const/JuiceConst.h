@@ -11,7 +11,7 @@ namespace JuiceConst
 	//----------------------------------------------------------
 	constexpr float ShakeDecay       = 8.0f;   // 1秒で強さが 1/e^8 に減衰
 	constexpr float ShakeLandStr     = 0.18f;  // 着地時の強さ
-	constexpr float ShakeHitStr      = 0.22f;  // 被ダメ時の強さ
+	constexpr float ShakeHitStr      = 0.5f;   // 被ダメ時の強さ
 	constexpr float ShakeDeathStr    = 0.35f;  // 敵撃破時の強さ
 
 	//----------------------------------------------------------
@@ -104,5 +104,25 @@ namespace JuiceConst
 	constexpr float StarBurstLifetimeMin = 0.3f;   // 寿命最小（秒）
 	constexpr float StarBurstLifetimeMax = 0.7f;   // 寿命最大（秒）
 	constexpr float StarBurstEmissive    = 4.0f;   // 発光強度（青白く光る）
+
+	//----------------------------------------------------------
+	// DamageBurst パーティクル（被ダメ時：体全体からboxが弾ける）
+	//----------------------------------------------------------
+	constexpr int   DmgBurstCount       = 18;     // スポーン粒数
+	constexpr float DmgBurstBodyRadius  = 0.45f;  // スポーン位置を体の半径内にばらつかせる
+	constexpr float DmgBurstScaleMin    = 0.07f;  // 初期スケール最小
+	constexpr float DmgBurstScaleMax    = 0.18f;  // 初期スケール最大
+	constexpr float DmgBurstShrinkMin   = 1.5f;   // 縮み速度最小
+	constexpr float DmgBurstShrinkMax   = 3.5f;   // 縮み速度最大
+	constexpr float DmgBurstSpeedMin    = 0.07f;  // 飛散速度最小
+	constexpr float DmgBurstSpeedMax    = 0.22f;  // 飛散速度最大
+	constexpr float DmgBurstUpBias      = 0.04f;  // 少し上向きに飛ばすバイアス
+	constexpr float DmgBurstGravity     = 0.006f; // 重力で落ちる（上方向の逆へ加速）
+	constexpr float DmgBurstSpin        = 12.0f;  // 粒の自転速度
+	constexpr float DmgBurstLifetimeMin = 0.35f;  // 寿命最小（秒）
+	constexpr float DmgBurstLifetimeMax = 0.70f;  // 寿命最大（秒）
+	// box本体の色（白モデルに乗算＝濃い赤の箱になる）。0〜1。
+	constexpr float DmgBurstColR = 0.80f, DmgBurstColG = 0.04f, DmgBurstColB = 0.05f;
+	constexpr float DmgBurstEmissive = 0.6f;   // 発光の強さ（控えめ＝白飛びしない）
 }
 

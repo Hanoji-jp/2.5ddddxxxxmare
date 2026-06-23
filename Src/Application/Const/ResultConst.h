@@ -59,12 +59,14 @@ namespace ResultConst
     constexpr const char* ClearWord  = "クリア！";
     constexpr const char* TimeLabel  = "タイム";
     constexpr const char* CoinLabel  = "コイン";
+    constexpr const char* RockLabel  = "いわ";
+    constexpr const char* CoreLabel  = "じゅうりょくコア";
     constexpr const char* DeathLabel = "ミス";
     constexpr const char* NextHint   = "ENTER：つぎへ";
     constexpr const char* CloseHint  = "ENTER：とじる";
 
-    // --- Pages (1:message 2:time 3:coins 4:rocks) ---
-    constexpr int Pages = 4;
+    // --- Pages (1:message 2:time 3:coins 4:rocks 5:gravity core) ---
+    constexpr int Pages = 5;
 
     // --- Icons ---
     constexpr const char* CoinIconPath = "Asset/Effect/Star_01.png";

@@ -81,6 +81,9 @@ public:
     void SetControlEnabled(bool e) { m_controlEnabled = e; }
     bool IsControlEnabled() const  { return m_controlEnabled; }
 
+    // 演出中などダメージを無効化する（見せカメラ再生中の被弾防止）
+    void SetDamageEnabled(bool e) { m_damageEnabled = e; }
+
     // 演出用：見た目のタンブル回転（描画のみ。コリジョンには影響しない）
     // 吹っ飛ばされてくるくる回る表現などに使う（ワールドZ軸まわりのロール）。
     void SetCutsceneSpin(float radians) { m_cutsceneSpin = radians; }
@@ -178,9 +181,11 @@ private:
 
     // ダッシュ中フラグ
     bool m_isDashing = false;
+    bool m_dashJumping = false;   // ダッシュ中にジャンプした＝空中でもダッシュ速度を維持（飛距離が伸びる）
 
     // 操作の有効/無効（演出用カットシーン中は false）
     bool m_controlEnabled = true;
+    bool m_damageEnabled  = true;   // false の間は一切ダメージを受けない（演出用）
 
     // 演出用タンブル回転角（描画のみ。ワールドZ軸ロール）
     float m_cutsceneSpin = 0.0f;

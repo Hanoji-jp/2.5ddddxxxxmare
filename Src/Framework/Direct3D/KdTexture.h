@@ -59,7 +59,8 @@ public:
 	// ・renderTarget	… レンダーターゲットビューを生成する(レンダーターゲットにする)
 	// ・depthStencil	… 深度ステンシルビューを生成する(Zバッファにする)
 	// ・generateMipmap	… ミップマップ生成する？
-	bool Load(std::string_view filename, bool renderTarget = false, bool depthStencil = false, bool generateMipmap = true);
+	// ・forceLinear		… true で sRGB 変換を無効化（生値のまま＝エクスプローラーと同じ明るさで表示）
+	bool Load(std::string_view filename, bool renderTarget = false, bool depthStencil = false, bool generateMipmap = true, bool forceLinear = false);
 
 	//====================================================
 	//

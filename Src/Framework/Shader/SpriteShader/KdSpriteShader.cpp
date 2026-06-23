@@ -304,24 +304,23 @@ void KdSpriteShader::DrawCircle(int x, int y, int radius, const Math::Color* col
 	// 頂点
 	if (fill)
 	{
-		int faceNum = radius + 1;
-		if (faceNum > 300)faceNum = 300;
-		std::vector<Vertex> vertex(faceNum * 3);		// 半径により頂点数を調整
+		int segments = radius + 1;
+		if (segments > 300)segments = 300;
+		if (segments < 3)  segments = 3;
+		const float step = 360.0f / (float)segments;	// segments で割ってちょうど一周で閉じる
+		std::vector<Vertex> vertex(segments * 3);		// 半径により頂点数を調整
 
-		// 描画
-		for (int i = 0; i < faceNum; i++)
+		// 描画（中心＋外周2点のトライアングルファンを TRIANGLELIST で構築）
+		for (int i = 0; i < segments; i++)
 		{
-			int idx = i * 3;
-			vertex[idx].Pos.x = (float)x;
-			vertex[idx].Pos.y = (float)y;
+			const int idx = i * 3;
+			const float a0 = DirectX::XMConvertToRadians(i       * step);
+			const float a1 = DirectX::XMConvertToRadians((i + 1) * step);
 
-			vertex[idx+1].Pos.x = x + cos(DirectX::XMConvertToRadians(i * (360.0f / (faceNum - 1)))) * (float)radius;
-			vertex[idx+1].Pos.y = y + sin(DirectX::XMConvertToRadians(i * (360.0f / (faceNum - 1)))) * (float)radius;
-			vertex[idx+1].Pos.z = 0;
-
-			vertex[idx+2].Pos.x = x + cos(DirectX::XMConvertToRadians((i+1) * (360.0f / (faceNum - 1)))) * (float)radius;
-			vertex[idx+2].Pos.y = y + sin(DirectX::XMConvertToRadians((i+1) * (360.0f / (faceNum - 1)))) * (float)radius;
-			vertex[idx+2].Pos.z = 0;
+			// 中心（z まで明示初期化。未設定だと深度破綻でビーム状に伸びることがある）
+			vertex[idx].Pos     = { (float)x, (float)y, 0.0f };
+			vertex[idx + 1].Pos = { x + cosf(a0) * (float)radius, y + sinf(a0) * (float)radius, 0.0f };
+			vertex[idx + 2].Pos = { x + cosf(a1) * (float)radius, y + sinf(a1) * (float)radius, 0.0f };
 		}
 
 		KdDirect3D::Instance().DrawVertices(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST, (int)vertex.size(), &vertex[0], sizeof(Vertex));
@@ -548,6 +547,86 @@ void KdSpriteShader::DrawRoundedTex(const KdTexture* tex, int x, int y, int exte
 	ID3D11ShaderResourceView* srv = nullptr;
 	KdDirect3D::Instance().WorkDevContext()->PSSetShaderResources(0, 1, &srv);
 
+	if (!bBgn)End();
+}
+
+void KdSpriteShader::DrawRoundedBubble(int x, int y, int extentX, int extentY, float radius,
+	int tailW, int tailH, const Math::Color* color, int cornerSegs)
+{
+	// 角丸ボックス本体
+	DrawRoundedBox(x, y, extentX, extentY, radius, color, cornerSegs);
+
+	// 下向きの尻尾（三角）
+	bool bBgn = m_isBegin;
+	if (!bBgn)Begin();
+
+	KdDirect3D::Instance().WorkDevContext()->PSSetShaderResources(0, 1, KdDirect3D::Instance().GetWhiteTex()->WorkSRViewAddress());
+	if (color) { m_cb0.Work().Color = *color; }
+	m_cb0.Write();
+
+	const float fx = static_cast<float>(x);
+	const float fy = static_cast<float>(y);
+	const float baseY = fy - static_cast<float>(extentY) + 1.0f;        // ボックス下端（少し内側）
+	const float apexY = fy - static_cast<float>(extentY) - static_cast<float>(tailH); // 下へ伸びる先端
+
+	// center-origin・+Yが上。左根元 → 先端 → 右根元
+	Vertex v[3] =
+	{
+		{ { fx - static_cast<float>(tailW), baseY, 0.0f }, { 0, 0 } },
+		{ { fx,                              apexY, 0.0f }, { 0, 0 } },
+		{ { fx + static_cast<float>(tailW), baseY, 0.0f }, { 0, 0 } },
+	};
+	KdDirect3D::Instance().DrawVertices(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST, 3, v, sizeof(Vertex));
+
+	if (!bBgn)End();
+}
+
+void KdSpriteShader::DrawRoundedBubbleTo(int x, int y, int extentX, int extentY, float radius,
+	float tailTargetX, float tailTargetY, int tailHalfW, float maxTailLen,
+	const Math::Color* color, int cornerSegs)
+{
+	DrawRoundedBox(x, y, extentX, extentY, radius, color, cornerSegs);
+
+	const float cx = static_cast<float>(x);
+	const float cy = static_cast<float>(y);
+	float dx = tailTargetX - cx;
+	float dy = tailTargetY - cy;
+	float len = std::sqrtf(dx * dx + dy * dy);
+	if (len < 1e-3f) { return; }   // 同じ位置なら尻尾なし
+	dx /= len; dy /= len;          // 方向（正規化）
+
+	// ボックス縁上の尻尾の根元中心（矩形境界へ）
+	const float ex = static_cast<float>(extentX);
+	const float ey = static_cast<float>(extentY);
+	const float sX = (std::fabs(dx) > 1e-4f) ? ex / std::fabs(dx) : 1e9f;
+	const float sY = (std::fabs(dy) > 1e-4f) ? ey / std::fabs(dy) : 1e9f;
+	const float s  = (sX < sY) ? sX : sY;
+	const float baseX = cx + dx * s;
+	const float baseY = cy + dy * s;
+
+	// 尻尾の長さ（対象まで。遠ければ maxTailLen でクランプ）
+	float tailLen = len - s;
+	if (tailLen < 6.0f) { tailLen = 6.0f; }
+	if (tailLen > maxTailLen) { tailLen = maxTailLen; }
+	const float apexX = baseX + dx * tailLen;
+	const float apexY = baseY + dy * tailLen;
+
+	// 根元の左右（方向に垂直）
+	const float px = -dy, py = dx;
+	const float hw = static_cast<float>(tailHalfW);
+
+	bool bBgn = m_isBegin;
+	if (!bBgn)Begin();
+	KdDirect3D::Instance().WorkDevContext()->PSSetShaderResources(0, 1, KdDirect3D::Instance().GetWhiteTex()->WorkSRViewAddress());
+	if (color) { m_cb0.Work().Color = *color; }
+	m_cb0.Write();
+	Vertex v[3] =
+	{
+		{ { baseX + px * hw, baseY + py * hw, 0.0f }, { 0, 0 } },
+		{ { apexX,           apexY,           0.0f }, { 0, 0 } },
+		{ { baseX - px * hw, baseY - py * hw, 0.0f }, { 0, 0 } },
+	};
+	KdDirect3D::Instance().DrawVertices(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST, 3, v, sizeof(Vertex));
 	if (!bBgn)End();
 }
 

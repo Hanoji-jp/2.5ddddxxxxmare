@@ -59,6 +59,36 @@ public:
     void AddTotalRocks(int n)  { m_totalRocks += n; SaveTotals(); }
 
     //------------------------------------------------------
+    // 初回起動判定（セーブデータ＝フラグファイルの有無で判定）。
+    // 初回のみ Story → Stage1 へ直行。以降は Story を出さない。
+    //------------------------------------------------------
+    bool IsFirstLaunch() const
+    {
+        return !std::filesystem::exists("Asset/Data/launched.flag");
+    }
+    void MarkLaunched() const
+    {
+        std::error_code ec;
+        std::filesystem::create_directories("Asset/Data/", ec);
+        std::ofstream ofs("Asset/Data/launched.flag");
+        if (ofs) { ofs << "1"; }
+    }
+
+    //------------------------------------------------------
+    // セーブデータを全消去（デバッグ用）。初回起動フラグ・合計・ステージ記録をリセット。
+    //------------------------------------------------------
+    void ResetSaveData()
+    {
+        std::error_code ec;
+        std::filesystem::remove("Asset/Data/launched.flag", ec);
+        std::filesystem::remove(TotalsPath(), ec);
+        std::filesystem::remove(RecordsPath(), ec);
+        m_totalCoins = 0;
+        m_totalRocks = 0;
+        m_records = std::array<StageRecord, kMaxStages>{};
+    }
+
+    //------------------------------------------------------
     // Per-stage best records (cleared / best coins / best time), saved across sessions.
     //------------------------------------------------------
     static constexpr int kMaxStages = 16;

@@ -16,6 +16,21 @@ namespace UIConst
     // フェードアルファの変化量（1フレームあたり）
     constexpr float FadeSpeed      = 0.02f;
 
+    // ── 重力コア(Rock)取得カウンター（コインの下。アイコンは DrawTriangle で岩を2D描画）──
+    constexpr int   CoreIconSize     = 38;    // 岩アイコンの直径(px)
+    constexpr float CoreMargin       = 18.0f; // 画面端からの距離(px)
+    constexpr float CoreGapBelowCoin = 14.0f; // コインカウンターの下に空ける距離(px)
+    constexpr float CorePopTime      = 0.3f;  // 取得時の拡大ポップ時間(秒)
+    constexpr float CorePopScale     = 0.5f;  // ポップ時の最大拡大率
+    constexpr float CoreSpinSpeed    = 1.0f;  // アイコン自転(ラジアン/秒)
+
+    // ── 低HP時の黒ビネット（画面端が暗くなる。被ダメ赤フラッシュの代わり）──
+    constexpr const char* LowHpVignetteTex = "Asset/Texture/Vignette.png"; // 黒枠・中央透明のPNG
+    constexpr float LowHpThreshold   = 0.45f;  // HP割合がこれ以下で出始める
+    constexpr float LowHpVignetteMaxA = 0.65f; // 最大の濃さ（HP0付近）
+    constexpr float LowHpPulseSpeed  = 4.5f;   // 鼓動の速さ
+    constexpr float LowHpPulseAmp    = 0.15f;  // 鼓動でゆれる濃さ幅
+
     // ── コアリア残機アイコン（死亡後の暗転画面に中央表示。マリギャラ風）──
     // ※ 仮画像。後で「顔だけ」版に差し替えるときは LifeIconPath を変えるだけ。
     constexpr const char* LifeIconPath    = "Asset/Texture/CoreliaLifeIco/LifeIco.png";
@@ -27,6 +42,16 @@ namespace UIConst
     // ── コイン（収集物）カウンター：右上にアイコン＋数字 ──
     // ※ 仮アイコン。後でコイン画像に差し替えるときは CoinIconPath を変えるだけ。
     constexpr const char* CoinIconPath = "Asset/Effect/Star_01.png";
+
+    // ── コインアイコンを 3Dモデル(coin.gltf)で表示する設定 ──
+    //    3Dモデルを専用RTへ描画し、その結果テクスチャをUIへスプライト貼りする。
+    constexpr int   Coin3DRTSize    = 256;    // オフスクリーンRTの一辺(px。大きいほど高精細)
+    constexpr float Coin3DFovDeg    = 35.0f;  // プレビューカメラの画角(度)
+    constexpr float Coin3DCamDist   = 4.0f;   // カメラからコインまでの距離(モデルが切れる/小さい時に調整)
+    constexpr float Coin3DScale     = 1.0f;   // コインモデルの拡大率(モデルが大きすぎ/小さすぎる時に調整)
+    constexpr float Coin3DSpinSpeed = 2.0f;   // 自転速度(rad/秒。Y軸回り)
+    constexpr float Coin3DTiltDeg   = 18.0f;  // 少し傾けて立体感を出す(度。X軸回り)
+    constexpr bool  Coin3DLit       = true;   // true=陰影あり(Lit) / false=フラット(UnLit)
     constexpr int         CoinIconSize = 48;     // アイコンの一辺(px)
     constexpr float       CoinMargin   = 30.0f;  // 画面端からの余白(px)
     constexpr float       CoinTextGap  = 6.0f;   // アイコンと数字の間隔(px)

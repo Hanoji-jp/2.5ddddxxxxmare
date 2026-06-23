@@ -3,6 +3,8 @@
 #include "../BaseScene/BaseScene.h"
 #include "../../GameObject/Character/AnimBlender.h"
 #include "../../Util/UiButton.h"
+#include "../../Util/CoinModelIcon.h"
+#include "../../../Framework/Shader/KdRenderTargetChange.h"
 
 //==========================================================
 // StageSelectScene
@@ -91,9 +93,11 @@ private:
 	float m_resTime       = 0.0f;
 	int   m_resStep       = 1;       // 表示中のページ（1..Pages → 最後の次で閉じてタリーへ）
 	float m_resCardAnim   = 0.0f;    // ページ入れ替えポップ用（経過秒）
+	float m_resultOutAnim = 0.0f;    // 登場演出（箱から出てくる）の経過秒
 
 	// アイコン（リザルト/HUD/タリー共用）
 	std::shared_ptr<KdTexture> m_coinTex;
+	CoinModelIcon              m_coinIcon;   // 3DコインをRTへ描く共通ヘルパー（結果/HUD共用）
 	std::shared_ptr<KdTexture> m_rockTex;
 
 	// HUD合計の取得ポップ（加算時に一瞬拡大）
@@ -126,4 +130,30 @@ private:
 	float         MarkerDrawScale() const; // 描画用スケール（入場演出で縮む）
 	void          StartMove(int target); // 指定ノードへホップ開始
 	void          DrawResultPanel();     // リザルトパネル描画
+
+	// ステージ解放判定：ステージ0は常に解放。以降は前ステージをクリア済みなら解放。
+	bool          IsUnlocked(int stageId) const;
+
+	// ── TABメニュー（背景ぼかし。つづける／タイトルへ）──
+	void          UpdateMenu();   // Event から呼ぶ
+	void          DrawMenu();     // DrawSpriteExtra から呼ぶ
+	bool          m_menuOpen     = false;
+	int           m_menuIndex    = 0;
+	bool          m_menuTabPrev  = false;
+	bool          m_menuNavPrev  = false;
+	bool          m_menuConfPrev = false;
+	float         m_menuBlink    = 0.0f;
+	KdRenderTargetPack m_menuBlurRT;       // 背景ぼかしの出力先
+	bool          m_menuBlurInit = false;
+
+	// ノードの見た目（未解放＝くすんだ色・小さめ／解放＝通常）。解放アニメ中は補間。
+	void          NodeAppearance(int nodeIdx, float& outScale, Math::Color& outColor) const;
+
+	// 解放アニメ（クリア後に次ステージが色・大きさを取り戻す）
+	int   m_unlockNode = -1;    // 取り戻すノードのindex（-1=なし）
+	float m_unlockAnim = 0.0f;  // 0→1 の進行
+
+	// 「行けない！」演出（未解放ノードへ行こうとしたら道を赤く点滅）
+	int   m_denyNode  = -1;     // 拒否対象ノードのindex（-1=なし）
+	float m_denyTimer = 0.0f;   // 残り点滅時間(秒)
 };

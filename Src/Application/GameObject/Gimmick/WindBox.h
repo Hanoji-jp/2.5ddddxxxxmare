@@ -37,9 +37,20 @@ public:
 	const KdCollider*    GetCollider()   const { return m_pCollider.get(); }
 	const Math::Matrix&  GetWorldMatrix() const { return m_worldMat; }
 
+	// 押し出し用の OBB（中心＋直交3軸＋半幅）。回転・横向きでも見た目の箱と一致するよう、
+	// 球 vs OBB の最近接点押し出しに使う（Box惑星等と同じ最近接点の考え方）。
+	const Math::Vector3& GetCenter()     const { return m_center; }
+	const Math::Vector3& GetWindRight()  const { return m_windRight; } // 軸u（風に垂直）
+	const Math::Vector3& GetWindUp()     const { return m_windUp; }    // 軸w（風に垂直）
+	// 軸v＝GetWindDir()（風方向）。半幅は cross=halfSize.x / 風方向=halfSize.y。
+	Math::Vector3        GetObbHalf()    const { return { m_halfSize.x, m_halfSize.y, m_halfSize.x }; }
+
 private:
 	// 風向きに対して垂直な平面上のランダム点（ボックス範囲内）を生成
 	Math::Vector3 RandomPerp() const;
+
+	// 描画・当たり判定で共用するワールド行列を構築（scale → rot(+Y→windDir) → translate）
+	Math::Matrix  BuildWorldMatrix() const;
 
 	Math::Vector3 m_center   = {};
 	Math::Vector3 m_halfSize = {};   // size * 0.5f

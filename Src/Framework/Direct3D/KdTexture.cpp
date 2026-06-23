@@ -202,7 +202,7 @@ ID3D11Texture2D* KdTexture::WorkResource() const
 	return tex2D;
 }
 
-bool KdTexture::Load(std::string_view filename, bool renderTarget, bool depthStencil, bool generateMipmap)
+bool KdTexture::Load(std::string_view filename, bool renderTarget, bool depthStencil, bool generateMipmap, bool forceLinear)
 {
 	Release();
 	if (filename.empty())return false;
@@ -289,7 +289,9 @@ bool KdTexture::Load(std::string_view filename, bool renderTarget, bool depthSte
 		bindFlags,										// Bind Flags
 		0,												// CPU Access Flags
 		0,												// MiscFlags
-		DirectX::CREATETEX_FLAGS::CREATETEX_DEFAULT,	// CREATETEX_DEFAULT
+		// forceLinear時はsRGB変換を無効化（生値のまま＝ファイル/エクスプローラーと同じ明るさ）
+		forceLinear ? DirectX::CREATETEX_FLAGS::CREATETEX_IGNORE_SRGB
+					: DirectX::CREATETEX_FLAGS::CREATETEX_DEFAULT,
 		(ID3D11Resource**)&tex2D)
 	)) {
 

@@ -1194,29 +1194,53 @@ void Character::ResolvePenetration()
         return resolveAABB(bmin, bmax);
     };
 
-    // 任意コライダーに対する球押し出し（キャップの無い箱＝WindBox 等に使う）。
-    // エンジンの SphereInfo は三角形メッシュへワールド行列込みで球を押し出してくれる。
-    auto resolveCollider = [&](const KdCollider& col, const Math::Matrix& mat) -> bool
+    // 球 vs OBB（中心C・直交軸u,v,w・半幅half）の最近接点押し出し。
+    // 地形のローカル空間（軸並行）で解いて戻すので、回転・横向きでも正しく押し出す。
+    auto resolveOBB = [&](const Math::Vector3& C,
+                          const Math::Vector3& u, const Math::Vector3& v, const Math::Vector3& w,
+                          const Math::Vector3& half) -> bool
     {
         bool pushed = false;
         for (float off : offsets)
         {
-            const Math::Vector3 c = GetPos() + m_upDir * off;
-            const KdCollider::SphereInfo sphere(KdCollider::TypeBump, c, r);
+            const Math::Vector3 cc = GetPos() + m_upDir * off;
+            const Math::Vector3 d  = cc - C;
+            // ローカル座標（各軸への射影）
+            const float lx = d.Dot(u), ly = d.Dot(v), lz = d.Dot(w);
+            const float clx = std::clamp(lx, -half.x, half.x);
+            const float cly = std::clamp(ly, -half.y, half.y);
+            const float clz = std::clamp(lz, -half.z, half.z);
+            const float dx = lx - clx, dy = ly - cly, dz = lz - clz;
+            const float dist2 = dx * dx + dy * dy + dz * dz;
+            if (dist2 > r * r) { continue; }   // 重なっていない
 
-            std::list<KdCollider::CollisionResult> results;
-            if (!col.Intersects(sphere, mat, &results)) { continue; }
-
-            const KdCollider::CollisionResult* pBest = nullptr;
-            for (const auto& res : results)
+            if (dist2 > 1e-8f)
             {
-                if (!pBest || res.m_overlapDistance > pBest->m_overlapDistance) { pBest = &res; }
+                // 表面の外側：最近接点→中心方向へ押し出す（ローカル→ワールド）
+                const float dist = std::sqrtf(dist2);
+                const Math::Vector3 nWorld = (u * dx + v * dy + w * dz) / dist;
+                SetPos(GetPos() + nWorld * (r - dist));
             }
-            if (pBest && pBest->m_overlapDistance > 0.0f)
+            else
             {
-                SetPos(GetPos() + pBest->m_hitDir * pBest->m_overlapDistance);
-                pushed = true;
+                // 中心が内部：最も浅い面の外向きへ
+                const float fd[6] = {
+                    half.x - lx, lx + half.x,
+                    half.y - ly, ly + half.y,
+                    half.z - lz, lz + half.z,
+                };
+                int best = 0;
+                for (int i = 1; i < 6; ++i) { if (fd[i] < fd[best]) { best = i; } }
+                Math::Vector3 axis;
+                switch (best)
+                {
+                case 0: axis =  u; break;  case 1: axis = -u; break;
+                case 2: axis =  v; break;  case 3: axis = -v; break;
+                case 4: axis =  w; break;  default: axis = -w; break;
+                }
+                SetPos(GetPos() + axis * (fd[best] + r));
             }
+            pushed = true;
         }
         return pushed;
     };
@@ -1245,16 +1269,16 @@ void Character::ResolvePenetration()
                 spMF->GetFaceLeft(), spMF->GetFaceRight());
         }
 
-        // WindBox（キャップ無し：素のコライダーへ球で押し出す）
+        // WindBox（球 vs OBB：横向き・回転でも見た目の箱どおりに押し出す）
         for (auto& wpWB : m_windBoxColliders)
         {
             const auto spWB = wpWB.lock();
             if (!spWB) { continue; }
             const auto spWBBox = std::dynamic_pointer_cast<WindBox>(spWB);
             if (!spWBBox || !spWBBox->IsEnabled()) { continue; }
-            const KdCollider* col = spWBBox->GetCollider();
-            if (!col) { continue; }
-            any |= resolveCollider(*col, spWBBox->GetWorldMatrix());
+            any |= resolveOBB(spWBBox->GetCenter(),
+                spWBBox->GetWindRight(), spWBBox->GetWindDir(), spWBBox->GetWindUp(),
+                spWBBox->GetObbHalf());
         }
 
         // SpikeBox（COL のワールドAABB に対し、惑星と同じ最近接点押し出し＝robust）

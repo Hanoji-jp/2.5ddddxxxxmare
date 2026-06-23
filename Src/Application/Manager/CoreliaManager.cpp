@@ -3,6 +3,7 @@
 #include "StageManager.h"
 #include "ModelManager.h"
 #include "PlanetGravityManager.h"
+#include "ManualGravityZoneManager.h"
 #include "../Const/CoreliaConst.h"
 #include "../Const/PlanetConst.h"
 #include "../../Framework/Utility/KdDebug/KdDebugWireFrame.h"
@@ -105,8 +106,21 @@ void CoreliaManager::Update(float dt)
 
     for (auto& npc : m_npcs)
     {
-        // 重力上＋接地位置
-        const Math::Vector3 up = GravityUpAt(npc.Pos);
+        // 重力上を決める。NormalGravityゾーン内（横重力などの部屋）では
+        // ゾーンの重力方向の逆をUpにする＝NPCが壁向きに正しく傾く。
+        // ゾーン外は従来どおり惑星重力から求める。
+        Math::Vector3 up;
+        Math::Vector3 zoneGravDir;
+        if (ManualGravityZoneManager::Instance().IsInNormalGravityZone(npc.Pos, zoneGravDir))
+        {
+            up = -zoneGravDir;
+            if (up.LengthSquared() < 1e-6f) { up = Math::Vector3(0.0f, 1.0f, 0.0f); }
+            up.Normalize();
+        }
+        else
+        {
+            up = GravityUpAt(npc.Pos);
+        }
         npc.Up = up;
         Math::Vector3 ground;
         npc.GroundPos = SnapToGround(npc.Pos, up, ground) ? ground : npc.Pos;
@@ -158,8 +172,11 @@ void CoreliaManager::Update(float dt)
                 }
                 if (hi >= 0)
                 {
-                    // ワールドUpを頭ローカル空間の軸へ変換し、頭ローカルでヨー回転
-                    Math::Vector3 axis = Math::Vector3::TransformNormal(up, nodes[hi].m_worldTransform.Invert());
+                    // m_worldTransform はモデルローカル空間（orient適用前）なので、
+                    // 軸はワールドUpではなくモデルローカルの+Y(=orientの中段行に対応)を使う。
+                    // これで横重力(orientが回転)でも首が正しく水平に回る。
+                    const Math::Vector3 modelUp(0.0f, 1.0f, 0.0f);
+                    Math::Vector3 axis = Math::Vector3::TransformNormal(modelUp, nodes[hi].m_worldTransform.Invert());
                     if (axis.LengthSquared() > 1e-8f) { axis.Normalize(); }
                     const Math::Matrix R = Math::Matrix::CreateFromAxisAngle(axis, npc.HeadYaw);
                     nodes[hi].m_localTransform = R * nodes[hi].m_localTransform;
@@ -194,10 +211,30 @@ bool CoreliaManager::GetNpcPos(int index, Math::Vector3& out) const
     return true;
 }
 
+bool CoreliaManager::GetNpcGroundPos(int index, Math::Vector3& out) const
+{
+    if (index < 0 || index >= static_cast<int>(m_npcs.size())) { return false; }
+    out = m_npcs[index].GroundPos;
+    return true;
+}
+
+bool CoreliaManager::GetNpcUp(int index, Math::Vector3& out) const
+{
+    if (index < 0 || index >= static_cast<int>(m_npcs.size())) { return false; }
+    out = m_npcs[index].Up;   // 接地時に求めた実際の上方向（壁ならその法線）
+    return true;
+}
+
 int CoreliaManager::GetNpcHintId(int index) const
 {
     if (index < 0 || index >= static_cast<int>(m_npcs.size())) { return 0; }
     return m_npcs[index].HintId;
+}
+
+int CoreliaManager::GetNpcBubbleDir(int index) const
+{
+    if (index < 0 || index >= static_cast<int>(m_npcs.size())) { return 0; }
+    return m_npcs[index].BubbleDir;
 }
 
 const std::string& CoreliaManager::GetHint(int hintId) const
@@ -208,7 +245,12 @@ const std::string& CoreliaManager::GetHint(int hintId) const
 
 void CoreliaManager::DrawLit()
 {
-    auto& shader = KdShaderManager::Instance().m_StandardShader;
+    auto& sm = KdShaderManager::Instance();
+    auto& shader = sm.m_StandardShader;
+
+    // ゴースト（死んだ霊）表現：半透明で描く。深度は書く（DoFでボケないように）。
+    sm.ChangeBlendState(KdBlendState::Alpha);
+    sm.ChangeDepthStencilState(KdDepthStencilState::ZEnable);
 
     const float bob = std::sinf(m_animTime * CoreliaConst::BobSpeed) * CoreliaConst::BobAmp;
 
@@ -236,10 +278,14 @@ void CoreliaManager::DrawLit()
             orient *
             Math::Matrix::CreateTranslation(drawPos);
 
-        // プレイヤーのクローンに見えないよう色を付ける（コアリアらしいシアン）
-        const Math::Color tint(CoreliaConst::TintR, CoreliaConst::TintG, CoreliaConst::TintB, 1.0f);
+        // プレイヤーのクローンに見えないよう色を付ける（コアリアらしいシアン）＋半透明ゴースト
+        const Math::Color tint(CoreliaConst::TintR, CoreliaConst::TintG, CoreliaConst::TintB,
+                               CoreliaConst::GhostAlpha);
         shader.DrawModel(*npc.modelWork, world, tint);
     }
+
+    sm.UndoDepthStencilState();
+    sm.UndoBlendState();
 }
 
 void CoreliaManager::DrawDebugShapes() const
@@ -321,6 +367,10 @@ void CoreliaManager::DrawGui()
         if (npc.HintId < 0) { npc.HintId = 0; }
         if (npc.HintId > maxHint) { npc.HintId = maxHint; }
 
+        // 話す吹き出しの向き（見た目が横向きのNPCは Left/Right を選ぶ）
+        const char* dirItems[] = { "Up", "Down", "Left", "Right" };
+        ImGui::Combo("Bubble Dir", &npc.BubbleDir, dirItems, 4);
+
         if (ImGui::Button("Delete"))
         {
             m_npcs.erase(m_npcs.begin() + m_selectedIndex);
@@ -348,7 +398,8 @@ void CoreliaManager::Save() const
         ofs << npc.Pos.x << ","
             << npc.Pos.y << ","
             << npc.Pos.z << ","
-            << npc.HintId << "\n";
+            << npc.HintId << ","
+            << npc.BubbleDir << "\n";
     }
 }
 
@@ -378,6 +429,7 @@ void CoreliaManager::Load()
         npc.Pos.y  = std::stof(tokens[1]);
         npc.Pos.z  = std::stof(tokens[2]);
         npc.HintId = std::stoi(tokens[3]);
+        if (tokens.size() >= 5) { npc.BubbleDir = std::stoi(tokens[4]); }   // 旧データは無→既定0(上)
 
         SetupNpcModel(npc);
 

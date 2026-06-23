@@ -115,7 +115,7 @@ namespace ClearConst
     constexpr int   BannerFontH   = 80;            // 大きめ
     constexpr float BannerStartT  = CamZoomInEnd;  // キメの瞬間に出す
     constexpr float BannerPopTime = 0.35f;         // 出現アニメ（フェード＋せり上がり）の時間
-    constexpr float BannerWorldUp = 4.0f;          // プレイヤー頭上のワールド高さ（アンカー位置）
+    constexpr float BannerWorldUp = 4.0f;          // プレイヤー頭上のワールド高さ（アンカー位置・ワールド上方向）
     constexpr float BannerRisePx  = 48.0f;         // 下からせり上がる距離(px)
     constexpr int   BannerOutlinePx = 3;           // 縁取りの太さ(px)
     // 色：金色の本体＋濃い縁＋影

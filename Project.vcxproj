@@ -78,8 +78,8 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <OutDir>C:\BuildCache\2.5S\Release\</OutDir>
-    <IntDir>C:\BuildCache\2.5S\Release\int\</IntDir>
+    <OutDir>$(SolutionDir)x64\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)x64\$(Configuration)\int\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" />
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -308,6 +308,8 @@
     <ClInclude Include="Src\Application\Const\WindBoxConst.h" />
     <ClInclude Include="Src\Application\Const\SpikeBoxConst.h" />
     <ClInclude Include="Src\Application\Editor\CheckpointEditor.h" />
+    <ClInclude Include="Src\Application\Editor\ShowcaseCamEditor.h" />
+    <ClInclude Include="Src\Application\Const\ShowcaseCamConst.h" />
     <ClInclude Include="Src\Application\Editor\EnemyPlacementData.h" />
     <ClInclude Include="Src\Application\Editor\EnemyPlacementEditor.h" />
     <ClInclude Include="Src\Application\Editor\GravityCoreEditor.h" />
@@ -329,6 +331,7 @@
     <ClInclude Include="Src\Application\GameObject\Character\Enemy\EnemyRanged.h" />
     <ClInclude Include="Src\Application\GameObject\Character\Player\Player.h" />
     <ClInclude Include="Src\Application\GameObject\Checkpoint\Checkpoint.h" />
+    <ClInclude Include="Src\Application\GameObject\Effect\DamageBurst.h" />
     <ClInclude Include="Src\Application\GameObject\Effect\FootDust.h" />
     <ClInclude Include="Src\Application\GameObject\Effect\GravityRingEffect.h" />
     <ClInclude Include="Src\Application\GameObject\Effect\StarBurstEffect.h" />
@@ -411,11 +414,9 @@
     <ClCompile Include="..\Library\imgui\imgui_stdlib.cpp" />
     <ClCompile Include="..\Library\imgui\imgui_tables.cpp" />
     <ClCompile Include="..\Library\imgui\imgui_widgets.cpp" />
-    <ClCompile Include="Distribute\AnimBlender\AnimBlender.cpp">
-      <ExcludedFromBuild>true</ExcludedFromBuild>
-    </ClCompile>
     <ClCompile Include="Src\Application\Camera\CameraSettings.cpp" />
     <ClCompile Include="Src\Application\Editor\CheckpointEditor.cpp" />
+    <ClCompile Include="Src\Application\Editor\ShowcaseCamEditor.cpp" />
     <ClCompile Include="Src\Application\Editor\EnemyPlacementEditor.cpp" />
     <ClCompile Include="Src\Application\Editor\GravityCoreEditor.cpp" />
     <ClCompile Include="Src\Application\Editor\MovingFloorEditor.cpp" />
@@ -434,6 +435,7 @@
     <ClCompile Include="Src\Application\GameObject\Character\Enemy\EnemyRanged.cpp" />
     <ClCompile Include="Src\Application\GameObject\Character\Player\Player.cpp" />
     <ClCompile Include="Src\Application\GameObject\Checkpoint\Checkpoint.cpp" />
+    <ClCompile Include="Src\Application\GameObject\Effect\DamageBurst.cpp" />
     <ClCompile Include="Src\Application\GameObject\Effect\FootDust.cpp" />
     <ClCompile Include="Src\Application\GameObject\Effect\GravityRingEffect.cpp" />
     <ClCompile Include="Src\Application\GameObject\Effect\StarBurstEffect.cpp" />

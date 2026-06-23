@@ -1,4 +1,5 @@
 #include "BaseScene.h"
+#include "../../Util/DebugFlags.h"
 
 void BaseScene::PreUpdate()
 {
@@ -198,9 +199,13 @@ void BaseScene::DrawDebug()
 	// デバッグ情報の描画はこの間で行う
 	KdShaderManager::Instance().m_StandardShader.BeginUnLit();
 	{
-		for (auto& obj : m_objList)
+		// デバッグ表示OFF時はオブジェクト側のデバッグワイヤーも全て描かない
+		if (DebugFlags::g_debugDrawVisible)
 		{
-			obj->DrawDebug();
+			for (auto& obj : m_objList)
+			{
+				obj->DrawDebug();
+			}
 		}
 		DrawDebugExtra();
 	}

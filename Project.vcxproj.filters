@@ -303,6 +303,8 @@
     <ClInclude Include="Src\Application\GameObject\Checkpoint\Checkpoint.h" />
     <ClInclude Include="Src\Application\GameObject\UI\HpUI.h" />
     <ClInclude Include="Src\Application\Editor\CheckpointEditor.h" />
+    <ClInclude Include="Src\Application\Editor\ShowcaseCamEditor.h" />
+    <ClInclude Include="Src\Application\Const\ShowcaseCamConst.h" />
     <ClInclude Include="Src\Application\Const\PlanetConst.h" />
     <ClInclude Include="Src\Application\Manager\PlanetGravityManager.h" />
     <ClInclude Include="Src\Application\GameObject\Light\PointLightObject.h" />
@@ -317,6 +319,7 @@
     <ClInclude Include="Src\Application\GameObject\BackGround\StarField.h" />
     <ClInclude Include="Src\Application\Const\JuiceConst.h" />
     <ClInclude Include="Src\Application\GameObject\Effect\FootDust.h" />
+    <ClInclude Include="Src\Application\GameObject\Effect\DamageBurst.h" />
     <ClInclude Include="Src\Application\Const\PostProcessConst.h" />
     <ClInclude Include="Src\Application\Const\GravityRingConst.h" />
     <ClInclude Include="Src\Application\GameObject\Effect\GravityRingEffect.h" />
@@ -351,6 +354,9 @@
     <ClInclude Include="Src\Application\Const\StoryConst.h" />
     <ClInclude Include="Src\Application\Scene\StageSelectScene\StageSelectScene.h" />
     <ClInclude Include="Src\Application\Scene\StoryScene\StoryScene.h" />
+    <ClInclude Include="Src\Application\Const\DeathConst.h" />
+    <ClInclude Include="Src\Application\Const\OutlineConst.h" />
+    <ClInclude Include="Src\Application\Const\PauseMenuConst.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Pch.cpp">
@@ -515,6 +521,7 @@
     <ClCompile Include="Src\Application\GameObject\Checkpoint\Checkpoint.cpp" />
     <ClCompile Include="Src\Application\GameObject\UI\HpUI.cpp" />
     <ClCompile Include="Src\Application\Editor\CheckpointEditor.cpp" />
+    <ClCompile Include="Src\Application\Editor\ShowcaseCamEditor.cpp" />
     <ClCompile Include="Src\Application\Manager\PlanetGravityManager.cpp" />
     <ClCompile Include="Src\Application\GameObject\Light\PointLightObject.cpp" />
     <ClCompile Include="Src\Application\Manager\ManualGravityZoneManager.cpp" />
@@ -524,8 +531,8 @@
     <ClCompile Include="Src\Application\GameObject\Gimmick\WarpHole.cpp" />
     <ClCompile Include="Src\Application\GameObject\BackGround\StarField.cpp" />
     <ClCompile Include="Src\Application\GameObject\Effect\FootDust.cpp" />
+    <ClCompile Include="Src\Application\GameObject\Effect\DamageBurst.cpp" />
     <ClCompile Include="Src\Application\GameObject\Effect\GravityRingEffect.cpp" />
-    <ClCompile Include="Distribute\AnimBlender\AnimBlender.cpp" />
     <ClCompile Include="Src\Application\GameObject\Item\Coin.cpp" />
     <ClCompile Include="Src\Application\Manager\ItemManager.cpp" />
     <ClCompile Include="Src\Application\GameObject\Gimmick\MovingFloor.cpp" />
@@ -599,5 +606,8 @@
     <FxCompile Include="Src\Framework\Shader\StandardShader\KdStandardShader_VS_UnLit.hlsl">
       <Filter>Src\Framework\Shader\StandardShader</Filter>
     </FxCompile>
+    <FxCompile Include="Src\Framework\Shader\PostProcessShader\KdPostProcessShader_PS_Outline.hlsl" />
+    <FxCompile Include="Src\Framework\Shader\StandardShader\KdStandardShader_VS_Outline.hlsl" />
+    <FxCompile Include="Src\Framework\Shader\StandardShader\KdStandardShader_PS_Outline.hlsl" />
   </ItemGroup>
 </Project>

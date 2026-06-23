@@ -34,6 +34,11 @@ public:
 	const WarpHoleData& GetData() const { return m_data; }
 	void SetData(const WarpHoleData& d) { m_data = d; m_centerPathDirty = true; }
 
+	// ワンウェイ通過後：収縮しながら消える演出を開始する
+	void Consume() { if (!m_dead) { m_consuming = true; } }
+	bool IsConsuming() const { return m_consuming; }
+	bool IsDead()      const { return m_dead; }   // 収縮し切って消えた
+
 	std::vector<Math::Vector3> BuildTunnelCenterPath() const;
 	std::vector<Math::Vector3> BuildTeleportEntryPath() const;
 	std::vector<Math::Vector3> BuildTeleportExitPath() const;
@@ -131,6 +136,11 @@ private:
 
 	WarpHoleData m_data;
 	float        m_animOffset = 0.0f;
+
+	// ワンウェイ通過後の収縮消滅
+	bool         m_consuming    = false;   // 収縮中
+	bool         m_dead         = false;   // 収縮し切って非表示・無効
+	float        m_consumeScale = 1.0f;    // 1=通常 → 0=消滅（半径に乗算）
 
 	mutable std::vector<Math::Vector3> m_centerPathCache;
 	mutable bool                       m_centerPathDirty = true;

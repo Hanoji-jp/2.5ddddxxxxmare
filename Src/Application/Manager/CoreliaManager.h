@@ -11,6 +11,7 @@ struct CoreliaNpc
     Math::Vector3 Pos      = { 0.0f, 0.0f, 0.0f };  // エディタで置く点
     Math::Vector3 GroundPos = { 0.0f, 0.0f, 0.0f };  // 接地後の実位置（描画・判定・会話で共通使用）
     int HintId = 0;
+    int BubbleDir = 0;   // 話す吹き出しの向き（0=上,1=下,2=左,3=右）。見た目重力に合わせて手動指定
 
     // 追尾用の状態（Update で更新）
     Math::Vector3 Up      = { 0.0f, 1.0f, 0.0f };   // 重力上方向
@@ -48,7 +49,10 @@ public:
     // NPC accessors
     int  GetNpcCount() const { return static_cast<int>(m_npcs.size()); }
     bool GetNpcPos(int index, Math::Vector3& out) const;
+    bool GetNpcGroundPos(int index, Math::Vector3& out) const;   // 接地点の素の座標（Upオフセット無し）
+    bool GetNpcUp(int index, Math::Vector3& out) const;   // 接地時の実際の上方向（吹き出し配置用）
     int  GetNpcHintId(int index) const;
+    int  GetNpcBubbleDir(int index) const;                // 吹き出しの向き（0=上,1=下,2=左,3=右）
 
     // Hint body text for a hint id (Shift-JIS bytes; empty if missing).
     const std::string& GetHint(int hintId) const;

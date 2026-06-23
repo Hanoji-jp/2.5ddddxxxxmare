@@ -477,13 +477,17 @@ void SideScrollCamera::Update(const Math::Vector3& _targetPos, const Math::Vecto
 		shakeOffset.y = sy * 0.5f * m_shakeStrength;
 	}
 
+	// シェイクはカメラの右/上方向（画面空間）に沿って加算する。
+	// ワールドx,y固定だとFixed2D等カメラの向き次第で画面に出ないため。
+	const Math::Vector3 shakeWorld = rolledRight * shakeOffset.x + rolledUp * shakeOffset.y;
+
 	Math::Matrix mCam;
 	mCam._11 = rolledRight.x; mCam._12 = rolledRight.y; mCam._13 = rolledRight.z; mCam._14 = 0.0f;
 	mCam._21 = rolledUp.x;    mCam._22 = rolledUp.y;    mCam._23 = rolledUp.z;    mCam._24 = 0.0f;
 	mCam._31 = fwd.x;         mCam._32 = fwd.y;         mCam._33 = fwd.z;         mCam._34 = 0.0f;
-	mCam._41 = m_pos.x + shakeOffset.x;
-	mCam._42 = m_pos.y + shakeOffset.y;
-	mCam._43 = m_pos.z;
+	mCam._41 = m_pos.x + shakeWorld.x;
+	mCam._42 = m_pos.y + shakeWorld.y;
+	mCam._43 = m_pos.z + shakeWorld.z;
 	mCam._44 = 1.0f;
 
 	SetCameraMatrix(mCam);

@@ -1,5 +1,6 @@
 ﻿#include "StoryScene.h"
 #include "../SceneManager.h"
+#include "../../Manager/StageManager.h"
 #include "../../Const/StoryConst.h"
 #include "../../Util/TextFx.h"
 
@@ -50,10 +51,12 @@ void StoryScene::Event()
 	const bool skipEdge = skipNow && !m_skipPrev && !locked;
 	m_skipPrev = skipNow;
 
-	// TAB でストーリーをスキップ → ステージセレクトへ（ESCはアプリ終了のため不可）
+	// TAB でストーリーをスキップ → 初回フラグを記録して Stage1 へ直行
 	if (skipEdge)
 	{
-		SceneManager::Instance().SetNextScene(SceneManager::SceneType::StageSelect);
+		StageManager::Instance().MarkLaunched();
+		StageManager::Instance().SetStageIndex(1);
+		SceneManager::Instance().SetNextScene(SceneManager::SceneType::Game);
 		return;
 	}
 
@@ -75,12 +78,12 @@ void StoryScene::Event()
 		{
 			if (m_page >= PageCount - 1)
 			{
-				// 最後まで見たらステージセレクトへ。
+				// 最後まで見たら：初回フラグを記録して Stage1 へ直行（ステージセレクトを跨がない）。
 				// ※ m_turn は 1.0 のまま維持する（巻き切ってフェードで消えた状態）。
-				//   0 に戻すとシーン切替の1フレーム遅延の間に最終ページが全表示で
-				//   一瞬戻ってしまうため。
 				m_turn = 1.0f;
-				SceneManager::Instance().SetNextScene(SceneManager::SceneType::StageSelect);
+				StageManager::Instance().MarkLaunched();
+				StageManager::Instance().SetStageIndex(1);
+				SceneManager::Instance().SetNextScene(SceneManager::SceneType::Game);
 			}
 			else
 			{

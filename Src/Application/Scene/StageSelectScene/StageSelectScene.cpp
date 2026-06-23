@@ -8,6 +8,8 @@
 #include "../../Manager/StageManager.h"
 #include "../../Const/StageSelectConst.h"
 #include "../../Const/ResultConst.h"
+#include "../../Const/PauseMenuConst.h"
+#include "../../Util/CoreIcon.h"
 #include "../../Const/ResultTextConst.h"
 #include "../../Const/OutlineConst.h"
 #include "../../Util/TextFx.h"
@@ -55,7 +57,15 @@ void StageSelectScene::Init()
 		{0,1},{1,2}, {3,4},{4,5},   // 横（各行）
 		{0,3},{1,4},{2,5},          // 縦（行間）
 	};
-	m_current = 0;   // 左下スタート（W で上の行へ行けるように）
+	// 直前にプレイ/選択していたステージにカーソルを合わせる（戻ってきたとき1に戻らないように）
+	m_current = 0;
+	{
+		const int lastStageId = StageManager::Instance().GetStageIndex() - 1;   // 0始まり
+		for (int i = 0; i < static_cast<int>(m_nodes.size()); ++i)
+		{
+			if (m_nodes[i].stageId == lastStageId) { m_current = i; break; }
+		}
+	}
 	m_camFocus = m_nodes[m_current].pos;   // カメラ初期注視点
 
 	// ── ノードの箱モデル（共有）──
@@ -132,7 +142,8 @@ void StageSelectScene::Init()
 		char path[128];
 		std::snprintf(path, sizeof(path), StageSelectConst::ThumbPathFmt, i + 1);
 		auto tex = std::make_shared<KdTexture>();
-		if (tex->Load(path)) { m_stageThumbs[i] = tex; }
+		// forceLinear=true：sRGB変換を無効化し、エクスプローラーで見える明るさのまま表示する
+		if (tex->Load(path, false, false, true, true)) { m_stageThumbs[i] = tex; }
 	}
 
 	// ── クリア後リザルト：直前にステージをクリアして戻ってきたか ──
@@ -149,6 +160,7 @@ void StageSelectScene::Init()
 			m_resTime      = res.time;
 			m_resStep      = 1;        // まずメッセージ
 			m_resCardAnim  = 0.0f;
+			m_resultOutAnim = 0.0f;    // 箱から出てくる登場演出を最初から
 
 			// マーカー（プレイヤー）をクリアしたステージのノードへ置く
 			for (int i = 0; i < static_cast<int>(m_nodes.size()); ++i)
@@ -156,6 +168,13 @@ void StageSelectScene::Init()
 				if (m_nodes[i].stageId == res.stageId) { m_current = i; break; }
 			}
 			m_camFocus = m_nodes[m_current].pos;
+
+			// 次ステージのノードを「色・大きさを取り戻す」演出の対象にする
+			const int nextStage = res.stageId + 1;
+			for (int i = 0; i < static_cast<int>(m_nodes.size()); ++i)
+			{
+				if (m_nodes[i].stageId == nextStage) { m_unlockNode = i; m_unlockAnim = 0.0f; break; }
+			}
 		}
 	}
 }
@@ -175,6 +194,41 @@ void StageSelectScene::StartMove(int target)
 	// 進む向きへマーカーを向ける
 	Math::Vector3 to = m_nodes[target].pos - m_nodes[m_current].pos;
 	m_markerYaw = std::atan2f(to.x, to.z);
+
+	// ホップ中はジャンプアニメ
+	m_markerAnim.ChangeAnimation("Jump", false, 4);
+}
+
+//----------------------------------------------------------
+// ステージ解放判定：ステージ0は常に解放。以降は前ステージをクリア済みなら解放。
+bool StageSelectScene::IsUnlocked(int stageId) const
+{
+	if (stageId <= 0) { return true; }
+	return StageManager::Instance().GetRecord(stageId - 1).cleared;
+}
+
+//----------------------------------------------------------
+// ノードの見た目：未解放はくすんだ色＋小さめ。解放アニメ中はロック→通常へ補間。
+void StageSelectScene::NodeAppearance(int nodeIdx, float& outScale, Math::Color& outColor) const
+{
+	using namespace StageSelectConst;
+	const auto& n = m_nodes[nodeIdx];
+
+	// lockT: 1=完全ロック見た目, 0=通常。解放アニメ中のノードは 1→0 へ。
+	float lockT = IsUnlocked(n.stageId) ? 0.0f : 1.0f;
+	if (nodeIdx == m_unlockNode)
+	{
+		const float p = std::clamp(m_unlockAnim / UnlockAnimTime, 0.0f, 1.0f);
+		lockT = 1.0f - (p * p * (3.0f - 2.0f * p));   // smoothstep で 1→0
+	}
+
+	outScale = NodeScale * std::lerp(1.0f, LockedNodeScaleMul, lockT);
+
+	// 未解放はほぼ黒（完全じゃない黒）。解放で元の色へ戻る。
+	const Math::Vector3 c = n.color;
+	const Math::Vector3 locked(LockedColorV, LockedColorV, LockedColorV);
+	const Math::Vector3 cc = Math::Vector3::Lerp(c, locked, lockT);
+	outColor = Math::Color(cc.x, cc.y, cc.z, 1.0f);
 }
 
 //----------------------------------------------------------
@@ -204,6 +258,16 @@ Math::Vector3 StageSelectScene::MarkerPos() const
 		const float sink = pe * pe * EnterSink;                           // 終盤ほど箱へ沈む
 		p.y += hop - sink;
 	}
+
+	// リザルト登場演出：入場(GO)の完全な逆再生。pe を 1→0 に動かして同じ式を使う。
+	if (m_resultActive)
+	{
+		const float prog = std::clamp((m_resultOutAnim - ResultOutDelay) / EnterHopTime, 0.0f, 1.0f);
+		const float pe   = 1.0f - prog;                                  // 入場の終端→始端
+		const float hop  = std::sinf(pe * 3.14159265f) * EnterHopHeight; // 入場と同じ
+		const float sink = pe * pe * EnterSink;                          // 入場と同じ
+		p.y += hop - sink;
+	}
 	return p;
 }
 
@@ -212,10 +276,23 @@ Math::Vector3 StageSelectScene::MarkerPos() const
 //----------------------------------------------------------
 float StageSelectScene::MarkerDrawScale() const
 {
-	if (!m_entering) { return MarkerScale; }
-	const float pe = std::clamp(m_enterAnim / EnterHopTime, 0.0f, 1.0f);
-	const float s  = 1.0f - pe * pe;   // 序盤は大きいまま、終盤で一気に縮む
-	return MarkerScale * std::max(s, 0.0f);
+	if (m_entering)
+	{
+		const float pe = std::clamp(m_enterAnim / EnterHopTime, 0.0f, 1.0f);
+		const float s  = 1.0f - pe * pe;   // 序盤は大きいまま、終盤で一気に縮む
+		return MarkerScale * std::max(s, 0.0f);
+	}
+
+	// リザルト登場：入場(GO)の完全な逆再生。pe を 1→0 にして同じスケール式(1-pe^2)を使う。
+	if (m_resultActive)
+	{
+		const float prog = std::clamp((m_resultOutAnim - ResultOutDelay) / EnterHopTime, 0.0f, 1.0f);
+		const float pe   = 1.0f - prog;
+		const float s    = 1.0f - pe * pe;   // 入場と同じ式（pe=1で0→pe=0で1）
+		return MarkerScale * std::max(s, 0.0f);
+	}
+
+	return MarkerScale;
 }
 
 //----------------------------------------------------------
@@ -240,6 +317,29 @@ void StageSelectScene::Event()
 {
 	const float dt = KdFPSController::GetDt();
 	m_timer += dt;
+
+	// ── TABメニュー（マップ閲覧中のみ開閉。背景ぼかし付き）──
+	{
+		const bool tab = (GetAsyncKeyState(VK_TAB) & 0x8000) != 0;
+		const bool canToggle = !m_resultActive && !m_tallyActive && !m_selecting && !m_entering;
+		if (tab && !m_menuTabPrev && (m_menuOpen || canToggle))
+		{
+			m_menuOpen = !m_menuOpen;
+			m_menuIndex = 0;
+		}
+		m_menuTabPrev = tab;
+	}
+	if (m_menuOpen) { UpdateMenu(); return; }
+
+	// 解放アニメ（次ステージが色・大きさを取り戻す）はリザルト/タリーを見終えてから進める
+	if (m_unlockNode >= 0 && !m_resultActive && !m_tallyActive
+		&& m_unlockAnim < StageSelectConst::UnlockAnimTime)
+	{
+		m_unlockAnim += dt;
+	}
+
+	// 「行けない！」赤点滅のタイマー
+	if (m_denyTimer > 0.0f) { m_denyTimer -= dt; }
 
 	// ライト
 	{
@@ -285,6 +385,7 @@ void StageSelectScene::Event()
 			m_moveT  = 0.0f;
 			m_moving = false;
 			m_current = m_moveTo;
+			m_markerAnim.ChangeAnimation("Idle", true, 6);   // 着地→待機
 		}
 	}
 
@@ -312,7 +413,12 @@ void StageSelectScene::Event()
 			else if (eS) { if (row > 0)         { target = m_current - kCols; } }  // 下の行へ（画面手前）
 			else if (eD) { if (col < kCols - 1) { target = m_current + 1; } }      // 右
 			else if (eA) { if (col > 0)         { target = m_current - 1; } }      // 左
-			if (target >= 0) { StartMove(target); }
+			// 未解放（前ステージ未クリア）のノードへは移動しない。代わりに赤点滅で拒否。
+			if (target >= 0)
+			{
+				if (IsUnlocked(m_nodes[target].stageId)) { StartMove(target); }
+				else { m_denyNode = target; m_denyTimer = StageSelectConst::DenyFlashTime; }
+			}
 		}
 
 		// 決定
@@ -333,13 +439,18 @@ void StageSelectScene::Event()
 			if (eA) { m_selChoice = 1; }        // 左 = BACK
 			else if (eD) { m_selChoice = 0; }   // 右 = GO
 			const bool back = (GetAsyncKeyState(VK_TAB) & 0x8000) != 0;
-			if (adv && !m_advPrev && !SceneManager::Instance().IsInputLocked())
+			// 入場演出中は決定を受け付けない（GO連打でぴょんぴょん再生されるのを防ぐ）
+			if (adv && !m_advPrev && !m_entering && !SceneManager::Instance().IsInputLocked())
 			{
 				if (m_selChoice == 0)
 				{
-					m_entering  = true;
-					m_enterAnim = 0.0f;   // ぴょん入場アニメ開始
-					StageManager::Instance().SetStageIndex(m_nodes[m_current].stageId + 1);
+					// 未解放ステージへは入れない（前ステージ未クリア）。GOは無視。
+					if (IsUnlocked(m_nodes[m_current].stageId))
+					{
+						m_entering  = true;
+						m_enterAnim = 0.0f;   // ぴょん入場アニメ開始
+						StageManager::Instance().SetStageIndex(m_nodes[m_current].stageId + 1);
+					}
 				}
 				else
 				{
@@ -371,6 +482,7 @@ void StageSelectScene::Event()
 	m_selZoom += (m_selecting ? ResultConst::ZoomSpeed : -ResultConst::ZoomSpeed) * dt;
 	m_selZoom  = std::clamp(m_selZoom, 0.0f, 1.0f);
 	m_resCardAnim += dt;   // ページ入れ替えポップ
+	if (m_resultActive) { m_resultOutAnim += dt; }   // 箱から出てくる登場演出
 	UpdateTally(dt);       // 入手分の UI ホーミング
 	if (m_coinHudPop > 0.0f) { m_coinHudPop -= dt; }
 	if (m_rockHudPop > 0.0f) { m_rockHudPop -= dt; }
@@ -476,13 +588,14 @@ void StageSelectScene::DrawLitExtra()
 		{
 			const auto& n = m_nodes[i];
 			const bool  isSel = (i == sel);
-			const float scale = NodeScale * (isSel ? NodeSelectScale : 1.0f);
+			float baseScale; Math::Color col;
+			NodeAppearance(i, baseScale, col);   // 未解放はくすんだ色＋小さめ
+			const float scale = baseScale * (isSel ? NodeSelectScale : 1.0f);
 			const float bob   = isSel ? std::sinf(m_timer * NodeBobSpeed) * NodeBobAmp : 0.0f;
 			const Math::Matrix w =
 				Math::Matrix::CreateScale(scale) *
 				Math::Matrix::CreateTranslation(n.pos.x, n.pos.y + bob, n.pos.z);
-			shader.DrawModel(m_nodeModel, w,
-				Math::Color(n.color.x, n.color.y, n.color.z, 1.0f), Math::Vector3::Zero);
+			shader.DrawModel(m_nodeModel, w, col, Math::Vector3::Zero);
 		}
 	}
 
@@ -512,7 +625,9 @@ void StageSelectScene::DrawOutlineExtra()
 		{
 			const auto& n = m_nodes[i];
 			const bool  isSel = (i == sel);
-			const float scale = NodeScale * (isSel ? NodeSelectScale : 1.0f);
+			float baseScale; Math::Color col;
+			NodeAppearance(i, baseScale, col);   // ロック状態でアウトラインの大きさも合わせる
+			const float scale = baseScale * (isSel ? NodeSelectScale : 1.0f);
 			const float bob   = isSel ? std::sinf(m_timer * NodeBobSpeed) * NodeBobAmp : 0.0f;
 			const Math::Matrix w =
 				Math::Matrix::CreateScale(scale) *
@@ -557,6 +672,10 @@ void StageSelectScene::DrawEffectExtra()
 		const float dotPulse = 0.7f + 0.3f * std::sinf(m_timer * 2.0f);
 		for (const auto& link : m_links)
 		{
+			// 未解放ノードへ繋がる道は描かない（どちらかがロックなら線なし）
+			if (!IsUnlocked(m_nodes[link.first].stageId)
+				|| !IsUnlocked(m_nodes[link.second].stageId)) { continue; }
+
 			const Math::Vector3 a = m_nodes[link.first].pos;
 			const Math::Vector3 b = m_nodes[link.second].pos;
 			const Math::Vector3 seg = b - a;
@@ -570,6 +689,28 @@ void StageSelectScene::DrawEffectExtra()
 				const Math::Color   col{ DotColR, DotColG, DotColB, 0.6f };
 				const Math::Vector3 em { DotColR * 0.6f, DotColG * 0.6f, DotColB * 0.6f };
 				EffectBase::DrawBillboard(m_dotPoly, p, DotSize * dotPulse, 0.0f, col, em);
+			}
+		}
+
+		// 「行けない！」演出：未解放ノードへの道を赤く点滅
+		if (m_denyTimer > 0.0f && m_denyNode >= 0 && m_denyNode < static_cast<int>(m_nodes.size()))
+		{
+			const float blink = 0.5f + 0.5f * std::sinf(m_timer * DenyFlashSpeed);
+			const float fade  = std::clamp(m_denyTimer / DenyFlashTime, 0.0f, 1.0f);
+			const float aRed  = blink * fade;
+			const Math::Vector3 a = m_nodes[m_current].pos;
+			const Math::Vector3 b = m_nodes[m_denyNode].pos;
+			const Math::Vector3 seg = b - a;
+			const float len = seg.Length();
+			const int   num = std::max(1, static_cast<int>(len / DotSpacing));
+			for (int k = 1; k < num; ++k)
+			{
+				const float f = static_cast<float>(k) / num;
+				Math::Vector3 p = a + seg * f;
+				p.y += 0.2f;
+				const Math::Color   col{ DenyColR, DenyColG, DenyColB, aRed };
+				const Math::Vector3 em { DenyColR * aRed, DenyColG * aRed, DenyColB * aRed };
+				EffectBase::DrawBillboard(m_dotPoly, p, DotSize * (0.9f + 0.4f * blink), 0.0f, col, em);
 			}
 		}
 
@@ -589,6 +730,9 @@ void StageSelectScene::DrawEffectExtra()
 
 	sm.UndoDepthStencilState();
 	sm.UndoBlendState();
+
+	// UI用コイン3D（別RTへ。結果パネル/合計HUDで使用）。3Dパス内で描き、カメラを戻す。
+	m_coinIcon.Render(KdFPSController::GetDt(), m_camera);
 }
 
 //----------------------------------------------------------
@@ -626,7 +770,7 @@ void StageSelectScene::DrawSpriteExtra()
 			const Math::Color col(1.0f, 1.0f, 1.0f, 0.9f * normalUiAlpha);
 			drawCentered(TitleText, sh * TitleYRatio, col);
 		}
-		// 選択中のステージ名（仮表示）
+		// 選択中のステージ名を吹き出しでマーカー（プレイヤー）の上に表示
 		{
 			int sid = 0;
 			if (m_current >= 0 && m_current < static_cast<int>(m_nodes.size()))
@@ -634,8 +778,44 @@ void StageSelectScene::DrawSpriteExtra()
 				sid = m_nodes[m_current].stageId;
 			}
 			const char* name = (sid >= 0 && sid < StageNameCount) ? StageNames[sid] : StageNameFallback;
-			const Math::Color col(0.85f, 0.95f, 1.0f, normalUiAlpha);
-			drawCentered(name, sh * StageNameYRatio, col);
+			// 「ステージN　〇〇」形式なら名前部分（〇〇）だけ（実行時SJISの全角スペース 0x81 0x40）
+			const char* disp = name;
+			if (const char* sp = std::strstr(name, "\x81\x40")) { disp = sp + 2; }
+
+			auto fs = KdFontManager::Instance().CreateFontTexture(FontNo, disp, false);
+			if (fs)
+			{
+				float tw = 0.0f, th = 0.0f;
+				for (const auto& d : fs->GetTexList())
+				{
+					if (!d || !d->FontTex) { continue; }
+					tw += static_cast<float>(d->FontTex->GetInfo().Width);
+					th  = std::max(th, static_cast<float>(d->FontTex->GetInfo().Height));
+				}
+				// 立っている箱（ノード）を投影し、スクリーン上で固定px上へ置く
+				// （ワールドの縦オフセットだと画面端で斜めにずれるため、スクリーン空間でずらす）
+				const Math::Vector3 nodePos = (m_current >= 0 && m_current < static_cast<int>(m_nodes.size()))
+					? m_nodes[m_current].pos : MarkerPos();
+				const Math::Matrix  vp = KdShaderManager::Instance().GetCameraCB().mView
+					* KdShaderManager::Instance().GetCameraCB().mProj;
+				const Math::Vector4 clip = Math::Vector4::Transform(
+					Math::Vector4(nodePos.x, nodePos.y, nodePos.z, 1.0f), vp);
+				if (clip.w > 0.001f)
+				{
+					constexpr float kScreenUpPx = 200.0f;   // 箱の画面位置から上へずらす量(px)
+					const float sx = (clip.x / clip.w) * sw * 0.5f;
+					const float sy = (clip.y / clip.w) * sh * 0.5f + kScreenUpPx;
+					const int ex = static_cast<int>(tw * 0.5f) + 24;   // 左右余白
+					const int ey = static_cast<int>(th * 0.5f) + 14;   // 上下余白
+					// 吹き出し（薄紫・角丸＋下向き尻尾）
+					const Math::Color body(0.93f, 0.91f, 0.99f, normalUiAlpha);
+					sprite.DrawRoundedBubble(static_cast<int>(sx), static_cast<int>(sy),
+						ex, ey, static_cast<float>(ey), 12, 16, &body, 8);
+					// 文字（濃い色・中央）
+					const Math::Color txt(0.28f, 0.22f, 0.38f, normalUiAlpha);
+					sprite.DrawFont(fs, Math::Vector2(sx - tw * 0.5f, sy - th * 0.5f), &txt, 0);
+				}
+			}
 		}
 		// 操作ヒント（下・点滅）
 		{
@@ -665,6 +845,138 @@ void StageSelectScene::DrawSpriteExtra()
 	{
 		const Math::Color flash(1.0f, 1.0f, 1.0f, m_fadeAlpha);
 		sprite.DrawBox(0, 0, sw, sh, &flash, true);
+	}
+
+	// ── TABメニュー（背景ぼかし＋パネル。最前面）──
+	if (m_menuOpen) { DrawMenu(); }
+}
+
+//----------------------------------------------------------
+// TABメニュー：操作（W/Sで選択、Enter/Spaceで決定。TABで閉じる）
+//----------------------------------------------------------
+void StageSelectScene::UpdateMenu()
+{
+	m_menuBlink += KdFPSController::GetDt();
+	constexpr int kCount = 2;   // 0=つづける / 1=タイトルへ
+
+	const bool up   = ((GetAsyncKeyState('W') & 0x8000) != 0) || ((GetAsyncKeyState(VK_UP)   & 0x8000) != 0);
+	const bool down = ((GetAsyncKeyState('S') & 0x8000) != 0) || ((GetAsyncKeyState(VK_DOWN) & 0x8000) != 0);
+	const bool nav  = up || down;
+	if (nav && !m_menuNavPrev)
+	{
+		if (up) { m_menuIndex = (m_menuIndex + kCount - 1) % kCount; }
+		else    { m_menuIndex = (m_menuIndex + 1) % kCount; }
+	}
+	m_menuNavPrev = nav;
+
+	const bool conf = ((GetAsyncKeyState(VK_RETURN) & 0x8000) != 0) || ((GetAsyncKeyState(VK_SPACE) & 0x8000) != 0);
+	if (conf && !m_menuConfPrev)
+	{
+		if (m_menuIndex == 0)
+		{
+			m_menuOpen = false;   // つづける
+			// 同じ決定キーがマップ側の「決定」に流れてステージ選択が暴発するのを防ぐ。
+			// 押しっぱなしを「既に押下済み」とみなしてエッジを消費する。
+			m_advPrev       = true;
+			m_resultAdvPrev = true;
+		}
+		else { SceneManager::Instance().SetNextScene(SceneManager::SceneType::Title); }
+	}
+	m_menuConfPrev = conf;
+}
+
+//----------------------------------------------------------
+// TABメニュー：描画（背景をぼかして角丸パネル＋項目）
+//----------------------------------------------------------
+void StageSelectScene::DrawMenu()
+{
+	using namespace PauseMenuConst;
+	auto& sprite = KdShaderManager::Instance().m_spriteShader;
+	auto& pp     = KdShaderManager::Instance().m_postProcessShader;
+	const auto& bb = KdDirect3D::Instance().GetBackBuffer();
+	const int sw = static_cast<int>(bb->GetInfo().Width);
+	const int sh = static_cast<int>(bb->GetInfo().Height);
+
+	// 背景ぼかし：シーンRT(3D)をぼかして全画面合成
+	if (!m_menuBlurInit)
+	{
+		m_menuBlurRT.CreateRenderTarget(bb->GetWidth(), bb->GetHeight());
+		m_menuBlurInit = (m_menuBlurRT.m_RTTexture != nullptr);
+	}
+	auto srcRT = pp.GetSceneRT();
+	if (m_menuBlurInit && srcRT && srcRT->WorkRTView())
+	{
+		sprite.End();
+		pp.GenerateBlurTexture(srcRT, m_menuBlurRT.m_RTTexture, m_menuBlurRT.m_viewPort, BlurRadius);
+		sprite.Begin();
+		const Math::Color white(1.0f, 1.0f, 1.0f, 1.0f);
+		sprite.DrawTex(m_menuBlurRT.m_RTTexture.get(), 0, 0, sw, sh, nullptr, &white);
+	}
+	// うっすら暗幕
+	{
+		const Math::Color dim(0.0f, 0.0f, 0.0f, DimAlpha);
+		sprite.DrawBox(0, 0, sw, sh, &dim, true);
+	}
+
+	// 中央寄せ＋影テキスト（指定スロット）
+	auto drawCentered = [&](int fontNo, const char* text, float cx, float y, const Math::Color& col)
+	{
+		auto fs = KdFontManager::Instance().CreateFontTexture(fontNo, text, false);
+		if (!fs) { return; }
+		float tw = 0.0f, th = 0.0f;
+		for (const auto& d : fs->GetTexList())
+		{
+			if (!d || !d->FontTex) { continue; }
+			tw += static_cast<float>(d->FontTex->GetInfo().Width);
+			th  = std::max(th, static_cast<float>(d->FontTex->GetInfo().Height));
+		}
+		const Math::Vector2 pos(cx - tw * 0.5f, y - th * 0.5f);
+		const Math::Color shc(TextFxConst::ShadowR, TextFxConst::ShadowG, TextFxConst::ShadowB,
+			col.w * TextFxConst::ShadowAlphaMul);
+		sprite.DrawFont(fs, Math::Vector2(pos.x + TextFxConst::ShadowOffX, pos.y - TextFxConst::ShadowOffY), &shc, 0);
+		sprite.DrawFont(fs, pos, &col, 0);
+	};
+
+	// パネル（影→金縁→紺本体、角丸）
+	const float hw = PanelFullW * 0.5f;
+	const float panelH = BannerH + ContentPadTop + 2 * ItemRowH + ContentPadBottom;
+	const float hh = panelH * 0.5f;
+	const float top = hh;
+	{
+		const int ct = PanelEdgeThickness;
+		const Math::Color shadow(0.0f, 0.0f, 0.0f, PanelShadowA);
+		sprite.DrawRoundedBox(6, -6, static_cast<int>(hw) + ct, static_cast<int>(hh) + ct, PanelRadius + ct, &shadow, PanelCornerSegs);
+		const Math::Color edge(PanelEdgeR, PanelEdgeG, PanelEdgeB, PanelEdgeA);
+		sprite.DrawRoundedBox(0, 0, static_cast<int>(hw) + ct, static_cast<int>(hh) + ct, PanelRadius + ct, &edge, PanelCornerSegs);
+		const Math::Color body(PanelBodyR, PanelBodyG, PanelBodyB, PanelBodyA);
+		sprite.DrawRoundedBox(0, 0, static_cast<int>(hw), static_cast<int>(hh), PanelRadius, &body, PanelCornerSegs);
+	}
+
+	// 上部バナー（金）＋タイトル
+	const float bannerCY = top - BannerH * 0.5f;
+	{
+		const Math::Color banner(PanelEdgeR, PanelEdgeG, PanelEdgeB, 1.0f);
+		sprite.DrawRoundedBox(0, static_cast<int>(bannerCY), static_cast<int>(hw), static_cast<int>(BannerH * 0.5f), PanelRadius, &banner, PanelCornerSegs);
+		const Math::Color titleCol(BannerTextR, BannerTextG, BannerTextB, 1.0f);
+		drawCentered(ResultConst::FontBigNo, "メニュー", 0.0f, bannerCY, titleCol);
+	}
+
+	// 項目
+	const float firstItemY = bannerCY - BannerH * 0.5f - ContentPadTop - ItemRowH * 0.5f;
+	const float barHalfW   = (PanelFullW - SidePad * 2.0f) * 0.5f;
+	const char* items[2] = { "つづける", "タイトルへ" };
+	const float blink = 0.5f + 0.5f * std::sinf(m_menuBlink * BlinkSpeed);
+	for (int i = 0; i < 2; ++i)
+	{
+		const bool  sel = (i == m_menuIndex);
+		const float y   = firstItemY - i * ItemRowH;
+		if (sel)
+		{
+			const Math::Color bar(PanelEdgeR, PanelEdgeG, PanelEdgeB, HighlightA + HighlightBlinkA * blink);
+			sprite.DrawRoundedBox(0, static_cast<int>(y), static_cast<int>(barHalfW), static_cast<int>(HighlightH * 0.5f), PanelRadius, &bar, PanelCornerSegs);
+		}
+		const Math::Color col = sel ? Math::Color(1.0f, 0.97f, 0.7f, 1.0f) : Math::Color(0.75f, 0.78f, 0.85f, 0.85f);
+		drawCentered(ResultConst::FontMidNo, items[i], 0.0f, y, col);
 	}
 }
 
@@ -795,17 +1107,41 @@ void StageSelectScene::DrawResultPanel()
 	const Math::Color valueCol(ValueR, ValueG, ValueB, ca);
 	const Math::Color msgCol  (ValueR, ValueG, ValueB, ca);
 
-	// アイコン＋数（コイン/rockページ用）
+	// アイコン＋数（コインページ用）。コインは3Dモデル(RT)を優先、無ければ従来テクスチャ
 	auto drawIconValue = [&](const std::shared_ptr<KdTexture>& tex, int amount)
 	{
 		char vb[16]; std::snprintf(vb, sizeof(vb), "x%d", amount);
 		const int isz = static_cast<int>(ResultConst::PageIconSize * scale);
-		if (tex)
+		KdTexture* useTex = m_coinIcon.GetTexture();
+		if (!useTex && tex) { useTex = tex.get(); }
+		if (useTex)
 		{
 			const Math::Color ic(1.0f, 1.0f, 1.0f, ca);
-			sprite.DrawTex(tex.get(), static_cast<int>(px), static_cast<int>(contentCY + ResultConst::PageIconSize * 0.4f),
+			sprite.DrawTex(useTex, static_cast<int>(px), static_cast<int>(contentCY + ResultConst::PageIconSize * 0.4f),
 				isz, isz, nullptr, &ic);
 		}
+		drawCenter(FontBigNo, vb, px, contentCY - ResultConst::FontBigH * 0.55f, valueCol);
+	};
+
+	// 重力コア版：テクスチャの代わりに DrawTriangle で岩(エメラルド)コアを描く
+	auto drawCoreValue = [&](int amount)
+	{
+		char vb[16]; std::snprintf(vb, sizeof(vb), "x%d", amount);
+		const int isz = static_cast<int>(ResultConst::PageIconSize * scale);
+		CoreIcon::Draw(sprite, static_cast<int>(px),
+			static_cast<int>(contentCY + ResultConst::PageIconSize * 0.4f), isz, m_timer);
+		drawCenter(FontBigNo, vb, px, contentCY - ResultConst::FontBigH * 0.55f, valueCol);
+	};
+
+	// 重力コア(Glow)版：クリアで手に入れたゴールのコアをシアンで描く
+	auto drawGlowCoreValue = [&](int amount)
+	{
+		char vb[16]; std::snprintf(vb, sizeof(vb), "x%d", amount);
+		const int isz = static_cast<int>(ResultConst::PageIconSize * scale);
+		const Math::Color glow(GravityCoreConst::GlowFaceR, GravityCoreConst::GlowFaceG,
+							   GravityCoreConst::GlowFaceB, 1.0f);
+		CoreIcon::Draw(sprite, static_cast<int>(px),
+			static_cast<int>(contentCY + ResultConst::PageIconSize * 0.4f), isz, m_timer, glow, true);
 		drawCenter(FontBigNo, vb, px, contentCY - ResultConst::FontBigH * 0.55f, valueCol);
 	};
 
@@ -832,11 +1168,17 @@ void StageSelectScene::DrawResultPanel()
 		drawCenter(FontSmallNo, CoinLabel, px, contentCY + contentH * 0.5f - LabelInset, labelCol);
 		drawIconValue(m_coinTex, m_resCoins);
 	}
+	else if (m_resStep == 4)
+	{
+		// ページ4：入手 いわ（エメラルド）
+		drawCenter(FontSmallNo, ResultConst::RockLabel, px, contentCY + contentH * 0.5f - LabelInset, labelCol);
+		drawCoreValue(m_resRocks);
+	}
 	else
 	{
-		// ページ4：入手 rock
-		drawCenter(FontSmallNo, "いわ", px, contentCY + contentH * 0.5f - LabelInset, labelCol);
-		drawIconValue(m_rockTex, m_resRocks);
+		// ページ5：入手 じゅうりょくコア（ゴール＝クリアで必ず1個）
+		drawCenter(FontSmallNo, ResultConst::CoreLabel, px, contentCY + contentH * 0.5f - LabelInset, labelCol);
+		drawGlowCoreValue(1);
 	}
 
 	// ── ヒント（下・点滅）。途中は NEXT、最後は OK ──
@@ -1032,7 +1374,7 @@ void StageSelectScene::DrawSelectPanel()
 	const auto& barThumb = (sid >= 0 && sid < static_cast<int>(m_stageThumbs.size())) ? m_stageThumbs[sid] : nullptr;
 	if (barThumb)
 	{
-		const Math::Color tint(1.0f, 1.0f, 1.0f, SelBarImgAlpha * a);
+		const Math::Color tint(SelBarImgBright, SelBarImgBright, SelBarImgBright, SelBarImgAlpha * a);
 		sprite.DrawRoundedTex(barThumb.get(), 0, ibcy, ibhw, ibhh, SelHintBoxRadius, &tint, ThumbCornerSegs);
 		const Math::Color scrim(0.0f, 0.0f, 0.0f, SelBarScrimAlpha * a);
 		sprite.DrawRoundedBox(0, ibcy, ibhw, ibhh, SelHintBoxRadius, &scrim, ThumbCornerSegs);
@@ -1058,12 +1400,26 @@ void StageSelectScene::DrawSelectPanel()
 		drawCenter(ResultConst::FontSmallNo, "ステージ", colCX(0), labelY, label);
 		drawCenter(ResultConst::FontSmallNo, name,    colCX(0), valueY, value);
 	}
-	// 列1：STATUS / クリア状況
+	// 列1：STATUS / クリア状況（未解放なら「ロック」表示）
 	{
-		const char* mark = rec.cleared ? SelClearedMark : SelNotClearedMark;
-		const Math::Color mc = rec.cleared
-			? Math::Color(ResultConst::EdgeR, ResultConst::EdgeG, ResultConst::EdgeB, a)
-			: Math::Color(0.7f, 0.7f, 0.75f, a);
+		const bool unlocked = IsUnlocked(sid);
+		const char* mark;
+		Math::Color mc;
+		if (!unlocked)
+		{
+			mark = SelLockedMark;
+			mc   = Math::Color(0.85f, 0.45f, 0.45f, a);   // 赤系＝ロック
+		}
+		else if (rec.cleared)
+		{
+			mark = SelClearedMark;
+			mc   = Math::Color(ResultConst::EdgeR, ResultConst::EdgeG, ResultConst::EdgeB, a);
+		}
+		else
+		{
+			mark = SelNotClearedMark;
+			mc   = Math::Color(0.7f, 0.7f, 0.75f, a);
+		}
 		drawCenter(ResultConst::FontSmallNo, "じょうたい", colCX(1), labelY, label);
 		drawCenter(ResultConst::FontSmallNo, mark,     colCX(1), valueY, mc);
 	}
@@ -1100,8 +1456,18 @@ void StageSelectScene::DrawSelectPanel()
 		const float backCX = -sw * 0.5f + SelBarMargin + backHalfW;   // 左下
 		const float goCX   =  sw * 0.5f - SelBarMargin - goHalfW;     // 右下
 
-		m_btnGo.Draw(  goCX,   btnCY, boxHalfH, SelHintBoxPadX, SelHintBoxRadius, m_selChoice == 0, a, pulse);
+		// 未解放ステージは GO を暗くして押せないことを示す
+		const bool  unlocked = IsUnlocked(sid);
+		const float goA      = unlocked ? a : a * SelLockedGoAlpha;
+		m_btnGo.Draw(  goCX,   btnCY, boxHalfH, SelHintBoxPadX, SelHintBoxRadius, unlocked && m_selChoice == 0, goA, pulse);
 		m_btnBack.Draw(backCX, btnCY, boxHalfH, SelHintBoxPadX, SelHintBoxRadius, m_selChoice == 1, a, pulse);
+
+		// ロック時はヒント文を GO の上に表示
+		if (!unlocked)
+		{
+			const Math::Color hintCol(0.95f, 0.6f, 0.6f, a);
+			drawCenter(ResultConst::FontSmallNo, SelLockedHint, goCX, btnCY + boxHalfH + SelLockedHintGap, hintCol);
+		}
 	}
 }
 
@@ -1110,13 +1476,20 @@ void StageSelectScene::DrawTotalsHud()
 	auto& sprite = KdShaderManager::Instance().m_spriteShader;
 
 	// アイコン＋数字（ポップ拡大つき）
-	auto drawRow = [&](const std::shared_ptr<KdTexture>& tex, const Math::Vector3& pos, int total, float pop)
+	auto drawRow = [&](const std::shared_ptr<KdTexture>& tex, const Math::Vector3& pos, int total, float pop, bool core = false)
 	{
 		const float k   = (pop > 0.0f) ? (pop / ResultConst::HudPopTime) : 0.0f;
 		const float scl = 1.0f + ResultConst::HudPopScale * k;
 		const int   isz = static_cast<int>(ResultConst::HudIconSize * scl);
 		const Math::Color ic(1.0f, 1.0f, 1.0f, 1.0f);
-		if (tex) { sprite.DrawTex(tex.get(), static_cast<int>(pos.x), static_cast<int>(pos.y), isz, isz, nullptr, &ic); }
+		if (core) { CoreIcon::Draw(sprite, static_cast<int>(pos.x), static_cast<int>(pos.y), isz, m_timer); }
+		else
+		{
+			// コインは3Dモデル(RT)を優先、無ければ従来テクスチャ
+			KdTexture* useTex = m_coinIcon.GetTexture();
+			if (!useTex && tex) { useTex = tex.get(); }
+			if (useTex) { sprite.DrawTex(useTex, static_cast<int>(pos.x), static_cast<int>(pos.y), isz, isz, nullptr, &ic); }
+		}
 
 		char nb[24]; std::snprintf(nb, sizeof(nb), "x%d", total);
 		auto fs = KdFontManager::Instance().CreateFontTexture(ResultConst::HudFontNo, nb, false);
@@ -1134,7 +1507,36 @@ void StageSelectScene::DrawTotalsHud()
 	};
 
 	drawRow(m_coinTex, HudCoinPos(), StageManager::Instance().GetTotalCoins(), m_coinHudPop);
-	drawRow(m_rockTex, HudRockPos(), StageManager::Instance().GetTotalRocks(), m_rockHudPop);
+	drawRow(nullptr,   HudRockPos(), StageManager::Instance().GetTotalRocks(), m_rockHudPop, true);   // いわ（かけら）
+
+	// ── ゴールの重力コア（Glow）：取り戻した数＝クリア済みステージ数（シアンで描画）──
+	{
+		int cleared = 0;
+		for (int i = 0; i < StageSelectConst::StageNameCount; ++i)
+		{
+			if (StageManager::Instance().GetRecord(i).cleared) { ++cleared; }
+		}
+		Math::Vector3 cpos = HudRockPos();
+		cpos.y -= ResultConst::HudRowGap;   // いわの下
+		const Math::Color glow(GravityCoreConst::GlowFaceR, GravityCoreConst::GlowFaceG,
+							   GravityCoreConst::GlowFaceB, 1.0f);
+		CoreIcon::Draw(sprite, static_cast<int>(cpos.x), static_cast<int>(cpos.y),
+			ResultConst::HudIconSize, m_timer, glow, true);   // Glowスタイルで再現
+
+		char nb[24]; std::snprintf(nb, sizeof(nb), "x%d", cleared);
+		auto fs = KdFontManager::Instance().CreateFontTexture(ResultConst::HudFontNo, nb, false);
+		if (fs)
+		{
+			float h = 0.0f;
+			for (const auto& d : fs->GetTexList()) { if (d && d->FontTex) { h = std::max(h, static_cast<float>(d->FontTex->GetInfo().Height)); } }
+			const float tx = cpos.x + ResultConst::HudIconSize * 0.5f + ResultConst::HudTextGap;
+			const float ty = cpos.y - h * 0.5f;
+			const Math::Color sh(0.0f, 0.0f, 0.0f, TextFxConst::ShadowAlphaMul);
+			sprite.DrawFont(fs, Math::Vector2(tx + TextFxConst::ShadowOffX, ty - TextFxConst::ShadowOffY), &sh, 0);
+			const Math::Color tc(1.0f, 1.0f, 1.0f, 1.0f);
+			sprite.DrawFont(fs, Math::Vector2(tx, ty), &tc, 0);
+		}
+	}
 
 	// タリー飛行アイコン（プレイヤー→HUDへ弧を描いてホーミング）
 	if (m_tallyActive)
@@ -1147,12 +1549,23 @@ void StageSelectScene::DrawTotalsHud()
 			const Math::Vector3 ctrl = (f.start + target) * 0.5f + Math::Vector3(0.0f, ResultConst::TallyArcUp, 0.0f);
 			const float u = 1.0f - te;
 			const Math::Vector3 pos = f.start * (u * u) + ctrl * (2.0f * u * te) + target * (te * te);
-			const auto& tex = f.isRock ? m_rockTex : m_coinTex;
-			if (tex)
+			if (f.isRock)
 			{
-				const Math::Color ic(1.0f, 1.0f, 1.0f, 1.0f);
-				sprite.DrawTex(tex.get(), static_cast<int>(pos.x), static_cast<int>(pos.y),
-					ResultConst::TallyFlySize, ResultConst::TallyFlySize, nullptr, &ic);
+				// コアは DrawTriangle で描く
+				CoreIcon::Draw(sprite, static_cast<int>(pos.x), static_cast<int>(pos.y),
+					ResultConst::TallyFlySize, m_timer);
+			}
+			else
+			{
+				// コインは3Dモデル(RT)を優先、無ければ従来テクスチャ
+				KdTexture* useTex = m_coinIcon.GetTexture();
+				if (!useTex && m_coinTex) { useTex = m_coinTex.get(); }
+				if (useTex)
+				{
+					const Math::Color ic(1.0f, 1.0f, 1.0f, 1.0f);
+					sprite.DrawTex(useTex, static_cast<int>(pos.x), static_cast<int>(pos.y),
+						ResultConst::TallyFlySize, ResultConst::TallyFlySize, nullptr, &ic);
+				}
 			}
 		}
 	}

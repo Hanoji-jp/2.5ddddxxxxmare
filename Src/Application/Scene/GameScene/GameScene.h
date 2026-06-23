@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include <functional>
+#include"../../../Framework/Shader/KdRenderTargetChange.h"
 #include"../BaseScene/BaseScene.h"
 #include"../../GameObject/Character/Player/Player.h"
 #include"../../GameObject/Character/Enemy/Enemy.h"
@@ -12,6 +13,7 @@
 #include"../../Editor/RoomBoundsEditor.h"
 #include"../../Editor/EnemyPlacementEditor.h"
 #include"../../Editor/CheckpointEditor.h"
+#include"../../Editor/ShowcaseCamEditor.h"
 #include"../../Editor/WarpHoleEditor.h"
 #include"../../Editor/MovingFloorEditor.h"
 #include"../../GameObject/Gimmick/WarpHole.h"
@@ -25,6 +27,7 @@
 #include"../../Const/EditorPickConst.h"
 #include"../../Const/JuiceConst.h"
 #include"../../Const/PauseMenuConst.h"
+#include"../../Const/GameOverConst.h"
 #include"../../Const/DeathConst.h"
 #include"../../GameObject/Checkpoint/Checkpoint.h"
 #include"../../Const/CheckpointConst.h"
@@ -32,6 +35,7 @@
 #include"../../GameObject/Light/PointLightObject.h"
 #include"../../Const/LightConst.h"
 #include"../../GameObject/Effect/FootDust.h"
+#include"../../GameObject/Effect/DamageBurst.h"
 #include"../../Manager/ItemManager.h"
 #include"../../GameObject/Gimmick/MovingFloor.h"
 #include"../../GameObject/Character/Enemy/Cubun.h"
@@ -42,6 +46,7 @@
 #include"../../GameObject/Gimmick/GravityCore.h"
 #include"../../Editor/SpikeBoxEditor.h"
 #include"../../GameObject/Gimmick/SpikeBox.h"
+#include"../../Util/CoinModelIcon.h"
 class GameScene : public BaseScene
 {
 public :
@@ -70,13 +75,20 @@ private:
 	bool IsUpdatePaused() const override
 	{
 		const bool unbuiltStage = PlanetGravityManager::Instance().GetPlanets().empty();
-		return m_menuOpen || m_convoActive || (m_editorMode && m_editorFreeze) || unbuiltStage || m_clearActive;
+		const bool showcaseFreeze = (m_showcaseState == ShowcaseState::Playing
+			|| m_showcaseState == ShowcaseState::Closing);
+		return m_menuOpen || m_gameOverActive || m_convoActive || (m_editorMode && m_editorFreeze) || unbuiltStage || m_clearActive || showcaseFreeze;
 	}
 	void UpdatePauseMenu();   // メニュー操作（Event から呼ぶ）
 	void DrawPauseMenu();     // メニュー描画（DrawSpriteExtra から呼ぶ）
+	void UpdateGameOver();    // ゲームオーバー操作（Event から呼ぶ）
+	void DrawGameOver();      // ゲームオーバー描画（DrawSpriteExtra から呼ぶ）
 
 	// 回復「＋」マークをプレイヤー位置とHP UI位置に出す（緑石取得時）
 	void SpawnHealPlus(int count);
+
+	// 被ダメ時：プレイヤーの体全体から赤系boxパーティクルを弾けさせる
+	void SpawnDamageBurst();
 
 	// 重力ゾーンの重力方向を壁に2D矢印で表示（マリギャラ風）
 	void DrawGravityArrows();
@@ -113,6 +125,7 @@ private:
 	RoomBoundsEditor        m_roomEditor;
 	EnemyPlacementEditor    m_enemyEditor;
 	CheckpointEditor        m_checkpointEditor;
+	ShowcaseCamEditor       m_showcaseEditor;
 	WarpHoleEditor          m_warpHoleEditor;
 	MovingFloorEditor       m_movingFloorEditor;
 
@@ -150,10 +163,24 @@ private:
 	bool                    m_f2Prev      = false;
 	EditorCamera*           m_pEditorCam  = nullptr;
 
+	// 撮影モード（F4）：自由移動カメラ＋ワイヤーフレーム一切非表示。エディタとは別。
+	bool                    m_photoMode   = false;
+	bool                    m_f4Prev      = false;
+
+	// ステージ1の操作説明（着地後に表示→A/D/Spaceを全部押したら消える）
+	bool   m_ctrlHintActive = false;   // 表示中（フェード含む）
+	bool   m_ctrlHintDone   = false;   // 全部押した＝フェードアウト中
+	float  m_ctrlHintAlpha  = 0.0f;    // 0→1 フェードイン / 1→0 フェードアウト
+	bool   m_ctrlGotA       = false;
+	bool   m_ctrlGotD       = false;
+	bool   m_ctrlGotJump    = false;
+	void   UpdateControlHint();        // 入力検知＋フェード（Event から呼ぶ）
+	void   DrawControlHint();          // 描画（DrawSpriteExtra から呼ぶ）
+
 	// ─── エディタ：オブジェクト選択・操作（自前マウスピッキング＋ドラッグ）───
 	// 生成・コピー対象の種別
 	enum class EditKind { Planet, WindBox, SpikeBox, GravityCore, MovingFloor,
-						   ManualZone, DeadZone, Corelia };
+						   ManualZone, DeadZone, Corelia, ShowcaseEye, ShowcaseLook };
 
 	// ギズモの操作軸
 	enum class GizmoAxis { None, X, Y, Z };
@@ -218,6 +245,7 @@ private:
 	Math::Vector3   m_teleportExitPos;
 	Math::Vector3   m_teleportExitDir;
 	bool            m_currentWarpTeleport  = false;
+	std::weak_ptr<WarpHole> m_currentWarpHole;   // 通過中のホール（ワンウェイなら完了時に収縮消滅）
 
 	// テレポート出現スケールポップ
 	float           m_teleportPopTimer     = 0.0f;  // >0 でポップアニメ再生中
@@ -239,6 +267,45 @@ private:
 	void StartIntroCutscene();
 	void UpdateIntroCutscene();
 	void DrawIntroTrail();    // 落下トレイル（カメラを向く連結リボン）を描く
+	float m_arrivalTimer = -1.0f;  // 着地後「〜にやってきた！」表示の経過秒（負で非表示）
+	bool  m_arrivalFitDone = false;// 画面幅に収まるようフォントサイズ調整済みか
+	void  DrawArrivalBanner();     // 着地直後のステージ名バナー
+	void  DrawTalkPrompt();        // 近くのコアリアの頭上に「Ｗ 話す」吹き出し
+
+	// ── ステージ見せカメラ（入場直後・落下演出の前に再生する、マリギャラ風フライスルー）──
+	// Playing=フライスルー中 / Closing=黒帯が中央へ閉じて暗転 / Opening=黒帯が開いてゲームへ
+	enum class ShowcaseState { Off, Playing, Closing, Opening };
+	ShowcaseState m_showcaseState = ShowcaseState::Off;
+	int   m_showcasePhase  = 0;      // 再生中のフェーズ(0始まり)
+	float m_showcaseTimer  = 0.0f;   // 現フェーズの経過秒
+	bool  m_showcaseSkipPrev = false;// スキップキーのエッジ検出
+	bool  m_introPending   = false;  // 見せカメラ後に導入落下を始めるか
+	float m_barCover       = 0.0f;   // 黒帯の被り量（画面高に対する各帯の高さ比。0.5で中央到達）
+	Math::Matrix m_showcaseLastWorld;// Closing中に保持する最後のカメラ行列
+	void  UpdateShowcaseCam();       // 毎フレーム：スプライン上をカメラ移動（Eventから）
+	void  UpdateShowcaseWorld();     // 見せカメラ中もプレイヤー以外のオブジェクトは動かす
+	void  DrawShowcaseBars();        // 上下の黒帯（シネマ）描画
+	// 経過秒 t から見せカメラのワールド行列を求める（全フェーズ終了で false）
+	bool  EvalShowcaseCam(float _t, Math::Matrix& _outWorld) const;
+
+	// ポーズ中の背景ぼかし（シーンRT＋HUDをぼかして全画面合成）
+	KdRenderTargetPack    m_pauseBlurRT;       // ぼかし結果の出力先
+	KdRenderTargetChanger m_pauseRTChanger;    // HUDをシーンRTへ描くための切替
+	bool                  m_pauseBlurInit = false;
+
+	// 見せカメラ視点を別ウィンドウへプレビュー（オフスクリーンRTへ2パス目を描く）
+	KdRenderTargetPack m_camPreviewRT;        // プレビュー用オフスクリーン描画先
+	KdCamera           m_camPreviewCam;       // プレビュー描画に使うカメラ
+	bool               m_camPreviewOn   = false; // プレビュー表示ON/OFF
+	bool               m_camPreviewInit = false; // RT初期化済み
+	bool               m_camPreviewPlaying = true; // タイムライン再生中か（一時停止/スクラブ用）
+	float              m_camPreviewTime = 0.0f;  // プレビュー再生時間（秒・全フェーズ通し）
+	float ShowcaseTotalDuration() const;      // 全フェーズの合計時間（秒）
+	void  DrawShowcasePreview();              // シーンを見せカメラ視点でRTへ描く
+	void  DrawShowcasePreviewWindow();        // ImGuiウィンドウにRTを表示
+
+	// ── UI用：3DコインをオフスクリーンRTへ描いてHUDにスプライト表示（共通ヘルパー）──
+	CoinModelIcon m_coinIcon;                 // RT＋カメラ＋モデル＋アウトラインを内包
 
 	// ステージクリア（ゴールコア取得＝即クリア→演出→StageSelectへ）
 	bool  m_clearActive = false;
@@ -257,6 +324,16 @@ private:
 	bool            m_menuNavPrev     = false;
 	bool            m_menuConfirmPrev = false;
 	float           m_menuBlinkTimer  = 0.0f;
+	// メニュー→シーン遷移の黒フェードアウト（-1=非作動）。target: 0=StageSelect / 1=Title
+	float           m_pauseExitFade   = -1.0f;
+	int             m_pauseExitTarget = 0;
+
+	// ゲームオーバー状態（死亡回数が上限に達したとき）
+	bool            m_gameOverActive   = false;
+	int             m_gameOverIndex    = 0;
+	bool            m_gameOverNavPrev  = false;
+	bool            m_gameOverConfPrev = false;
+	float           m_gameOverTimer    = 0.0f;   // 出現フェード＆点滅用
 
 	// HP ダメージ検知（前フレームの HP を保持）
 	int             m_prevPlayerHp         = -1;
@@ -322,10 +399,14 @@ private:
 	// クリア暗転用アイリスマスク（中央が透明な穴・外周が黒。マリオ風の閉じる暗転）
 	std::shared_ptr<KdTexture> m_irisMaskTex;
 
-	// 導入の落下トレイル（控えめなリボン＋柔らかいglow画像オーバーレイ＝彗星の尾）
-	std::shared_ptr<KdTexture> m_introTrailTex;   // 柔らかい丸グロー（かぶせ用）
-	KdSquarePolygon            m_introTrailPoly;
+	// 低HP時の黒ビネット（画面端が暗くなる）
+	std::shared_ptr<KdTexture> m_vignetteTex;
+	void DrawLowHpVignette();   // DrawSpriteExtra から呼ぶ
+
+	// 導入の落下トレイル（カメラを向く連結リボン＝彗星の尾）
 	std::vector<Math::Vector3> m_introTrail;   // 位置履歴（[0]=最新＝頭）
+	std::shared_ptr<KdTexture> m_footGlowTex;  // 足元に重ねて繋ぎ目を隠すglow
+	KdSquarePolygon            m_footGlowPoly;
 
 	// コアリア残機アイコン（死亡暗転画面に中央表示）
 	std::shared_ptr<KdTexture> m_lifeIconTex;
@@ -336,6 +417,12 @@ private:
 	std::shared_ptr<KdTexture> m_coinIconTex;
 	int                        m_coinTotal    = 0;     // 取得した累計
 	float                      m_coinPopTimer = 0.0f;  // 取得時の拡大演出残り
+
+	// 重力コア(Rock)取得カウンター（HUDに DrawTriangle で岩アイコン＋数字）
+	int                        m_coreTotal    = 0;     // 取得した重力コア数（このラン）
+	float                      m_corePopTimer = 0.0f;  // 取得ポップ残り
+	float                      m_coreIconSpin = 0.0f;  // アイコン自転角
+	void DrawCoreIcon(int cx, int cy, int size, float spin);   // 岩コアを2D投影描画（HUD用）
 
 	// HP（星1個で完結する満ち欠けゲージ）
 	std::shared_ptr<KdTexture> m_hpStarTex;
@@ -369,18 +456,22 @@ private:
 	// ── コアリア会話（ヒントNPC）──
 	bool          m_convoActive   = false;  // 会話中か
 	Math::Vector3 m_convoNpcPos   = {};     // ズーム対象のNPC位置
-	std::string   m_convoText;              // 表示するヒント本文（SJIS）
+	std::string   m_convoText;              // 表示中ページの本文（SJIS）
+	std::vector<std::string> m_convoPages;  // ヒントを PageSep で分割したページ群
+	int           m_convoPage     = 0;      // 表示中ページindex
 	float         m_convoZoom     = 0.0f;   // 0=通常, 1=ズームイン完了
 	bool          m_interactPrev  = false;  // Wキーの押下エッジ検出
 
 	// デバッグ可視化（ManualZone以外＝デッドゾーン/コアリア判定）。1キーでトグル
 	bool          m_debugZonesVisible = false;
 	bool          m_debugKeyPrev      = false;
+	bool          m_resetKeyPrev      = false;   // Rキー（セーブデータリセット）のエッジ検出
 
 	float         m_gravArrowScroll   = 0.0f;  // 重力矢印の流れ（スクロール）時間
 
 	// エディタ画面（ゲームをImGuiウィンドウに表示）。F3でトグル。OFFで通常フルスクリーン描画
-	bool          m_editorScreen   = true;
+	// 開始時は通常のゲーム画面（false）。エディタを使うときだけ F3 でON。
+	bool          m_editorScreen   = false;
 	bool          m_editorKeyPrev  = false;
 	void UpdateCorelia();                   // 会話・インタラクト処理（Event から呼ぶ）
 	void DrawCorelia();                     // 会話UI描画（DrawSpriteExtra から呼ぶ）

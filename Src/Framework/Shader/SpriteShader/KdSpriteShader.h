@@ -147,6 +147,20 @@ public:
 		DrawRoundedTex(tex.lock().get(), x, y, extentX, extentY, radius, color, cornerSegs);
 	}
 
+	// 角丸の吹き出し（角丸ボックス＋下向きの三角の尻尾）。中心(x,y)・ハーフサイズextentX/Y。
+	// ・radius   … 角の丸み半径(px)
+	// ・tailW    … 尻尾の根元の半幅(px)
+	// ・tailH    … 尻尾の高さ(px。ボックス下端から下へ伸びる)
+	void DrawRoundedBubble(int x, int y, int extentX, int extentY, float radius,
+		int tailW, int tailH, const Math::Color* color = &kWhiteColor, int cornerSegs = 6);
+
+	// 角丸の吹き出し（尻尾が指定座標 (tailTargetX,tailTargetY) の方向へ伸びる版）。
+	// ・tailHalfW … 尻尾の根元の半幅(px)
+	// ・maxTailLen… 尻尾の最大長(px。対象が遠い時の伸びすぎ防止)
+	void DrawRoundedBubbleTo(int x, int y, int extentX, int extentY, float radius,
+		float tailTargetX, float tailTargetY, int tailHalfW, float maxTailLen,
+		const Math::Color* color = &kWhiteColor, int cornerSegs = 6);
+
 	// 切り抜き範囲を設定する
 	// ・rect			… 範囲
 	void SetScissorRect(const Math::Rectangle& rect);

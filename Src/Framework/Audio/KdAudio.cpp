@@ -1,7 +1,108 @@
 ﻿#include "KdAudio.h"
 
+// ── mp3 等を PCM へデコードするための Media Foundation ──
+#include <mfapi.h>
+#include <mfidl.h>
+#include <mfreadwrite.h>
+#include <mferror.h>
+#include <wrl/client.h>
+#include <vector>
+#include <algorithm>
+#include <cctype>
+#include <cstring>
+#pragma comment(lib, "mfplat.lib")
+#pragma comment(lib, "mfreadwrite.lib")
+#pragma comment(lib, "mfuuid.lib")
+
+namespace
+{
+	// 拡張子（小文字）で末尾一致
+	bool EndsWithExtCI(std::string_view name, std::string_view ext)
+	{
+		if (name.size() < ext.size()) { return false; }
+		for (size_t i = 0; i < ext.size(); ++i)
+		{
+			const char a = static_cast<char>(std::tolower(static_cast<unsigned char>(name[name.size() - ext.size() + i])));
+			const char b = static_cast<char>(std::tolower(static_cast<unsigned char>(ext[i])));
+			if (a != b) { return false; }
+		}
+		return true;
+	}
+
+	// Media Foundation で音声ファイル(mp3/m4a/wma等)を 16bit PCM へ全デコードする。
+	// 成功時：outPcm に生PCM、outWfx に PCM フォーマットを返す。
+	bool DecodeAudioToPcm(const wchar_t* path, std::vector<uint8_t>& outPcm, WAVEFORMATEX& outWfx)
+	{
+		using Microsoft::WRL::ComPtr;
+
+		ComPtr<IMFSourceReader> reader;
+		if (FAILED(MFCreateSourceReaderFromURL(path, nullptr, reader.GetAddressOf()))) { return false; }
+
+		// 音声ストリームのみ選択
+		reader->SetStreamSelection(static_cast<DWORD>(MF_SOURCE_READER_ALL_STREAMS), FALSE);
+		reader->SetStreamSelection(static_cast<DWORD>(MF_SOURCE_READER_FIRST_AUDIO_STREAM), TRUE);
+
+		// 出力を 16bit PCM に指定（デコーダが自動で挟まる）
+		ComPtr<IMFMediaType> pcmType;
+		if (FAILED(MFCreateMediaType(pcmType.GetAddressOf()))) { return false; }
+		pcmType->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Audio);
+		pcmType->SetGUID(MF_MT_SUBTYPE,    MFAudioFormat_PCM);
+		pcmType->SetUINT32(MF_MT_AUDIO_BITS_PER_SAMPLE, 16);
+		if (FAILED(reader->SetCurrentMediaType(static_cast<DWORD>(MF_SOURCE_READER_FIRST_AUDIO_STREAM), nullptr, pcmType.Get())))
+		{
+			return false;
+		}
+
+		// 実際に決まった出力フォーマットを取得
+		ComPtr<IMFMediaType> actual;
+		if (FAILED(reader->GetCurrentMediaType(static_cast<DWORD>(MF_SOURCE_READER_FIRST_AUDIO_STREAM), actual.GetAddressOf())))
+		{
+			return false;
+		}
+
+		UINT32 channels = 0, sampleRate = 0, bits = 16;
+		actual->GetUINT32(MF_MT_AUDIO_NUM_CHANNELS,     &channels);
+		actual->GetUINT32(MF_MT_AUDIO_SAMPLES_PER_SECOND, &sampleRate);
+		actual->GetUINT32(MF_MT_AUDIO_BITS_PER_SAMPLE,  &bits);
+		if (channels == 0 || sampleRate == 0 || bits == 0) { return false; }
+
+		ZeroMemory(&outWfx, sizeof(outWfx));
+		outWfx.wFormatTag      = WAVE_FORMAT_PCM;
+		outWfx.nChannels       = static_cast<WORD>(channels);
+		outWfx.nSamplesPerSec  = sampleRate;
+		outWfx.wBitsPerSample  = static_cast<WORD>(bits);
+		outWfx.nBlockAlign     = static_cast<WORD>(channels * bits / 8);
+		outWfx.nAvgBytesPerSec = sampleRate * outWfx.nBlockAlign;
+		outWfx.cbSize          = 0;
+
+		// 全サンプルを読み出して連結
+		for (;;)
+		{
+			DWORD flags = 0;
+			ComPtr<IMFSample> sample;
+			if (FAILED(reader->ReadSample(static_cast<DWORD>(MF_SOURCE_READER_FIRST_AUDIO_STREAM),
+				0, nullptr, &flags, nullptr, sample.GetAddressOf())))
+			{
+				return false;
+			}
+			if (flags & MF_SOURCE_READERF_ENDOFSTREAM) { break; }
+			if (!sample) { continue; }
+
+			ComPtr<IMFMediaBuffer> buffer;
+			if (FAILED(sample->ConvertToContiguousBuffer(buffer.GetAddressOf()))) { return false; }
+
+			BYTE* data = nullptr; DWORD len = 0;
+			if (FAILED(buffer->Lock(&data, nullptr, &len))) { return false; }
+			outPcm.insert(outPcm.end(), data, data + len);
+			buffer->Unlock();
+		}
+
+		return !outPcm.empty();
+	}
+}
+
 // ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### #####
-// 
+//
 // KdAudioManager
 // 
 // ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### #####
@@ -20,6 +121,15 @@ void KdAudioManager::Init()
 	m_audioEng->SetReverb(DirectX::Reverb_Default);
 
 	m_listener.OrientFront = { 0, 0, 1 };
+
+	// Media Foundation 初期化（mp3 等のデコード用）。COM は AudioEngine 生成時点で初期化済み前提。
+	if (!m_mfInitialized)
+	{
+		if (SUCCEEDED(MFStartup(MF_VERSION, MFSTARTUP_LITE)))
+		{
+			m_mfInitialized = true;
+		}
+	}
 }
 
 // ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// /////
@@ -203,6 +313,13 @@ void KdAudioManager::Release()
 	m_soundMap.clear();
 
 	m_audioEng = nullptr;
+
+	// Media Foundation 終了
+	if (m_mfInitialized)
+	{
+		MFShutdown();
+		m_mfInitialized = false;
+	}
 }
 
 // ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// /////
@@ -255,8 +372,42 @@ bool KdSoundEffect::Load(std::string_view fileName, const std::unique_ptr<Direct
 			// wstringに変換
 			std::wstring wFilename = sjis_to_wide(fileName.data());
 
-			// 読み込み
-			m_soundEffect = std::make_unique<DirectX::SoundEffect>(engine.get(), wFilename.c_str());
+			// mp3/m4a/wma 等の圧縮音源は Media Foundation で PCM デコードして読み込む。
+			// wav は従来どおり DirectXTK で直接読み込む（速い）。
+			const bool compressed =
+				EndsWithExtCI(fileName, ".mp3") ||
+				EndsWithExtCI(fileName, ".m4a") ||
+				EndsWithExtCI(fileName, ".aac") ||
+				EndsWithExtCI(fileName, ".wma");
+
+			if (compressed)
+			{
+				std::vector<uint8_t> pcm;
+				WAVEFORMATEX wfx{};
+				if (!DecodeAudioToPcm(wFilename.c_str(), pcm, wfx))
+				{
+					assert(0 && "Sound File Decode Error (Media Foundation)");
+					return false;
+				}
+
+				// [WAVEFORMATEX][PCMデータ] の連続バッファを作る。
+				// SoundEffect は wfx ポインタを保持するため、所有権を渡すバッファ内に同居させる。
+				const size_t hdr = sizeof(WAVEFORMATEX);
+				auto wavData = std::make_unique<uint8_t[]>(hdr + pcm.size());
+				std::memcpy(wavData.get(), &wfx, hdr);
+				std::memcpy(wavData.get() + hdr, pcm.data(), pcm.size());
+
+				const WAVEFORMATEX* pwfx = reinterpret_cast<const WAVEFORMATEX*>(wavData.get());
+				const uint8_t* startAudio = wavData.get() + hdr;
+
+				m_soundEffect = std::make_unique<DirectX::SoundEffect>(
+					engine.get(), wavData, pwfx, startAudio, pcm.size());
+			}
+			else
+			{
+				// wav 読み込み
+				m_soundEffect = std::make_unique<DirectX::SoundEffect>(engine.get(), wFilename.c_str());
+			}
 		}
 		catch (...)
 		{

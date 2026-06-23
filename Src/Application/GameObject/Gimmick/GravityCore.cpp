@@ -591,9 +591,10 @@ void GravityCore::DrawGlowEffect()
 	auto& shader = KdShaderManager::Instance().m_StandardShader;
 	if (!m_triVerts.empty())
 	{
+		// 深度を書く（DoFでボケないように）。面で深度を埋めてからワイヤーを重ねる。
 		shader.DrawVertices(m_triVerts, m_mWorld,
 			Math::Color(1, 1, 1, 1),
-			KdDepthStencilState::ZWriteDisable,
+			KdDepthStencilState::ZEnable,
 			D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	}
 	if (!m_wireVerts.empty())

@@ -227,7 +227,7 @@ void WarpHole::UpdateParticles()
 //----------------------------------------------------------
 void WarpHole::DrawLit()
 {
-	if (!m_data.Enabled) { return; }
+	if (!m_data.Enabled || m_dead) { return; }
 
 	// パーティクルをシアン色で描画（tintでベースカラーをシアンに染める）
 	const Math::Color particleTint = {
@@ -270,9 +270,22 @@ void WarpHole::DrawLit()
 //----------------------------------------------------------
 void WarpHole::Update()
 {
-	if (!m_data.Enabled) { return; }
+	if (!m_data.Enabled || m_dead) { return; }
 
 	const float dt = KdFPSController::GetDt();
+
+	// ワンウェイ通過後：収縮して消える
+	if (m_consuming)
+	{
+		m_consumeScale -= WarpHoleConst::ConsumeShrinkSpeed * dt;
+		if (m_consumeScale <= 0.0f)
+		{
+			m_consumeScale = 0.0f;
+			m_dead = true;   // 完全消滅（以降は描画・判定なし）
+			return;
+		}
+	}
+
 	m_animOffset += WarpHoleConst::AnimSpeed * dt;
 	if (m_animOffset > 1.0f) { m_animOffset -= 1.0f; }
 
@@ -283,7 +296,7 @@ void WarpHole::Update()
 //----------------------------------------------------------
 void WarpHole::DrawEffect()
 {
-	if (!m_data.Enabled) { return; }
+	if (!m_data.Enabled || m_dead) { return; }
 
 	auto& shaderMgr = KdShaderManager::Instance();
 	shaderMgr.ChangeBlendState(KdBlendState::Add);
@@ -357,7 +370,7 @@ void WarpHole::DrawEffect()
 //----------------------------------------------------------
 void WarpHole::DrawBright()
 {
-	if (!m_data.Enabled) { return; }
+	if (!m_data.Enabled || m_dead) { return; }
 
 	auto& shaderMgr = KdShaderManager::Instance();
 	shaderMgr.ChangeBlendState(KdBlendState::Add);
@@ -421,7 +434,7 @@ void WarpHole::DrawBright()
 //----------------------------------------------------------
 void WarpHole::DrawDebug()
 {
-	if (!m_data.Enabled) { return; }
+	if (!m_data.Enabled || m_dead) { return; }
 
 	{
 		KdDebugWireFrame wire;
@@ -490,10 +503,10 @@ void WarpHole::DrawFunnelFace(const Math::Vector3& center,
 			wave = std::sinf(wavePhase) * waveAmp;
 		}
 
-		const float r = radius * (1.0f + jitter + wave);
+		const float r = radius * (1.0f + jitter + wave) * m_consumeScale;   // 収縮消滅で縮む
 
 		return center
-			+ mouthDir  * depth
+			+ mouthDir  * (depth * m_consumeScale)
 			+ tangent   * (r * std::cosf(angle))
 			+ bitangent * (r * std::sinf(angle));
 	};
@@ -896,7 +909,7 @@ void WarpHole::DrawTunnelFace(const std::vector<Math::Vector3>& path,
 //----------------------------------------------------------
 bool WarpHole::CheckWarpTrigger(const Math::Vector3& pPos) const
 {
-	if (!m_data.Enabled) { return false; }
+	if (!m_data.Enabled || m_dead || m_consuming) { return false; }
 
 	const float distSq   = (pPos - m_data.EntryPos).LengthSquared();
 	const float radiusSq = WarpHoleConst::SuckRadius * WarpHoleConst::SuckRadius;
@@ -1003,7 +1016,7 @@ void WarpHole::DrawTunnelAlongPath(const std::vector<Math::Vector3>& path,
 		{
 			const float wavePhase = kTwoPi * (WarpHoleConst::TunnelWaveFreqAlong * arc[i] - animTime * WarpHoleConst::AnimSpeed * 5.0f);
 			const float wave = std::sinf(wavePhase) * WarpHoleConst::TunnelWaveAmp;
-			radius[i] *= (1.0f + wave);
+			radius[i] *= (1.0f + wave) * m_consumeScale;   // 収縮消滅で縮む
 		}
 
 		along[i]  = arc[i] / totalLen;

@@ -1,5 +1,6 @@
 ﻿#include "TitleScene.h"
 #include "../SceneManager.h"
+#include "../../Manager/StageManager.h"
 #include "../../GameObject/BackGround/BackGround.h"
 #include "../../GameObject/BackGround/StarField.h"
 #include "../../GameObject/Light/PointLightObject.h"
@@ -35,7 +36,10 @@ namespace
 	constexpr int          kFontNo         = 0;
 	constexpr int          kFontHeight     = 44;
 	constexpr const char*  kFontName       = FontConst::GameFontName;
-	constexpr const char*  kPromptText     = "PRESS ENTER";
+	constexpr const char*  kPromptText     = "ボタンを押してスタート";
+	constexpr float        kPromptBobAmp   = 6.0f;   // 上下ふわふわの振れ幅(px)
+	constexpr float        kPromptBobSpeed = 2.2f;   // ふわふわの速さ
+	constexpr int          kPromptOutline  = 2;      // 黒フチの太さ(px)
 
 	// ── カメラ（-Z 側から +Z を見る＝+X が画面右で直感的）──
 	const     Math::Vector3 kCamEye        = { 0.0f, 8.0f, -25.0f };
@@ -232,10 +236,14 @@ void TitleScene::Event()
 		OutputDebugStringA(buf);
 	}
 
-	// Enter で「むっちゃ光って小さくなる」演出を開始 → 終わったらゲームへ
+	// 何かキー／マウスを押したら「むっちゃ光って小さくなる」演出を開始 → 終わったらゲームへ
 	// （シーン切替直後の押しっぱなし/連打は無視）
-	if (!m_starting && (GetAsyncKeyState(VK_RETURN) & 0x8000)
-		&& !SceneManager::Instance().IsInputLocked())
+	bool anyKey = false;
+	for (int vk = 0x01; vk <= 0xFE; ++vk)
+	{
+		if (GetAsyncKeyState(vk) & 0x8000) { anyKey = true; break; }
+	}
+	if (!m_starting && anyKey && !SceneManager::Instance().IsInputLocked())
 	{
 		m_starting   = true;
 		m_startTimer = 0.0f;
@@ -245,7 +253,15 @@ void TitleScene::Event()
 		m_startTimer += dt;
 		if (m_startTimer >= kStartDur)
 		{
-			SceneManager::Instance().SetNextScene(SceneManager::SceneType::Story);
+			// 初回起動のみ Story を見せる。2回目以降は Story を飛ばして StageSelect へ。
+			if (StageManager::Instance().IsFirstLaunch())
+			{
+				SceneManager::Instance().SetNextScene(SceneManager::SceneType::Story);
+			}
+			else
+			{
+				SceneManager::Instance().SetNextScene(SceneManager::SceneType::StageSelect);
+			}
 		}
 	}
 }
@@ -441,20 +457,36 @@ void TitleScene::DrawSpriteExtra()
 	{
 		const float promptFade = std::min((m_timer - kPromptIn) / 0.4f, 1.0f);
 		const float blink = 0.3f + 0.7f * (0.5f + 0.5f * std::sinf(m_timer * kBlinkSpeed));
-		const Math::Color col(1.0f, 1.0f, 1.0f, blink * promptFade);
+		// スタート演出（白発光）が進むほどテキストを消す（白の上に文字が残る違和感を防ぐ）
+		const float a = blink * promptFade * (1.0f - startP);
+		const Math::Color col(1.0f, 1.0f, 1.0f, a);
 
-		auto measure = KdFontManager::Instance().CreateFontTexture(kFontNo, kPromptText, false);
-		float textW = 0.0f, textH = 0.0f;
-		if (measure)
+		auto fs = KdFontManager::Instance().CreateFontTexture(kFontNo, kPromptText, false);
+		if (fs)
 		{
-			for (const auto& d : measure->GetTexList())
+			float textW = 0.0f, textH = 0.0f;
+			for (const auto& d : fs->GetTexList())
 			{
 				if (!d || !d->FontTex) { continue; }
 				textW += static_cast<float>(d->FontTex->GetInfo().Width);
 				textH  = std::max(textH, static_cast<float>(d->FontTex->GetInfo().Height));
 			}
+			// 上下にふわっと浮遊
+			const float bob = std::sinf(m_timer * kPromptBobSpeed) * kPromptBobAmp;
+			const Math::Vector2 pos(-textW * 0.5f, -sh * kPromptYRatio - textH * 0.5f + bob);
+
+			// 黒フチ(8方向)でくっきり → 本体
+			const Math::Color outline(0.0f, 0.0f, 0.0f, col.w * 0.9f);
+			const int o = kPromptOutline;
+			for (int dy = -1; dy <= 1; ++dy)
+			{
+				for (int dx = -1; dx <= 1; ++dx)
+				{
+					if (dx == 0 && dy == 0) { continue; }
+					sprite.DrawFont(fs, Math::Vector2(pos.x + dx * o, pos.y + dy * o), &outline, 0);
+				}
+			}
+			sprite.DrawFont(fs, pos, &col, 0);
 		}
-		const Math::Vector2 pos(-textW * 0.5f, -sh * kPromptYRatio - textH * 0.5f);
-		TextFx::DrawShadowed(sprite, pos, col, kPromptText);
 	}
 }

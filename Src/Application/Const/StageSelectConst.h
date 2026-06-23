@@ -32,6 +32,16 @@ namespace StageSelectConst
 	constexpr float       NodeBobAmp      = 0.25f;  // 選択中の上下ふわふわ
 	constexpr float       NodeBobSpeed    = 3.0f;
 
+	// 未解放ノードの見た目（ほぼ黒・小さめ）と解放アニメ
+	constexpr float       LockedNodeScaleMul = 0.6f;   // 未解放時の大きさ倍率
+	constexpr float       LockedColorV       = 0.08f;  // 未解放時の色（完全じゃない黒＝暗いグレー）
+	constexpr float       UnlockAnimTime     = 0.7f;   // 取り戻すアニメの長さ(秒)
+
+	// 「行けない！」演出（未解放ノードへの道を赤点滅）
+	constexpr float       DenyFlashTime  = 0.6f;   // 点滅の長さ(秒)
+	constexpr float       DenyFlashSpeed = 30.0f;  // 点滅の速さ
+	constexpr float       DenyColR = 1.0f, DenyColG = 0.15f, DenyColB = 0.15f;  // 赤
+
 	//----------------------------------------------------------
 	// マーカー（プレイヤー＝カーソル。物理なし・モデルのみ）
 	//----------------------------------------------------------
@@ -96,6 +106,10 @@ namespace StageSelectConst
 	constexpr float EnterHopHeight = 1.8f;   // ジャンプの高さ
 	constexpr float EnterSink      = 1.3f;   // 箱の中へ沈む量(px相当の高さ)
 
+	// クリア後リザルトの登場演出：入場の逆。箱の中から小さく→大きくなりながらせり上がる
+	// （入場と同じ EnterHopTime/Height/Sink を逆再生で使う）
+	constexpr float ResultOutDelay = 0.6f;   // リザルト突入からポップ開始までの待ち(秒)
+
 	constexpr int          FontNo      = 0;
 	constexpr int          FontHeight  = 32;
 	constexpr const char*  FontName    = FontConst::GameFontName;
@@ -110,8 +124,8 @@ namespace StageSelectConst
 	//----------------------------------------------------------
 	constexpr const char* StageNames[] =
 	{
-		"ステージ１　みどりのほし",
-		"ステージ２（準備中）",
+		"ステージ１　まるとしかくのほし",
+		"ステージ２　かぜとパラソル",
 		"ステージ３（準備中）",
 		"ステージ４（準備中）",
 		"ステージ５（準備中）",
@@ -136,6 +150,10 @@ namespace StageSelectConst
 	// 選択詳細（画面下部の情報バー）の文言・レイアウト
 	constexpr const char* SelClearedMark   = "クリア済み";
 	constexpr const char* SelNotClearedMark = "未クリア";
+	constexpr const char* SelLockedMark    = "ロック";
+	constexpr const char* SelLockedHint    = "前のステージをクリアしよう";
+	constexpr float       SelLockedGoAlpha = 0.35f;   // ロック時のGOボタンの暗さ
+	constexpr float       SelLockedHintGap = 40.0f;   // GOボタン上のヒント文の距離(px)
 	constexpr const char* SelBestCoinLabel = "さいこうコイン";
 	constexpr const char* SelBestTimeLabel = "ベストタイム";
 	constexpr const char* SelNoTime        = "--:--.--";
@@ -163,5 +181,6 @@ namespace StageSelectConst
 	constexpr const char* ThumbPathFmt   = "Asset/Texture/StageThumb/Stage%02d.png";
 	constexpr int   ThumbCornerSegs      = 8;     // 角の分割数（滑らかさ）
 	constexpr float SelBarImgAlpha       = 1.0f;  // 背景画像の不透明度（1=そのままの明るさ）
+	constexpr float SelBarImgBright      = 1.0f;  // 画像の明るさ倍率（sRGB無効化で素のまま表示するので既定1.0）
 	constexpr float SelBarScrimAlpha     = 0.0f; // 画像の上に重ねる暗幕（文字可読性用。小さいほど明るい）
 }

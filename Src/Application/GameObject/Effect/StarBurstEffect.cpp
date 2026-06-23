@@ -9,11 +9,14 @@ static float SBRand01()
 
 void StarBurstEffect::Spawn(const Math::Vector3&              pos,
 							const Math::Vector3&              upDir,
-							const std::shared_ptr<KdModelData>& modelData)
+							const std::shared_ptr<KdModelData>& modelData,
+							float countMul,
+							float scaleMul)
 {
 	SetPos(pos);  // CheckInScreen がオブジェクト位置を m_mWorld から取るため必須
 
-	m_particles.reserve(JuiceConst::StarBurstCount);
+	const int count = std::max(1, static_cast<int>(JuiceConst::StarBurstCount * countMul));
+	m_particles.reserve(count);
 
 	// upDir に直交する右・前ベクトルを作る
 	Math::Vector3 right = upDir.Cross(Math::Vector3::UnitZ);
@@ -22,7 +25,7 @@ void StarBurstEffect::Spawn(const Math::Vector3&              pos,
 	right.Normalize();
 	const Math::Vector3 fwd = upDir.Cross(right);
 
-	for (int i = 0; i < JuiceConst::StarBurstCount; ++i)
+	for (int i = 0; i < count; ++i)
 	{
 		Particle p;
 
@@ -31,8 +34,8 @@ void StarBurstEffect::Spawn(const Math::Vector3&              pos,
 		// 全方向ランダム飛散（球面分布）
 		const float theta = SBRand01() * DirectX::XM_2PI;       // 水平角
 		const float phi   = (SBRand01() - 0.5f) * DirectX::XM_PI; // 仰角
-		const float speed = JuiceConst::StarBurstSpeedMin
-						  + SBRand01() * (JuiceConst::StarBurstSpeedMax - JuiceConst::StarBurstSpeedMin);
+		const float speed = (JuiceConst::StarBurstSpeedMin
+						  + SBRand01() * (JuiceConst::StarBurstSpeedMax - JuiceConst::StarBurstSpeedMin)) * scaleMul;
 
 		// 球面→直交座標
 		const float cosPhi = std::cos(phi);
@@ -43,8 +46,8 @@ void StarBurstEffect::Spawn(const Math::Vector3&              pos,
 
 		p.pos      = pos;
 		p.vel      = dir * speed;
-		p.scale    = JuiceConst::StarBurstScaleMin
-				   + SBRand01() * (JuiceConst::StarBurstScaleMax - JuiceConst::StarBurstScaleMin);
+		p.scale    = (JuiceConst::StarBurstScaleMin
+				   + SBRand01() * (JuiceConst::StarBurstScaleMax - JuiceConst::StarBurstScaleMin)) * scaleMul;
 		p.scaleShrink = JuiceConst::StarBurstShrinkMin
 					  + SBRand01() * (JuiceConst::StarBurstShrinkMax - JuiceConst::StarBurstShrinkMin);
 		p.lifetime = JuiceConst::StarBurstLifetimeMin

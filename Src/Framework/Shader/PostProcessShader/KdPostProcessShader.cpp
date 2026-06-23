@@ -448,6 +448,10 @@ void KdPostProcessShader::GenerateMotionBlurTexture(
 
 void KdPostProcessShader::GenerateBlurTexture(std::shared_ptr<KdTexture>& spSrcTex, std::shared_ptr<KdTexture>& spDstTex, D3D11_VIEWPORT& VP, int blurRadius)
 {
+	// ブラー用シェーダ（VS/入力レイアウト/PS）をセット。
+	// 外部から単独で呼んでも動くよう自己完結させる（内部の二重呼び出しは無害）。
+	SetBlurToDevice();
+
 	KdShaderManager::Instance().ChangeSamplerState(KdSamplerState::Linear_Clamp);
 
 	KdRenderTargetPack tmpBlurRTPack;
