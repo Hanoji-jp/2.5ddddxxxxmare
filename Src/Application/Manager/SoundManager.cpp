@@ -296,8 +296,12 @@ void SoundManager::StartTrack(std::string_view path)
 	if (!Exists(path)) { return; }   // 未配置なら無音（oldはフェードアウトで消える）
 
 	// 通常版とこもり版を「同時に」ループ再生開始＝以後ずっと同期する。
-	m_bgm = KdAudioManager::Instance().Play(path, true);
-	if (m_bgm) { m_bgm->SetVolume(0.0f); m_bgmPath = std::string(path); }
+	// ファイルが無ければ無音（アサート回避）。こもり版と同様にガードする。
+	if (Exists(path))
+	{
+		m_bgm = KdAudioManager::Instance().Play(path, true);
+		if (m_bgm) { m_bgm->SetVolume(0.0f); m_bgmPath = std::string(path); }
+	}
 
 	const std::string muf = MuffledOf(path);
 	if (Exists(muf))

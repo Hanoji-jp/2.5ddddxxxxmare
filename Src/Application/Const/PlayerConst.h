@@ -5,6 +5,9 @@
 // プレイヤーに関わる定数
 namespace PlayerConst
 {
+    // デバッグ：フリーフライ移動速度（units/秒）
+    constexpr float FreeFlySpeed     = 22.0f;
+
     // 移動速度
     constexpr float MoveSpeed        = 0.08f;
 

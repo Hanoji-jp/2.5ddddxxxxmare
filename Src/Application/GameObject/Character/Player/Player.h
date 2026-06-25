@@ -147,6 +147,10 @@ private:
     std::shared_ptr<Sword>  m_sword;
     std::shared_ptr<Bow>    m_bow;
 
+    // デバッグ：フリーフライ（Fでトグル。WASDで移動・壁貫通）
+    bool m_freeFly    = false;
+    bool m_freeFlyKeyPrev = false;
+
     // 飛翔中の矢リスト（シーンへの追加は GameScene が行う想定）
     std::vector<std::shared_ptr<Arrow>> m_arrows;
 

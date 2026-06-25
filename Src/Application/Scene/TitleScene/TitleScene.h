@@ -71,4 +71,8 @@ private :
 	// 設定ウィンドウ（TABで開く）
 	SettingsMenu m_settingsMenu;
 	bool         m_settingsTabPrev = false;
+
+	// ボタンのホバー音用（前フレームのホバー状態。立ち上がりでSE再生）
+	bool m_hovStartPrev = false;
+	bool m_hovSetPrev   = false;
 };

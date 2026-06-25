@@ -566,6 +566,59 @@ void Character::CheckGround()
 
                 m_isGround = true;
                 m_airGravitySwitchCount = 0;
+                // 移動床にアタッチされた風ボックスなら、その床に乗っている扱いで一緒に運ぶ
+                if (!spWBBox->GetAttachFloor().expired()) { m_pRidingFloor = &spWBBox->GetAttachFloor(); }
+                return;
+            }
+        }
+    }
+
+    // ---- ★ 棘ボックス上面（移動床アタッチ時に一緒に運ぶ）----
+    // COL を TypeGround レイで判定し、上面に乗っていれば接地＋riding設定。
+    if (!skipDownwardSnap && m_velocity.Dot(m_upDir) <= 0.1f)
+    {
+        const Math::Vector3 rayStart = pos + m_upDir * CollisionConst::GroundRayOffset;
+        const KdCollider::RayInfo ray(
+            KdCollider::TypeGround,
+            rayStart,
+            -m_upDir,
+            CollisionConst::GroundRayLength);
+
+        for (auto& wpSB : m_spikeBoxColliders)
+        {
+            const auto spSB = wpSB.lock();
+            if (!spSB) { continue; }
+            const auto spSpike = std::dynamic_pointer_cast<SpikeBox>(spSB);
+            if (!spSpike || !spSpike->IsEnabled()) { continue; }
+            const KdCollider* col = spSpike->GetCollider();
+            if (!col) { continue; }
+
+            std::list<KdCollider::CollisionResult> results;
+            if (!col->Intersects(ray, spSpike->GetWorldMatrix(), &results)) { continue; }
+
+            const KdCollider::CollisionResult* pBest = nullptr;
+            for (const auto& r : results)
+            {
+                if (r.m_hitNDir.Dot(m_upDir) < 0.7f) { continue; }   // 上向き面のみ
+                if (!pBest || r.m_overlapDistance > pBest->m_overlapDistance) { pBest = &r; }
+            }
+            if (!pBest) { continue; }
+
+            // 上面にスナップ
+            const float penetration = pBest->m_hitPos.Dot(m_upDir) - pos.Dot(m_upDir);
+            if (penetration > -CollisionConst::GroundSnapDist && penetration <= CollisionConst::GroundRayOffset)
+            {
+                Math::Vector3 corrected = GetPos();
+                corrected += m_upDir * penetration;
+                SetPos(corrected);
+
+                const float downComp = m_velocity.Dot(-m_upDir);
+                if (downComp > 0.0f) { m_velocity += m_upDir * downComp; }
+
+                m_isGround = true;
+                m_airGravitySwitchCount = 0;
+                // 移動床にアタッチされた棘なら、その床に乗っている扱いで一緒に運ぶ
+                if (!spSpike->GetAttachFloor().expired()) { m_pRidingFloor = &spSpike->GetAttachFloor(); }
                 return;
             }
         }

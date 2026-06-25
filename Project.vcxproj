@@ -261,6 +261,10 @@
     </FxCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ResourceCompile Include="Src\Project.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Src\resource.h" />
     <ClInclude Include="..\Library\imgui\imconfig.h" />
     <ClInclude Include="..\Library\imgui\imgui.h" />
     <ClInclude Include="..\Library\imgui\imgui_impl_dx11.h" />

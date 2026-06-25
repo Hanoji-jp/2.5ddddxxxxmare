@@ -115,6 +115,8 @@ void WindBox::Update()
 	if (auto floor = m_attachFloor.lock())
 	{
 		m_center = m_baseCenter + (floor->GetPos() - floor->GetBaseCenter());
+		// フラスタムカリング用の m_mWorld 位置も同期（これが無いとカリング球が元位置に残り消える）
+		SetPos(m_center);
 	}
 
 	const float dt = KdFPSController::GetDt();

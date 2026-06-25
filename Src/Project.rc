@@ -1,0 +1,5 @@
+#include "resource.h"
+
+// 実行ファイル(Project.exe)のアイコン
+// 最小番号の ICON が Explorer のファイルアイコンに使われる
+IDI_APP_ICON ICON "..\\Asset\\Texture\\LifeIco.ico"

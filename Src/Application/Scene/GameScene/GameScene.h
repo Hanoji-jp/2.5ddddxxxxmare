@@ -181,7 +181,8 @@ private:
 	// ─── エディタ：オブジェクト選択・操作（自前マウスピッキング＋ドラッグ）───
 	// 生成・コピー対象の種別
 	enum class EditKind { Planet, WindBox, SpikeBox, GravityCore, MovingFloor,
-						   ManualZone, DeadZone, Corelia, ShowcaseEye, ShowcaseLook };
+						   ManualZone, DeadZone, Corelia, ShowcaseEye, ShowcaseLook,
+						   Coin, RockGem };
 
 	// ギズモの操作軸
 	enum class GizmoAxis { None, X, Y, Z };
@@ -425,7 +426,8 @@ private:
 	float                      m_coinPopTimer = 0.0f;  // 取得時の拡大演出残り
 
 	// 重力コア(Rock)取得カウンター（HUDに DrawTriangle で岩アイコン＋数字）
-	int                        m_coreTotal    = 0;     // 取得した重力コア数（このラン）
+	int                        m_coreTotal    = 0;     // 取得した岩系の合計（重力コア＋エメラルド＋カラフル岩。このラン）
+	int                        m_gravityCoreCount = 0; // うち重力コアだけの数（リザルトで専用アイコンを飛ばす用）
 	float                      m_corePopTimer = 0.0f;  // 取得ポップ残り
 	float                      m_coreIconSpin = 0.0f;  // アイコン自転角
 	void DrawCoreIcon(int cx, int cy, int size, float spin);   // 岩コアを2D投影描画（HUD用）

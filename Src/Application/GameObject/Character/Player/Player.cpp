@@ -54,6 +54,41 @@ void Player::Update()
 	// （死亡やカットシーンの早期returnより前に置かないと、グローが残留する）
 	UpdatePickupGlow(KdFPSController::GetDt());
 
+	// 背中の剣(BackSword)は全状態で非表示（無かったことに）。
+	// ※飛来カットシーンや死亡の早期returnより前に置く。後段の処理に到達しないと残るため。
+	m_modelWork.SetNodeVisible("BackSword", false);
+
+	// ── デバッグ：フリーフライ（Fでトグル。WASD=上下左右、壁貫通）──
+	{
+		const bool fNow = (GetAsyncKeyState('F') & 0x8000) != 0;
+		if (fNow && !m_freeFlyKeyPrev) { m_freeFly = !m_freeFly; }
+		m_freeFlyKeyPrev = fNow;
+	}
+	if (m_freeFly)
+	{
+		const float dt = KdFPSController::GetDt();
+		Math::Vector3 mv = Math::Vector3::Zero;
+		if (GetAsyncKeyState('W') & 0x8000) { mv.y += 1.0f; }  // 上
+		if (GetAsyncKeyState('S') & 0x8000) { mv.y -= 1.0f; }  // 下
+		if (GetAsyncKeyState('D') & 0x8000) { mv.x += 1.0f; }  // 右
+		if (GetAsyncKeyState('A') & 0x8000) { mv.x -= 1.0f; }  // 左
+		if (GetAsyncKeyState('E') & 0x8000) { mv.z += 1.0f; }  // 奥（任意）
+		if (GetAsyncKeyState('Q') & 0x8000) { mv.z -= 1.0f; }  // 手前（任意）
+		if (mv.LengthSquared() > 0.0f) { mv.Normalize(); }
+
+		Math::Vector3 p = GetPos();
+		p += mv * (PlayerConst::FreeFlySpeed * dt);
+		SetPos(p);
+
+		// 物理を完全に止める（重力・速度なし＝壁貫通は PostUpdate 側で当たり判定をスキップ）
+		m_velocity     = Math::Vector3::Zero;
+		m_moveVelocity = Math::Vector3::Zero;
+		m_isGround     = false;
+		ChangeAnim("Idle", true);
+		m_animBlender.Update(m_modelWork, 1.0f);
+		return;
+	}
+
 	// 死亡中は通常の入力・移動・状態遷移を止める。
 	// （Move() が毎フレーム m_state を上書きするため、放置すると Dead アニメが
 	//   他アニメと毎フレーム切り替わってガクガクする）
@@ -418,8 +453,8 @@ void Player::PostUpdate()
     const int  prevPlanet = m_currentPlanetIndex;
 
     // 死亡中は物理・当たり判定（CheckWall の敵押し出し含む）をスキップして位置を固定。
-    // これをしないと、踏みつぶし時に Cubun 本体のめり込み防止押し出しで死体が外へ滑り出る。
-    if (!IsDead())
+    // フリーフライ中も当たり判定をスキップ＝壁貫通（位置は Update で直接動かす）。
+    if (!IsDead() && !m_freeFly)
     {
         // 親クラスのPostUpdate（位置反映）を先に実行
         Character::PostUpdate();

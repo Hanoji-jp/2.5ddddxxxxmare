@@ -39,6 +39,18 @@ public:
 
 	// ── カラフル岩（スターピース風・コインエディタで配置する収集アイテム）──
 	void SpawnRockGem(const Math::Vector3& pos);
+	void SpawnRockGemLine(const Math::Vector3& start, const Math::Vector3& end, int count);  // 直線に等間隔
+
+	// 図形パターン配置（XY平面。CubeEdgesのみZも使う）
+	enum class GemShape { Circle, Star, Heart, CubeEdges };
+	void SpawnRockGemShape(GemShape shape, const Math::Vector3& center, float size, int count);
+
+	// コインも図形パターンで並べる（GemShape を流用）
+	void SpawnCoinShape(GemShape shape, const Math::Vector3& center, float size, int count);
+
+	// 配置前ガイド：ライン/図形のプレビューをデバッグワイヤーで表示（GameSceneのデバッグ描画から呼ぶ）
+	void DrawPlacementPreview() const;
+
 	void ClearRockGems();
 	void SaveRockGems() const;
 	void LoadRockGems();
@@ -73,6 +85,9 @@ public:
 	void UpdatePickupEffects();   // 取得バーストのみ更新（ヒットストップ中も呼ぶ）
 	void DrawGui();   // ImGui によるアイテム配置エディター
 
+	// ショーケース等で「取得判定なし・見た目だけ」更新する（ふわふわ/自転/きらめき/バースト）
+	void UpdateVisualOnly();
+
 	// 取得済みアイテムを除去
 	void Refresh();
 
@@ -86,6 +101,20 @@ public:
 
 	// GameScene から直接 Update するためのアクセサ
 	std::list<std::shared_ptr<ParasolItem>>& WorkParasols() { return m_parasols; }
+
+	// ── エディタのギズモ編集用（クリック選択＋軸ドラッグでコイン/カラフル岩を配置）──
+	std::list<std::shared_ptr<Coin>>&    WorkCoins()    { return m_coins; }
+	std::list<std::shared_ptr<RockGem>>& WorkRockGems() { return m_rockGems; }
+	void RemoveLastCoin()    { if (!m_coins.empty())    { m_coins.back()->Expire();    m_coins.pop_back(); } }
+	void RemoveLastRockGem() { if (!m_rockGems.empty()) { m_rockGems.back()->Expire(); m_rockGems.pop_back(); } }
+	void SetCoinPos(int i, const Math::Vector3& p)
+	{
+		int k = 0; for (auto& c : m_coins)    { if (k++ == i) { c->SetSpawnPos(p);  return; } }
+	}
+	void SetRockGemPos(int i, const Math::Vector3& p)
+	{
+		int k = 0; for (auto& g : m_rockGems) { if (k++ == i) { g->SetPlacedPos(p); return; } }
+	}
 
 	// 任意の位置に星バーストを出す（クリアのキメ演出など外部から使う）
 	void SpawnBurstAt(const Math::Vector3& pos, const Math::Color& baseColor,
@@ -107,6 +136,31 @@ private:
 	std::list<std::shared_ptr<RockDrop>>    m_rocks;
 	std::list<std::shared_ptr<RockGem>>     m_rockGems;   // 配置するカラフル岩（収集）
 	std::list<std::shared_ptr<RockGem>>     m_thrown;     // 左クリックで撃ち出した岩（投擲物・非保存）
+
+	// 図形/ラインの点を生成（配置とプレビューで共用）
+	static std::vector<Math::Vector3> BuildShapePoints(GemShape shape, const Math::Vector3& center, float size, int count);
+	static std::vector<Math::Vector3> BuildLinePoints(const Math::Vector3& start, const Math::Vector3& end, int count);
+
+	// 配置プレビュー状態（DrawGui で毎フレーム更新。エディタを閉じると false）
+	bool          m_pvLineOn   = false;
+	Math::Vector3 m_pvLineStart = {};
+	Math::Vector3 m_pvLineEnd   = {};
+	int           m_pvLineCount = 0;
+	bool          m_pvShapeOn  = false;
+	GemShape      m_pvShapeKind = GemShape::Circle;
+	Math::Vector3 m_pvShapeCenter = {};
+	float         m_pvShapeSize  = 0.0f;
+	int           m_pvShapeCount = 0;
+	// コイン用プレビュー
+	bool          m_pvCoinLineOn  = false;
+	Math::Vector3 m_pvCoinLineStart = {};
+	Math::Vector3 m_pvCoinLineEnd   = {};
+	int           m_pvCoinLineCount = 0;
+	bool          m_pvCoinShapeOn = false;
+	GemShape      m_pvCoinShapeKind = GemShape::Circle;
+	Math::Vector3 m_pvCoinShapeCenter = {};
+	float         m_pvCoinShapeSize  = 0.0f;
+	int           m_pvCoinShapeCount = 0;
 	std::list<std::shared_ptr<PickupBurst>> m_bursts;
 	int                                     m_rockCount = 0;   // 取得した岩石の累計
 };

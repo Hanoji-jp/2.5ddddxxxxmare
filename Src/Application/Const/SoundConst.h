@@ -43,7 +43,7 @@ namespace SoundConst
 	constexpr const char* SeDeath      = "Asset/Sound/SE/dead-sound.mp3";                   // 死亡
 	constexpr const char* SeStomp      = "Asset/Sound/SE/ポコッ.mp3";                       // 敵踏みつけ撃破
 	constexpr const char* SeCore       = "Asset/Sound/SE/エネルギー・パワーチャージ音.mp3"; // 重力コア(ゴール)取得
-	constexpr const char* SeClear      = "Asset/Sound/SE/派手目なセレクト音.mp3";           // ステージクリア
+	constexpr const char* SeClear      = "Asset/Sound/SE/GameClear.mp3";           // ステージクリア（クリア演出ジングル）
 	constexpr const char* SeMenuMove   = "Asset/Sound/SE/セレクト音_1.mp3";                 // メニュー移動
 	constexpr const char* SeMenuDecide = "Asset/Sound/SE/システム決定音_11.mp3";           // メニュー決定
 

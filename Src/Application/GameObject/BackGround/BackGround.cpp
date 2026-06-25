@@ -3,7 +3,7 @@
 #include "../../Manager/ModelManager.h"
 
 static constexpr const char* SkyboxModelPath = "Asset/Data/galaxybox.gltf";
-static constexpr float       SkyboxScale     = 6.0f;  // gltf内スケール[92,92,92] × 5.0 = 半径460
+static constexpr float       SkyboxScale     = 5.0f;  // 少し小さく（カメラが遠ざかってクリップ／描画外になるのを防ぐ）
 
 void BackGround::Init()
 {
@@ -27,6 +27,12 @@ void BackGround::Update()
 void BackGround::DrawUnLit()
 {
     if (!m_modelWork.IsEnable()) { return; }
+
+    // 描画直前に必ず現在のカメラ位置へ再追従（ポーズ／showcase中で Update が
+    // 止まっていてもカメラが球から出て描画外にならないようにする）
+    const Math::Vector3& camPos = KdShaderManager::Instance().GetCameraCB().CamPos;
+    m_mWorld = Math::Matrix::CreateScale(SkyboxScale)
+             * Math::Matrix::CreateTranslation(camPos);
 
     auto& shaderMgr = KdShaderManager::Instance();
 

@@ -1376,6 +1376,7 @@ void GameScene::Event()
 				{
 					gc->Expire();                 // 取得＝消す（リスポーンで復活）
 					m_coreTotal++;
+					m_gravityCoreCount++;         // 重力コアだけ別カウント（リザルトで専用アイコン）
 					m_corePopTimer = UIConst::CorePopTime;
 					m_spPlayer->TriggerPickupGlow(Math::Color{
 						GravityCoreConst::FaceColorR, GravityCoreConst::FaceColorG,
@@ -2756,6 +2757,7 @@ void GameScene::DrawDebugWires()
 		m_gravityCoreEditor.DrawDebug();
 		m_spikeBoxEditor.DrawDebug();
 		PlanetGravityManager::Instance().DrawDebugShapes();
+		m_itemManager.DrawPlacementPreview();   // コイン/岩のライン・図形配置ガイド
 	}
 }
 
@@ -3069,6 +3071,8 @@ void GameScene::DrawGui()
 			if (ImGui::Button(U8("手動ゾーン")))  { SpawnAtCursor(EditKind::ManualZone); }  ImGui::SameLine();
 			if (ImGui::Button(U8("デッドゾーン")))    { SpawnAtCursor(EditKind::DeadZone); }    ImGui::SameLine();
 			if (ImGui::Button(U8("コアリア")))     { SpawnAtCursor(EditKind::Corelia); }
+			if (ImGui::Button(U8("コイン")))       { SpawnAtCursor(EditKind::Coin); }       ImGui::SameLine();
+			if (ImGui::Button(U8("カラフル岩")))   { SpawnAtCursor(EditKind::RockGem); }
 		}
 
 		ImGui::Separator();
@@ -3605,6 +3609,38 @@ void GameScene::BuildEditEntries()
 				[i]() { CoreliaManager::Instance().SetSelected(i); });
 		}
 	}
+	// コイン（クリック選択＋軸ドラッグで配置。XYZ手入力不要）
+	{
+		int idx = 0;
+		for (auto& c : m_itemManager.WorkCoins())
+		{
+			if (!c->IsExpired())
+			{
+				const int ci = idx;
+				pushEntry(c->GetSpawnPos(), EditKind::Coin, ci, "Coin " + std::to_string(ci),
+					[c](const Math::Vector3& p) { c->SetSpawnPos(p); },
+					[this, c, copyOff]() { m_itemManager.SpawnCoin(c->GetSpawnPos() + Math::Vector3(copyOff, 0.0f, 0.0f)); },
+					[]() {});
+			}
+			++idx;
+		}
+	}
+	// カラフル岩（クリック選択＋軸ドラッグで配置）
+	{
+		int idx = 0;
+		for (auto& g : m_itemManager.WorkRockGems())
+		{
+			if (!g->IsExpired())
+			{
+				const int gi = idx;
+				pushEntry(g->GetSpawnPos(), EditKind::RockGem, gi, "RockGem " + std::to_string(gi),
+					[g](const Math::Vector3& p) { g->SetPlacedPos(p); },
+					[this, g, copyOff]() { m_itemManager.SpawnRockGem(g->GetSpawnPos() + Math::Vector3(copyOff, 0.0f, 0.0f)); },
+					[]() {});
+			}
+			++idx;
+		}
+	}
 	// 見せカメラの制御点（eye / look）。マウスでドラッグ移動できる（idx = phase*1000 + 点index）
 	{
 		const auto& phases = m_showcaseEditor.GetPhases();
@@ -3785,6 +3821,8 @@ void GameScene::CreateDefaultAt(EditKind _kind, const Math::Vector3& _pos)
 	case EditKind::ManualZone:  { ManualGravityZone z; z.Center = _pos; ManualGravityZoneManager::Instance().AddZone(z); } break;
 	case EditKind::DeadZone:    { DeadZone z;          z.Center = _pos; DeadZoneManager::Instance().AddZone(z); } break;
 	case EditKind::Corelia:     { CoreliaNpc n;        n.Pos    = _pos; CoreliaManager::Instance().AddNpc(n); } break;
+	case EditKind::Coin:        { m_itemManager.SpawnCoin(_pos); }    break;
+	case EditKind::RockGem:     { m_itemManager.SpawnRockGem(_pos); } break;
 	}
 }
 
@@ -3801,6 +3839,8 @@ void GameScene::RemoveLastOfKind(EditKind _kind)
 	case EditKind::ManualZone:  { ManualGravityZoneManager::Instance().RemoveLastZone(); } break;
 	case EditKind::DeadZone:    { DeadZoneManager::Instance().RemoveLastZone(); } break;
 	case EditKind::Corelia:     { CoreliaManager::Instance().RemoveLastNpc(); } break;
+	case EditKind::Coin:        { m_itemManager.RemoveLastCoin(); }    break;
+	case EditKind::RockGem:     { m_itemManager.RemoveLastRockGem(); } break;
 	}
 }
 
@@ -3819,6 +3859,8 @@ void GameScene::SetPosByKindIndex(EditKind _kind, int _idx, const Math::Vector3&
 	case EditKind::Corelia:     { auto* n = CoreliaManager::Instance().GetNpc(_idx);            if (n) { n->Pos    = _pos; } } break;
 	case EditKind::ShowcaseEye:  { m_showcaseEditor.SetEyePoint(_idx / 1000, _idx % 1000, _pos); }  break;
 	case EditKind::ShowcaseLook: { m_showcaseEditor.SetLookPoint(_idx / 1000, _idx % 1000, _pos); } break;
+	case EditKind::Coin:         { m_itemManager.SetCoinPos(_idx, _pos); }    break;
+	case EditKind::RockGem:      { m_itemManager.SetRockGemPos(_idx, _pos); } break;
 	}
 }
 
@@ -4216,7 +4258,9 @@ void GameScene::StartStageClear(const Math::Vector3& corePos)
 	if (m_clearActive) { return; }
 	m_clearActive = true;
 	m_clearTimer  = 0.0f;
-	SoundManager::Instance().PlaySE(SeId::Clear, SoundConst::SeVolume);
+	// クリアジングルはカメラが動き出すこの瞬間に再生。SE割り当て(se_assign)に依らず
+	// 固定で GameClear を鳴らすため、SeId ではなく直接パスで再生する。
+	SoundManager::Instance().PlaySE(SoundConst::SeClear, SoundConst::SeVolume);
 	m_clearDecideFlashed = false;
 	m_clearYaw    = ClearConst::CamStartYawDeg;   // 振り子バネの初期角
 	m_clearYawVel = 0.0f;
@@ -4225,7 +4269,7 @@ void GameScene::StartStageClear(const Math::Vector3& corePos)
 	// リザルト用データを StageManager へ渡す（StageSelect 帰還時に表示）
 	const int clearedStageId = StageManager::Instance().GetStageIndex() - 1;   // 0始まり
 	StageManager::Instance().SetResult(
-		clearedStageId, m_coinTotal, m_coreTotal, m_deathCount, m_playTime);   // rocks枠に重力コア数を載せる
+		clearedStageId, m_coinTotal, m_coreTotal, m_deathCount, m_playTime, m_gravityCoreCount);   // rocks=岩系合計, cores=重力コアのみ
 	// ステージ別の記録（クリア済み・最高コイン・ベストタイム）を更新・保存
 	StageManager::Instance().RecordClear(clearedStageId, m_coinTotal, m_playTime);
 
@@ -4597,6 +4641,9 @@ void GameScene::UpdateShowcaseWorld()
 		if (!obj || obj.get() == m_spPlayer.get()) { continue; }
 		obj->PostUpdate();
 	}
+
+	// アイテム（コイン/カラフル岩/エメラルド等）は m_objList に居ないので個別に見た目更新
+	m_itemManager.UpdateVisualOnly();
 }
 
 // 全フェーズ（再生可能なもの）の合計時間
@@ -4942,6 +4989,7 @@ void GameScene::Respawn()
 	m_coinPopTimer = 0.0f;
 	// 重力コアも復活するのでカウントを戻す
 	m_coreTotal    = 0;
+	m_gravityCoreCount = 0;
 	m_corePopTimer = 0.0f;
 
 	// プレイタイムはリセットしない：クリアタイムは「ステージ入場〜クリアまでの

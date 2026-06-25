@@ -134,8 +134,8 @@ namespace StageSelectConst
 		"ステージ１　まるとしかくのほし",
 		"ステージ２　かぜとパラソル",
 		"ステージ３　うごくゆかととげ",
-		"ステージ４（準備中）",
-		"ステージ５（準備中）",
+		"ステージ４　じゅうりょくをあやつれ",
+		"ステージ５　マスター・オブ・コアリア",
 	};
 	constexpr int         StageNameCount    = static_cast<int>(sizeof(StageNames) / sizeof(StageNames[0]));
 	constexpr const char* StageNameFallback = "ステージ ？";

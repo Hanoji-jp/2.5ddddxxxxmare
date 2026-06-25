@@ -167,6 +167,7 @@ void StageSelectScene::Init()
 			m_resStageId   = res.stageId;
 			m_resCoins     = res.coins;
 			m_resRocks     = res.rocks;
+			m_resCores     = res.cores;
 			m_resDeaths    = res.deaths;
 			m_resTime      = res.time;
 			m_resStep      = 1;        // まずメッセージ
@@ -218,6 +219,7 @@ void StageSelectScene::StartMove(int target)
 bool StageSelectScene::IsUnlocked(int stageId) const
 {
 	if (stageId <= 0) { return true; }
+	if (StageManager::Instance().IsDebugUnlockAll()) { return true; }   // デバッグ：全解放
 	return StageManager::Instance().GetRecord(stageId - 1).cleared;
 }
 
@@ -331,6 +333,18 @@ void StageSelectScene::Event()
 {
 	const float dt = KdFPSController::GetDt();
 	m_timer += dt;
+
+	// ── デバッグ：F9 で全ステージ解放をトグル ──
+	{
+		const bool f9 = (GetAsyncKeyState(VK_F9) & 0x8000) != 0;
+		if (f9 && !m_dbgUnlockPrev)
+		{
+			auto& sm = StageManager::Instance();
+			sm.SetDebugUnlockAll(!sm.IsDebugUnlockAll());
+			SoundManager::Instance().PlaySE(SeId::MenuDecide, SoundConst::SeVolume);
+		}
+		m_dbgUnlockPrev = f9;
+	}
 
 	// ── TABメニュー（マップ閲覧中のみ開閉。背景ぼかし付き）──
 	{
@@ -1456,7 +1470,8 @@ void StageSelectScene::StartTally()
 	auto rnd = []() { return static_cast<float>(std::rand()) / RAND_MAX * 2.0f - 1.0f; };
 
 	float delay = 0.0f;
-	auto spawn = [&](bool isRock, int amount)
+	// kind: 0=コイン 1=岩(エメラルド/カラフル岩) 2=重力コア
+	auto spawn = [&](int kind, int amount)
 	{
 		if (amount <= 0) { return; }
 		const int count = std::min(amount, ResultConst::TallyMaxPerKind);
@@ -1465,7 +1480,8 @@ void StageSelectScene::StartTally()
 		for (int i = 0; i < count; ++i)
 		{
 			TallyFlyer f;
-			f.isRock = isRock;
+			f.isRock = (kind == 1);
+			f.isCore = (kind == 2);
 			f.start  = startBase + Math::Vector3(rnd() * ResultConst::TallySpread, rnd() * ResultConst::TallySpread * 0.5f, 0.0f);
 			f.delay  = delay;
 			f.t      = 0.0f;
@@ -1475,8 +1491,10 @@ void StageSelectScene::StartTally()
 			delay += ResultConst::TallyStagger;
 		}
 	};
-	spawn(false, m_resCoins);   // コイン先
-	spawn(true,  m_resRocks);   // rock後
+	const int emeraldGems = std::max(0, m_resRocks - m_resCores);   // 岩系合計から重力コアを除いた分
+	spawn(0, m_resCoins);     // コイン
+	spawn(1, emeraldGems);    // エメラルド／カラフル岩
+	spawn(2, m_resCores);     // 重力コア（専用アイコン）
 
 	m_tallyActive = !m_flyers.empty();
 
@@ -1504,7 +1522,7 @@ void StageSelectScene::UpdateTally(float dt)
 			f.done = true;
 			// UIが吸収する音（カウント加算の瞬間）
 			SoundManager::Instance().PlaySE(SeId::UiAbsorb, SoundConst::SeVolume);
-			if (f.isRock)
+			if (f.isRock || f.isCore)   // 重力コアも岩系合計に加算
 			{
 				StageManager::Instance().AddTotalRocks(f.add);
 				m_rockHudPop = ResultConst::HudPopTime;
@@ -1770,20 +1788,29 @@ void StageSelectScene::DrawTotalsHud()
 		for (const auto& f : m_flyers)
 		{
 			if (f.done || f.delay > 0.0f) { continue; }
-			const Math::Vector3 target = f.isRock ? HudRockPos() : HudCoinPos();
+			// 行き先：コア/岩は岩HUD、コインはコインHUD
+			const Math::Vector3 target = (f.isRock || f.isCore) ? HudRockPos() : HudCoinPos();
 			const float te = f.t * f.t * (3.0f - 2.0f * f.t);   // smoothstep
 			const Math::Vector3 ctrl = (f.start + target) * 0.5f + Math::Vector3(0.0f, ResultConst::TallyArcUp, 0.0f);
 			const float u = 1.0f - te;
 			const Math::Vector3 pos = f.start * (u * u) + ctrl * (2.0f * u * te) + target * (te * te);
-			if (f.isRock)
+			if (f.isCore)
 			{
-				// コアは DrawTriangle で描く
+				// 重力コア＝青いクリスタル（Glowスタイル）
+				const Math::Color glow(GravityCoreConst::GlowFaceR, GravityCoreConst::GlowFaceG,
+					GravityCoreConst::GlowFaceB, 1.0f);
+				CoreIcon::Draw(sprite, static_cast<int>(pos.x), static_cast<int>(pos.y),
+					ResultConst::TallyFlySize, m_timer, glow, true);
+			}
+			else if (f.isRock)
+			{
+				// エメラルド／カラフル岩＝虹色の岩
 				CoreIcon::Draw(sprite, static_cast<int>(pos.x), static_cast<int>(pos.y),
 					ResultConst::TallyFlySize, m_timer);
 			}
 			else
 			{
-				// コインは3Dモデル(RT)を優先、無ければ従来テクスチャ
+				// コインは3Dモデル(RT)を優先、無ければ従来テクスチャ、それも無ければ金の円
 				KdTexture* useTex = m_coinIcon.GetTexture();
 				if (!useTex && m_coinTex) { useTex = m_coinTex.get(); }
 				if (useTex)
@@ -1791,6 +1818,12 @@ void StageSelectScene::DrawTotalsHud()
 					const Math::Color ic(1.0f, 1.0f, 1.0f, 1.0f);
 					sprite.DrawTex(useTex, static_cast<int>(pos.x), static_cast<int>(pos.y),
 						ResultConst::TallyFlySize, ResultConst::TallyFlySize, nullptr, &ic);
+				}
+				else
+				{
+					const Math::Color gold(1.0f, 0.85f, 0.25f, 1.0f);
+					sprite.DrawCircle(static_cast<int>(pos.x), static_cast<int>(pos.y),
+						ResultConst::TallyFlySize / 2, &gold, true);
 				}
 			}
 		}

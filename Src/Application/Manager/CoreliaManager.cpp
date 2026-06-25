@@ -102,6 +102,11 @@ void CoreliaManager::Update(float dt)
 {
     m_animTime += dt;
 
+    // フレームレート非依存：60fps基準のフレーム換算
+    const float dt60 = dt * 60.0f;
+    const float bodyTurn = std::min(1.0f, CoreliaConst::BodyTurnLerp * dt60);
+    const float headTurn = std::min(1.0f, CoreliaConst::HeadTurnLerp * dt60);
+
     const float neckLimit = CoreliaConst::NeckLimitDeg * 0.01745329f;  // deg→rad
 
     for (auto& npc : m_npcs)
@@ -144,19 +149,19 @@ void CoreliaManager::Update(float dt)
             const float over = a - std::clamp(a, -neckLimit, neckLimit);
             if (fabsf(over) > 1e-4f)
             {
-                npc.BodyFwd = RotateAround(npc.BodyFwd, up, over * CoreliaConst::BodyTurnLerp);
+                npc.BodyFwd = RotateAround(npc.BodyFwd, up, over * bodyTurn);
                 npc.BodyFwd.Normalize();
             }
             // 頭は残り角を首制限内で（速く）追従
             const float rem = SignedAngleAround(npc.BodyFwd, targetFwd, up);
             const float headTarget = std::clamp(rem, -neckLimit, neckLimit);
-            npc.HeadYaw += (headTarget - npc.HeadYaw) * CoreliaConst::HeadTurnLerp;
+            npc.HeadYaw += (headTarget - npc.HeadYaw) * headTurn;
         }
 
         // アニメ更新 → ノード行列確定 → 頭ボーンをローカル変形で回す（子も追従・上書きされない）
         if (npc.animator && npc.modelWork && npc.modelWork->GetData())
         {
-            npc.animator->AdvanceTime(npc.modelWork->WorkNodes());
+            npc.animator->AdvanceTime(npc.modelWork->WorkNodes(), dt60);
             npc.modelWork->CalcNodeMatrices();   // 頭ワールド行列を取得するため一旦確定
 
             if (fabsf(npc.HeadYaw) > 1e-4f)

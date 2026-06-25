@@ -38,10 +38,11 @@ int ItemManager::Update(HitBox& _playerHitBox, bool& outParasolPickedUp, int& ou
 		// コインの KdCollider に対して HitBox の球を当てる
 		if (coin->Intersects(hitSphere, nullptr))
 		{
-			// 取得演出（プレイヤー体中心・コインの色）。コインはヒットストップ無し
+			// 取得演出：コイン専用エフェクト（金のリング＋金の星が舞い上がる）。ヒットストップ無し
 			PlayPickupEffect(playerPos,
 				{ SparkleConst::CoinColorR, SparkleConst::CoinColorG,
-				  SparkleConst::CoinColorB, SparkleConst::CoinColorA });
+				  SparkleConst::CoinColorB, SparkleConst::CoinColorA },
+				PickupBurst::Style::Coin);
 			coin->Collect();   // ※Expireではない：配置データは残し、保存しても消えない
 			++collected;
 		}
@@ -202,6 +203,17 @@ int ItemManager::Update(HitBox& _playerHitBox, bool& outParasolPickedUp, int& ou
 	return collected;
 }
 
+void ItemManager::UpdateVisualOnly()
+{
+	// 取得判定はせず、各アイテムの見た目（ふわふわ・自転・きらめき）だけ進める
+	for (const auto& coin : m_coins)    { if (!coin->IsExpired() && !coin->IsCollected()) { coin->Update(); } }
+	for (const auto& p    : m_parasols) { if (!p->IsExpired())   { p->Update(); } }
+	for (const auto& rock : m_rocks)    { if (!rock->IsExpired()) { rock->Update(); } }
+	for (const auto& gem  : m_rockGems) { if (!gem->IsExpired() && !gem->IsCollected()) { gem->Update(); } }
+	for (const auto& g    : m_thrown)   { if (!g->IsExpired())   { g->Update(); } }
+	UpdatePickupEffects();   // 取得バーストも進める
+}
+
 void ItemManager::UpdatePickupEffects()
 {
 	// 取得バーストの更新＋寿命切れ掃除（ヒットストップ中も呼ばれる）
@@ -315,6 +327,135 @@ void ItemManager::SpawnRockGem(const Math::Vector3& pos)
 	m_rockGems.push_back(std::move(gem));
 }
 
+// 直線上の等間隔点
+std::vector<Math::Vector3> ItemManager::BuildLinePoints(const Math::Vector3& start, const Math::Vector3& end, int count)
+{
+	std::vector<Math::Vector3> pts;
+	if (count <= 0) { return pts; }
+	if (count == 1) { pts.push_back(start); return pts; }
+	pts.reserve(count);
+	for (int i = 0; i < count; ++i)
+	{
+		const float t = static_cast<float>(i) / static_cast<float>(count - 1);
+		pts.push_back(Math::Vector3::Lerp(start, end, t));
+	}
+	return pts;
+}
+
+// 図形（丸・星・ハート・立方体の辺）の点を生成
+std::vector<Math::Vector3> ItemManager::BuildShapePoints(GemShape shape, const Math::Vector3& center, float size, int count)
+{
+	std::vector<Math::Vector3> pts;
+	if (count <= 0 || size <= 0.0f) { return pts; }
+	constexpr float kPi  = 3.14159265358979f;
+	constexpr float kTau = 6.28318530718f;
+	pts.reserve(count);
+
+	switch (shape)
+	{
+	case GemShape::Circle:
+		for (int i = 0; i < count; ++i)
+		{
+			const float a = kTau * static_cast<float>(i) / static_cast<float>(count);
+			pts.push_back(center + Math::Vector3(std::cos(a), std::sin(a), 0.0f) * size);
+		}
+		break;
+	case GemShape::Star:
+	{
+		const int kPts = 10;
+		Math::Vector3 verts[10];
+		for (int k = 0; k < kPts; ++k)
+		{
+			const float a = -kPi * 0.5f + kPi * static_cast<float>(k) / 5.0f;
+			const float r = (k % 2 == 0) ? size : size * 0.42f;
+			verts[k] = center + Math::Vector3(std::cos(a), std::sin(a), 0.0f) * r;
+		}
+		for (int i = 0; i < count; ++i)
+		{
+			const float fp = static_cast<float>(kPts) * static_cast<float>(i) / static_cast<float>(count);
+			const int   seg = static_cast<int>(fp) % kPts;
+			const float ft  = fp - std::floor(fp);
+			pts.push_back(Math::Vector3::Lerp(verts[seg], verts[(seg + 1) % kPts], ft));
+		}
+		break;
+	}
+	case GemShape::Heart:
+		for (int i = 0; i < count; ++i)
+		{
+			const float t = kTau * static_cast<float>(i) / static_cast<float>(count);
+			const float st = std::sin(t);
+			const float x = 16.0f * st * st * st;
+			const float y = 13.0f * std::cos(t) - 5.0f * std::cos(2.0f * t)
+						  - 2.0f * std::cos(3.0f * t) - std::cos(4.0f * t);
+			pts.push_back(center + Math::Vector3(x, y, 0.0f) * (size / 16.0f));
+		}
+		break;
+	case GemShape::CubeEdges:
+	{
+		const Math::Vector3 c[8] = {
+			{-1,-1,-1}, { 1,-1,-1}, { 1, 1,-1}, {-1, 1,-1},
+			{-1,-1, 1}, { 1,-1, 1}, { 1, 1, 1}, {-1, 1, 1} };
+		const int e[12][2] = {
+			{0,1},{1,2},{2,3},{3,0}, {4,5},{5,6},{6,7},{7,4}, {0,4},{1,5},{2,6},{3,7} };
+		const int perEdge = std::max(1, count / 12);
+		for (int ei = 0; ei < 12; ++ei)
+		{
+			const Math::Vector3 a = center + c[e[ei][0]] * size;
+			const Math::Vector3 b = center + c[e[ei][1]] * size;
+			for (int k = 0; k < perEdge; ++k)
+			{
+				const float t = static_cast<float>(k) / static_cast<float>(perEdge);
+				pts.push_back(Math::Vector3::Lerp(a, b, t));
+			}
+		}
+		break;
+	}
+	}
+	return pts;
+}
+
+void ItemManager::SpawnRockGemLine(const Math::Vector3& start, const Math::Vector3& end, int count)
+{
+	for (const auto& p : BuildLinePoints(start, end, count)) { SpawnRockGem(p); }
+}
+
+void ItemManager::SpawnRockGemShape(GemShape shape, const Math::Vector3& center, float size, int count)
+{
+	for (const auto& p : BuildShapePoints(shape, center, size, count)) { SpawnRockGem(p); }
+}
+
+void ItemManager::DrawPlacementPreview() const
+{
+	if (!m_pvLineOn && !m_pvShapeOn && !m_pvCoinLineOn && !m_pvCoinShapeOn) { return; }
+
+	KdDebugWireFrame wire;
+	const Math::Color gemCol (1.0f, 0.55f, 0.15f, 1.0f);   // 岩＝オレンジ寄り金
+	const Math::Color coinCol(1.0f, 0.9f,  0.2f,  1.0f);   // コイン＝黄色
+	const float r = std::max(0.15f, RockGemConst::Radius);
+
+	// カラフル岩
+	if (m_pvLineOn)
+	{
+		for (const auto& p : BuildLinePoints(m_pvLineStart, m_pvLineEnd, m_pvLineCount)) { wire.AddDebugSphere(p, r, gemCol); }
+		wire.AddDebugLine(m_pvLineStart, m_pvLineEnd, { 0.4f, 1.0f, 0.4f, 1.0f });
+	}
+	if (m_pvShapeOn)
+	{
+		for (const auto& p : BuildShapePoints(m_pvShapeKind, m_pvShapeCenter, m_pvShapeSize, m_pvShapeCount)) { wire.AddDebugSphere(p, r, gemCol); }
+	}
+	// コイン
+	if (m_pvCoinLineOn)
+	{
+		for (const auto& p : BuildLinePoints(m_pvCoinLineStart, m_pvCoinLineEnd, m_pvCoinLineCount)) { wire.AddDebugSphere(p, r, coinCol); }
+		wire.AddDebugLine(m_pvCoinLineStart, m_pvCoinLineEnd, { 0.4f, 0.9f, 1.0f, 1.0f });
+	}
+	if (m_pvCoinShapeOn)
+	{
+		for (const auto& p : BuildShapePoints(m_pvCoinShapeKind, m_pvCoinShapeCenter, m_pvCoinShapeSize, m_pvCoinShapeCount)) { wire.AddDebugSphere(p, r, coinCol); }
+	}
+	wire.Draw();
+}
+
 void ItemManager::ClearRockGems()
 {
 	for (auto& g : m_rockGems) { g->Expire(); }
@@ -394,6 +535,11 @@ void ItemManager::SpawnCoinLine(const Math::Vector3& _start, const Math::Vector3
 	}
 }
 
+void ItemManager::SpawnCoinShape(GemShape shape, const Math::Vector3& center, float size, int count)
+{
+	for (const auto& p : BuildShapePoints(shape, center, size, count)) { SpawnCoin(p); }
+}
+
 void ItemManager::ClearCoins()
 {
 	for (auto& coin : m_coins) { coin->Expire(); }
@@ -402,6 +548,12 @@ void ItemManager::ClearCoins()
 
 void ItemManager::DrawGui()
 {
+	// 配置プレビューはこのフレームのGUIで再設定する（ウィンドウ非表示なら消える）
+	m_pvLineOn  = false;
+	m_pvShapeOn = false;
+	m_pvCoinLineOn  = false;
+	m_pvCoinShapeOn = false;
+
 	if (!ImGui::Begin(U8("コインエディタ")))
 	{
 		ImGui::End();
@@ -433,11 +585,36 @@ void ItemManager::DrawGui()
 		static int           s_lineCount = 5;
 		ImGui::DragFloat3(U8("始点##line"), &s_lineStart.x, 0.1f);
 		ImGui::DragFloat3(U8("終点##line"),   &s_lineEnd.x,   0.1f);
-		ImGui::SliderInt(U8("個数##line"), &s_lineCount, 2, 20);
+		ImGui::SliderInt(U8("個数##line"), &s_lineCount, 2, 30);
 		if (ImGui::Button(U8("配置##line")))
 		{
 			SpawnCoinLine(s_lineStart, s_lineEnd, s_lineCount);
 		}
+		// 配置前ガイド
+		m_pvCoinLineOn = true; m_pvCoinLineStart = s_lineStart; m_pvCoinLineEnd = s_lineEnd; m_pvCoinLineCount = s_lineCount;
+	}
+
+	// ──────────────────────────────────────────
+	// Spawn Shape（図形配置：丸/星/ハート/立方体の辺）
+	// ──────────────────────────────────────────
+	if (ImGui::CollapsingHeader(U8("図形配置")))
+	{
+		static Math::Vector3 s_cShapeCenter = { 0.0f, 5.0f, 0.0f };
+		static float         s_cShapeSize   = 4.0f;
+		static int           s_cShapeCount  = 16;
+		static int           s_cShapeKind   = 0;
+		const char* shapeItems[] = { U8("丸"), U8("星"), U8("ハート"), U8("立方体の辺") };
+		ImGui::Combo(U8("図形##coinshape"), &s_cShapeKind, shapeItems, IM_ARRAYSIZE(shapeItems));
+		ImGui::DragFloat3(U8("中心##coinshape"), &s_cShapeCenter.x, 0.1f);
+		ImGui::DragFloat(U8("大きさ##coinshape"), &s_cShapeSize, 0.1f, 0.5f, 50.0f);
+		ImGui::SliderInt(U8("個数##coinshape"), &s_cShapeCount, 3, 120);
+		if (ImGui::Button(U8("図形配置##coin")))
+		{
+			SpawnCoinShape(static_cast<GemShape>(s_cShapeKind), s_cShapeCenter, s_cShapeSize, s_cShapeCount);
+		}
+		// 配置前ガイド
+		m_pvCoinShapeOn = true; m_pvCoinShapeKind = static_cast<GemShape>(s_cShapeKind);
+		m_pvCoinShapeCenter = s_cShapeCenter; m_pvCoinShapeSize = s_cShapeSize; m_pvCoinShapeCount = s_cShapeCount;
 	}
 
 	// ──────────────────────────────────────────
@@ -472,6 +649,15 @@ void ItemManager::DrawGui()
 			if (ImGui::SmallButton(U8("削除")))
 			{
 				coin->Expire();
+			}
+
+			// 向き（モデルの傾き）
+			const char* dirItems[] = { U8("上"), U8("下"), U8("左"), U8("右") };
+			int dirIdx = static_cast<int>(coin->GetDir());
+			ImGui::SetNextItemWidth(90.0f);
+			if (ImGui::Combo(U8("向き##coindir"), &dirIdx, dirItems, IM_ARRAYSIZE(dirItems)))
+			{
+				coin->SetDir(static_cast<Coin::CoinDir>(dirIdx));
 			}
 
 			ImGui::PopID();
@@ -550,6 +736,42 @@ void ItemManager::DrawGui()
 		SpawnRockGem(s_gemPos);
 	}
 
+	// ── ライン配置 ──
+	{
+		static Math::Vector3 s_gemLineStart = { -5.0f, 2.0f, 0.0f };
+		static Math::Vector3 s_gemLineEnd   = {  5.0f, 2.0f, 0.0f };
+		static int           s_gemLineCount = 5;
+		ImGui::DragFloat3(U8("始点##gemline"), &s_gemLineStart.x, 0.1f);
+		ImGui::DragFloat3(U8("終点##gemline"), &s_gemLineEnd.x,   0.1f);
+		ImGui::SliderInt(U8("個数##gemline"), &s_gemLineCount, 2, 30);
+		if (ImGui::Button(U8("ライン配置##gem")))
+		{
+			SpawnRockGemLine(s_gemLineStart, s_gemLineEnd, s_gemLineCount);
+		}
+		// 配置前ガイド（ワイヤー球＋線）を表示
+		m_pvLineOn = true; m_pvLineStart = s_gemLineStart; m_pvLineEnd = s_gemLineEnd; m_pvLineCount = s_gemLineCount;
+	}
+
+	// ── 図形配置（星・ハート・丸・立方体の辺）──
+	{
+		static Math::Vector3 s_shapeCenter = { 0.0f, 5.0f, 0.0f };
+		static float         s_shapeSize   = 4.0f;
+		static int           s_shapeCount  = 16;
+		static int           s_shapeKind   = 0;   // 0=丸 1=星 2=ハート 3=立方体の辺
+		const char* shapeItems[] = { U8("丸"), U8("星"), U8("ハート"), U8("立方体の辺") };
+		ImGui::Combo(U8("図形##gemshape"), &s_shapeKind, shapeItems, IM_ARRAYSIZE(shapeItems));
+		ImGui::DragFloat3(U8("中心##gemshape"), &s_shapeCenter.x, 0.1f);
+		ImGui::DragFloat(U8("大きさ##gemshape"), &s_shapeSize, 0.1f, 0.5f, 50.0f);
+		ImGui::SliderInt(U8("個数##gemshape"), &s_shapeCount, 3, 120);
+		if (ImGui::Button(U8("図形配置##gem")))
+		{
+			SpawnRockGemShape(static_cast<GemShape>(s_shapeKind), s_shapeCenter, s_shapeSize, s_shapeCount);
+		}
+		// 配置前ガイド（ワイヤー球）を表示
+		m_pvShapeOn = true; m_pvShapeKind = static_cast<GemShape>(s_shapeKind);
+		m_pvShapeCenter = s_shapeCenter; m_pvShapeSize = s_shapeSize; m_pvShapeCount = s_shapeCount;
+	}
+
 	if (ImGui::Button(U8("全消去##gems"))) { ClearRockGems(); }
 	ImGui::SameLine();
 	if (ImGui::Button(U8("保存##gems")))  { SaveRockGems(); }
@@ -599,7 +821,8 @@ void ItemManager::Save() const
 	{
 		if (coin->IsExpired()) { continue; }
 		const Math::Vector3& p = coin->GetSpawnPos();
-		ofs << p.x << "," << p.y << "," << p.z << "\n";
+		ofs << p.x << "," << p.y << "," << p.z << ","
+			<< static_cast<int>(coin->GetDir()) << "\n";
 	}
 }
 
@@ -624,6 +847,11 @@ void ItemManager::Load()
 		p.y = std::stof(tokens[1]);
 		p.z = std::stof(tokens[2]);
 		SpawnCoin(p);
+		if (tokens.size() >= 4 && !m_coins.empty())
+		{
+			const int di = std::stoi(tokens[3]);
+			if (di >= 0 && di <= 3) { m_coins.back()->SetDir(static_cast<Coin::CoinDir>(di)); }
+		}
 	}
 }
 

@@ -89,7 +89,8 @@ private:
 	bool  m_resultAdvPrev = false;   // 決定キーのエッジ検出（閉じる用）
 	int   m_resStageId    = 0;       // 0始まりの stageId
 	int   m_resCoins      = 0;
-	int   m_resRocks      = 0;
+	int   m_resRocks      = 0;       // 岩系合計（重力コア＋エメラルド＋カラフル岩）
+	int   m_resCores      = 0;       // うち重力コアの数（専用アイコンで別に飛ばす）
 	int   m_resDeaths     = 0;
 	float m_resTime       = 0.0f;
 	int   m_resStep       = 1;       // 表示中のページ（1..Pages → 最後の次で閉じてタリーへ）
@@ -111,6 +112,7 @@ private:
 	struct TallyFlyer
 	{
 		bool          isRock = false;
+		bool          isCore = false;   // 重力コア（Glowアイコンで飛ばす）。isRockに優先
 		Math::Vector3 start  = {};   // 開始(スクリーン中心原点)
 		float         delay  = 0.0f; // 発射までの待ち
 		float         t      = 0.0f; // 0..1 進行
@@ -149,6 +151,8 @@ private:
 	float         m_menuBlink    = 0.0f;
 	KdRenderTargetPack m_menuBlurRT;       // 背景ぼかしの出力先
 	bool          m_menuBlurInit = false;
+
+	bool          m_dbgUnlockPrev = false;  // F9：全ステージ解放トグルのエッジ検出
 
 	// ノードの見た目（未解放＝くすんだ色・小さめ／解放＝通常）。解放アニメ中は補間。
 	void          NodeAppearance(int nodeIdx, float& outScale, Math::Color& outColor) const;

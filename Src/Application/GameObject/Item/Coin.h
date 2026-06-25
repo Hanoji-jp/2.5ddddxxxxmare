@@ -11,6 +11,9 @@
 class Coin : public KdGameObject
 {
 public:
+	// コインの向き（モデルの傾き）。Z軸回りの基準回転で表現
+	enum class CoinDir { Up, Down, Left, Right };
+
 	Coin()          { Init(); }
 	~Coin() override = default;
 
@@ -26,6 +29,10 @@ public:
 	void SetSpawnPos(const Math::Vector3& _pos) { m_spawnPos = _pos; SetPos(_pos); }
 	const Math::Vector3& GetSpawnPos() const    { return m_spawnPos; }
 
+	// 向き（モデルの傾き）
+	void    SetDir(CoinDir d) { m_dir = d; }
+	CoinDir GetDir() const    { return m_dir; }
+
 	// 削除（エディタで配置を消す）：保存対象から外れ、リストからも除去される
 	void Expire() { m_isExpired = true; }
 	bool IsExpired() const override { return m_isExpired; }
@@ -40,6 +47,7 @@ private:
 	Math::Vector3 m_spawnPos    = { 0.0f, 0.0f, 0.0f };
 	float         m_bobTimer    = 0.0f;
 	float         m_rotAngle    = 0.0f;
+	CoinDir       m_dir         = CoinDir::Up;   // モデルの向き（Z軸回りの基準回転）
 	bool          m_collected   = false;   // プレイ中に取得済み（保存・配置は維持）
 	ItemEffect    m_effect;       // 星きらめき（コインは Effekseer なし）
 };

@@ -2,6 +2,18 @@
 #include "Coin.h"
 #include "../../Const/OutlineConst.h"
 
+// 向き → Z軸回りの基準回転角（ラジアン）
+static float CoinDirAngleZ(Coin::CoinDir d)
+{
+	switch (d)
+	{
+	case Coin::CoinDir::Down:  return DirectX::XM_PI;
+	case Coin::CoinDir::Left:  return DirectX::XM_PIDIV2;
+	case Coin::CoinDir::Right: return -DirectX::XM_PIDIV2;
+	default:                   return 0.0f;   // Up
+	}
+}
+
 void Coin::Init()
 {
 	m_drawType = eDrawTypeLit;
@@ -39,8 +51,10 @@ void Coin::Init()
 
 void Coin::Update()
 {
-	m_bobTimer  += ItemConst::CoinBobSpeed;
-	m_rotAngle  += ItemConst::CoinRotateSpeed;
+	// フレームレート非依存：60fps基準に換算（高FPSで回転・上下が速くなるのを防ぐ）
+	const float fs = KdFPSController::GetDt() * 60.0f;
+	m_bobTimer  += ItemConst::CoinBobSpeed   * fs;
+	m_rotAngle  += ItemConst::CoinRotateSpeed * fs;
 	if (m_rotAngle > DirectX::XM_2PI) { m_rotAngle -= DirectX::XM_2PI; }
 
 	const float bobOffset = std::sinf(m_bobTimer) * ItemConst::CoinBobAmplitude;
@@ -61,7 +75,8 @@ void Coin::DrawLit()
 	if (!m_modelWork.IsEnable()) { return; }
 
 	const Math::Vector3 pos   = GetPos();
-	const Math::Matrix  rot   = Math::Matrix::CreateRotationY(m_rotAngle);
+	const Math::Matrix  rot   = Math::Matrix::CreateRotationY(m_rotAngle)
+							  * Math::Matrix::CreateRotationZ(CoinDirAngleZ(m_dir));
 	const Math::Matrix  trans = Math::Matrix::CreateTranslation(pos);
 
 	KdShaderManager::Instance().m_StandardShader.DrawModel(m_modelWork, rot * trans);
@@ -72,7 +87,8 @@ void Coin::DrawOutline()
 	if (!m_modelWork.IsEnable()) { return; }
 
 	const Math::Vector3 pos   = GetPos();
-	const Math::Matrix  rot   = Math::Matrix::CreateRotationY(m_rotAngle);
+	const Math::Matrix  rot   = Math::Matrix::CreateRotationY(m_rotAngle)
+							  * Math::Matrix::CreateRotationZ(CoinDirAngleZ(m_dir));
 	const Math::Matrix  trans = Math::Matrix::CreateTranslation(pos);
 
 	auto& shader = KdShaderManager::Instance().m_StandardShader;

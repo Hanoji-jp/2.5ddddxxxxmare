@@ -142,7 +142,8 @@ void SideScrollCamera::Update(const Math::Vector3& _targetPos, const Math::Vecto
 			gravForward * localFocus.z;
 
 		// スムーズに補間
-		m_focusOffsetWorld = Math::Vector3::Lerp(m_focusOffsetWorld, targetFocusWorld, focusLerp);
+		const float focusF = 1.0f - std::powf(1.0f - std::clamp(focusLerp, 0.0f, 1.0f), KdFPSController::GetDt() * 60.0f);
+		m_focusOffsetWorld = Math::Vector3::Lerp(m_focusOffsetWorld, targetFocusWorld, focusF);
 	}
 
 	// ── 1. ルーム遷移ステート更新（全モード共通） ──────────────
@@ -314,7 +315,8 @@ void SideScrollCamera::Update(const Math::Vector3& _targetPos, const Math::Vecto
 			const float targetZoomRate = std::clamp(
 				std::sqrtf(overX * cs.WallZoomSensitivity),
 				0.0f, cs.WallZoomMaxRatio);
-			m_wallZoomRate = std::lerp(m_wallZoomRate, targetZoomRate, cs.WallZoomLerp);
+			const float wzF = 1.0f - std::powf(1.0f - std::clamp(cs.WallZoomLerp, 0.0f, 1.0f), kDt * 60.0f);
+			m_wallZoomRate = std::lerp(m_wallZoomRate, targetZoomRate, wzF);
 
 			const float actualOffsetZ = (baseOffsetZ + planetZoomOffset) * (1.0f - m_wallZoomRate);
 			const float planeDist1    = std::abs(actualOffsetZ);
@@ -390,15 +392,19 @@ void SideScrollCamera::Update(const Math::Vector3& _targetPos, const Math::Vecto
 		if (targetPos.y < minCamY) { targetPos.y = minCamY; }
 	}
 
+	// フレームレート非依存：60fps基準で同じ追従感になる指数補間係数へ変換
+	const float camDt60 = kDt * 60.0f;
+	auto dtf = [camDt60](float k) { return 1.0f - std::powf(1.0f - std::clamp(k, 0.0f, 1.0f), camDt60); };
+
 	if (mode == CameraConst::CameraMode::Fixed2D)
 	{
-		m_pos       = Math::Vector3::Lerp(m_pos,       targetPos,    CameraConst::Fixed2DPosLerp);
-		m_lookAtPos = Math::Vector3::Lerp(m_lookAtPos, targetLookAt, CameraConst::Fixed2DLookLerp);
+		m_pos       = Math::Vector3::Lerp(m_pos,       targetPos,    dtf(CameraConst::Fixed2DPosLerp));
+		m_lookAtPos = Math::Vector3::Lerp(m_lookAtPos, targetLookAt, dtf(CameraConst::Fixed2DLookLerp));
 	}
 	else
 	{
-		m_pos       = Math::Vector3::Lerp(m_pos,       targetPos,    cs.PosLerp);
-		m_lookAtPos = Math::Vector3::Lerp(m_lookAtPos, targetLookAt, cs.LookAtLerp);
+		m_pos       = Math::Vector3::Lerp(m_pos,       targetPos,    dtf(cs.PosLerp));
+		m_lookAtPos = Math::Vector3::Lerp(m_lookAtPos, targetLookAt, dtf(cs.LookAtLerp));
 
 		if (mode != CameraConst::CameraMode::TopDown)
 		{
@@ -414,7 +420,7 @@ void SideScrollCamera::Update(const Math::Vector3& _targetPos, const Math::Vecto
 	}
 
 	// ── 5. ロール ─────────────────────────────────────────────
-	m_rollDeg = std::lerp(m_rollDeg, targetRollDeg, cs.RollLerp);
+	m_rollDeg = std::lerp(m_rollDeg, targetRollDeg, dtf(cs.RollLerp));
 
 	// ── 6. LookAt 基底を構築 ────────────────────────────────────
 	Math::Vector3 worldUp;

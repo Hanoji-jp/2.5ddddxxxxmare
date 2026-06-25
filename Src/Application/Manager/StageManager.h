@@ -33,14 +33,15 @@ public:
         bool  pending = false;   // a fresh clear is waiting to be shown
         int   stageId = 0;       // 0-based id (for stage-name lookup)
         int   coins   = 0;       // coins collected in the run
-        int   rocks   = 0;       // rock items collected in the run
+        int   rocks   = 0;       // rock items total (gravity cores + emeralds + colorful gems)
         int   deaths  = 0;       // times died in the run
         float time    = 0.0f;    // play time until clear (seconds)
+        int   cores   = 0;       // gravity-core count only (subset of rocks; flown with own icon)
     };
 
-    void SetResult(int _stageId, int _coins, int _rocks, int _deaths, float _time)
+    void SetResult(int _stageId, int _coins, int _rocks, int _deaths, float _time, int _cores = 0)
     {
-        m_result = { true, _stageId, _coins, _rocks, _deaths, _time };
+        m_result = { true, _stageId, _coins, _rocks, _deaths, _time, _cores };
     }
     // Read the result once; clears the pending flag so it only shows one time.
     StageResult ConsumeResult()
@@ -105,6 +106,10 @@ public:
         if (stageId < 0 || stageId >= kMaxStages) { return empty; }
         return m_records[stageId];
     }
+
+    // Debug: unlock all stages (transient, not saved to file).
+    void SetDebugUnlockAll(bool on) { m_debugUnlockAll = on; }
+    bool IsDebugUnlockAll() const   { return m_debugUnlockAll; }
 
     // Call on stage clear: marks cleared and keeps the best coins/time.
     void RecordClear(int stageId, int coins, float time)
@@ -196,4 +201,5 @@ private:
     int m_totalCoins = 0;
     int m_totalRocks = 0;
     std::array<StageRecord, kMaxStages> m_records{};
+    bool m_debugUnlockAll = false;   // Debug: unlock all stages (not saved)
 };

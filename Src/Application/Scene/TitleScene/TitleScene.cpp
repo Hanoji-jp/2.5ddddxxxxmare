@@ -285,20 +285,34 @@ void TitleScene::Event()
 	if (m_timer > kPromptIn)
 	{
 		auto& cur = CursorManager::Instance();
-		if (cur.IsActive() && cur.Clicked() && !m_starting && !SceneManager::Instance().IsInputLocked())
+		const auto& bb = KdDirect3D::Instance().GetBackBuffer();
+		const float sh = static_cast<float>(bb->GetInfo().Height);
+		const float bob = std::sinf(m_timer * kPromptBobSpeed) * kPromptBobAmp;
+		const float startCY = -sh * kPromptYRatio + kBtnRiseY + bob;
+		const float setCY   = startCY - kBtnGap;
+
+		const bool canInput = !m_starting && !SceneManager::Instance().IsInputLocked();
+		const bool hovStart = cur.IsActive() && canInput && cur.HitRect(0.0f, startCY, kBtnHalfW, kBtnHalfH);
+		const bool hovSet   = cur.IsActive() && canInput && cur.HitRect(0.0f, setCY,   kBtnHalfW, kBtnHalfH);
+
+		// ホバー音（カーソルがボタンに乗った瞬間だけ鳴らす）
+		if ((hovStart && !m_hovStartPrev) || (hovSet && !m_hovSetPrev))
 		{
-			const auto& bb = KdDirect3D::Instance().GetBackBuffer();
-			const float sh = static_cast<float>(bb->GetInfo().Height);
-			const float bob = std::sinf(m_timer * kPromptBobSpeed) * kPromptBobAmp;
-			const float startCY = -sh * kPromptYRatio + kBtnRiseY + bob;
-			const float setCY   = startCY - kBtnGap;
-			if (cur.HitRect(0.0f, startCY, kBtnHalfW, kBtnHalfH))
+			SoundManager::Instance().PlaySE(SeId::MenuMove, SoundConst::SeVolume);
+		}
+		m_hovStartPrev = hovStart;
+		m_hovSetPrev   = hovSet;
+
+		if (cur.IsActive() && cur.Clicked() && canInput)
+		{
+			if (hovStart)
 			{
 				m_starting = true; m_startTimer = 0.0f;
 				SoundManager::Instance().PlaySE(SeId::TitleStart, SoundConst::SeVolume);
 			}
-			else if (cur.HitRect(0.0f, setCY, kBtnHalfW, kBtnHalfH))
+			else if (hovSet)
 			{
+				SoundManager::Instance().PlaySE(SeId::MenuDecide, SoundConst::SeVolume);
 				m_settingsMenu.Open();
 			}
 		}

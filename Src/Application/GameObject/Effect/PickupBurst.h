@@ -13,7 +13,7 @@ class PickupBurst : public EffectBase
 {
 public:
     // 取得演出のスタイル
-    enum class Style { Full, Calm, Ring };
+    enum class Style { Full, Calm, Ring, Coin };
 
     void Spawn(const Math::Vector3& pos, const Math::Color& color, Style style = Style::Full)
     {
@@ -38,6 +38,7 @@ public:
         float total = SparkleConst::PickupBurstLife + SparkleConst::PickupAfterglowLife;
         if      (m_style == Style::Calm) { total = SparkleConst::CalmPickupLife; }
         else if (m_style == Style::Ring) { total = SparkleConst::RingPickupLife; }
+        else if (m_style == Style::Coin) { total = SparkleConst::RingPickupLife; }
         if (m_age >= total) { m_isExpired = true; }
     }
 
@@ -55,8 +56,9 @@ public:
         // スタイル別の演出（Full 以外はここで描いて終了）
         if (m_style != Style::Full)
         {
-            if (m_style == Style::Calm) { DrawCalm(); }
-            else                        { DrawRing(); }
+            if      (m_style == Style::Calm) { DrawCalm(); }
+            else if (m_style == Style::Coin) { DrawCoin(); }
+            else                             { DrawRing(); }
             KdShaderManager::Instance().UndoDepthStencilState();
             KdShaderManager::Instance().UndoBlendState();
             return;
@@ -293,6 +295,61 @@ private:
             const Math::Color   scol { rc.x, rc.y, rc.z, sa };
             const Math::Vector3 sem  { rc.x * sa, rc.y * sa, rc.z * sa };
             // 画像を回転させながら落下（spin = age 依存 ＋ 個体オフセット）
+            const float spin = age * (4.0f + 2.0f * Hash(m_seed + i * 5.1f)) + i;
+            DrawBillboard(a.star, p, sz, spin, scol, sem);
+        }
+    }
+
+    // コイン専用：金色のリングがパッと広がり、白フラッシュ＋金の星が上へ舞い上がってきらめく
+    void DrawCoin() const
+    {
+        const Assets& a = GetAssets();
+        const float t    = m_age / SparkleConst::RingPickupLife;   // 0..1
+        const float fade = 1.0f - t;
+        const Math::Vector3 gold{ 1.0f, 0.82f, 0.30f };
+
+        // 金のリング（速く広がって消える）
+        const float ringT = (t < SparkleConst::RingFadeFrac) ? (t / SparkleConst::RingFadeFrac) : 1.0f;
+        if (ringT < 1.0f)
+        {
+            const float rs = SparkleConst::RingGlowStart
+                + (SparkleConst::RingGlowEnd - SparkleConst::RingGlowStart) * ringT;
+            const float ra = SparkleConst::RingGlowAlpha * (1.0f - ringT);
+            const Math::Color   rcol{ gold.x, gold.y, gold.z, ra };
+            const Math::Vector3 rem { gold.x * ra, gold.y * ra, gold.z * ra };
+            const KdPolygon& ringPoly = a.hasRing ? a.ring : a.glow;
+            DrawBillboard(ringPoly, m_pos, rs, m_age * SparkleConst::RingGlowSpin, rcol, rem);
+        }
+
+        // 中央の白フラッシュ
+        const float pop = (t < SparkleConst::RingCoreFrac) ? (1.0f - t / SparkleConst::RingCoreFrac) : 0.0f;
+        if (pop > 0.0f)
+        {
+            const float cs = SparkleConst::RingCoreSize * (0.5f + 0.6f * pop);
+            DrawBillboard(a.core, m_pos, cs, m_age * 2.0f, { 1.0f, 1.0f, 1.0f, pop }, { 1.0f, 1.0f, 1.0f });
+        }
+
+        // 金の星：主に上へ舞い上がる（コインらしく）。横は控えめ、重力で少し落ちる。
+        const float age = m_age;
+        for (int i = 0; i < SparkleConst::RingStarCount; ++i)
+        {
+            const float ang    = DirectX::XM_2PI * static_cast<float>(i)
+                               / static_cast<float>(SparkleConst::RingStarCount) + Hash(m_seed + i) * 0.8f;
+            const float outSpd = SparkleConst::RingStarOut * 0.45f * (0.5f + 0.6f * Hash(m_seed + i * 2.7f));
+            const float upSpd  = SparkleConst::RingStarUp  * 1.35f * (0.8f + 0.4f * Hash(m_seed + i * 4.3f));
+
+            Math::Vector3 p = m_pos;
+            p.x += std::cosf(ang) * outSpd * age;
+            p.z += std::sinf(ang) * outSpd * age;
+            p.y += upSpd * age - 0.5f * SparkleConst::RingStarGravity * age * age;
+
+            // 金色（個体差で少し明暗）＋またたき
+            const float v = 0.85f + 0.15f * Hash(m_seed + i * 7.7f);
+            const float tw = 0.6f + 0.4f * std::sinf(age * SparkleConst::RingStarTwinkle + i * 2.0f);
+            const float sa = fade * tw;
+            const float sz = SparkleConst::RingStarSize * (0.6f + 0.4f * fade) * tw;
+            const Math::Color   scol{ gold.x * v, gold.y * v, gold.z * v, sa };
+            const Math::Vector3 sem { gold.x * v * sa, gold.y * v * sa, gold.z * v * sa };
             const float spin = age * (4.0f + 2.0f * Hash(m_seed + i * 5.1f)) + i;
             DrawBillboard(a.star, p, sz, spin, scol, sem);
         }

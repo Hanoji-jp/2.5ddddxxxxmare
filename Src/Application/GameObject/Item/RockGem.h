@@ -28,6 +28,13 @@ public:
 	void SetSpawnPos(const Math::Vector3& pos) { m_spawnPos = pos; SetPos(pos); }
 	const Math::Vector3& GetSpawnPos() const   { return m_spawnPos; }
 
+	// エディタのギズモ移動用：配置位置・浮遊基準・ワールド行列をまとめて更新（即見た目が動く）
+	void SetPlacedPos(const Math::Vector3& pos)
+	{
+		m_spawnPos = pos; m_basePos = pos; m_vel = Math::Vector3::Zero;
+		SetPos(pos); m_mWorld = Math::Matrix::CreateTranslation(pos);
+	}
+
 	// 削除（エディタで配置を消す）：保存対象から外れ、リストからも除去される
 	void Expire()                   { m_expired = true; }
 	bool IsExpired() const override { return m_expired; }

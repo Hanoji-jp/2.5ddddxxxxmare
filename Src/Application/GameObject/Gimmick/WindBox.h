@@ -30,6 +30,7 @@ public:
 
 	// 移動床へアタッチ（GameScene が Rebuild 時に設定）
 	void SetAttachFloor(const std::weak_ptr<MovingFloor>& floor) { m_attachFloor = floor; }
+	const std::weak_ptr<MovingFloor>& GetAttachFloor() const { return m_attachFloor; }
 
 	// プレイヤー位置がこのボックスの範囲内かどうか
 	bool IsInRange(const Math::Vector3& pos) const;
