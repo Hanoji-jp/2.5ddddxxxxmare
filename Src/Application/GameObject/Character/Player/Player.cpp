@@ -8,6 +8,10 @@
 #include "../../../Const/SparkleConst.h"
 #include "../../../Const/OutlineConst.h"
 #include "../../../Const/CoreliaConst.h"
+#include "../../../Const/DeathConst.h"
+#include "../../../Const/SoundConst.h"
+#include "../../../Manager/SoundManager.h"
+#include "../../../main.h"   // マウスホイール値（重力切替）の取得
 
 void Player::Init()
 {
@@ -61,7 +65,21 @@ void Player::Update()
 		m_velocity     = Math::Vector3::Zero;   // その場で停止
 		m_moveVelocity = Math::Vector3::Zero;
 		m_animBlender.Update(m_modelWork, m_animSpeed);
+
+		// 死亡中はディゾルブ量を 0→1 へ進める（DrawLit で本体を溶かす）
+		m_dissolve = std::min(m_dissolve + KdFPSController::GetDt() / DeathConst::DissolveTime, 1.0f);
 		return;
+	}
+
+	// 生存中のディゾルブ：復活中は 1→0 へ逆再生（再構成）、それ以外は通常表示(0)
+	if (m_respawning)
+	{
+		m_dissolve = std::max(m_dissolve - KdFPSController::GetDt() / DeathConst::DissolveTime, 0.0f);
+		if (m_dissolve <= 0.0f) { m_respawning = false; }
+	}
+	else
+	{
+		m_dissolve = 0.0f;
 	}
 
 	// アイテム取得ヒットボックスをプレイヤー座標に合わせて更新
@@ -98,7 +116,10 @@ void Player::Update()
 		// 空中制限チェック：地上 or 空中1回まで
 		const bool canSwitch = m_isGround || CanSwitchGravityInAir();
 
-		if (canSwitch && (GetAsyncKeyState(VK_DOWN) & 0x8000))  // ↓キー
+		// マウスホイール：奥へ回す(+)＝重力↑ / 手前へ回す(-)＝重力↓（矢印キーと同等の操作）
+		const int wheel = Application::Instance().GetMouseWheelValue();
+
+		if (canSwitch && ((GetAsyncKeyState(VK_DOWN) & 0x8000) || wheel < 0))  // ↓キー / ホイール手前
 		{
 			if (GetManualGravity() != ManualGravityDir::Down)
 			{
@@ -106,7 +127,7 @@ void Player::Update()
 				if (!m_isGround) { ConsumeAirGravitySwitch(); }
 			}
 		}
-		else if (canSwitch && (GetAsyncKeyState(VK_UP) & 0x8000))  // ↑キー
+		else if (canSwitch && ((GetAsyncKeyState(VK_UP) & 0x8000) || wheel > 0))  // ↑キー / ホイール奥
 		{
 			if (GetManualGravity() != ManualGravityDir::Up)
 			{
@@ -126,7 +147,37 @@ void Player::Update()
 	Jump();
 	AttackMelee();
 	AttackRanged();
+
+	// ── デバッグ：PageUp/PageDown でZ方向へ手動移動（Z端の落下確認用）──
+	//   プレイヤーは通常Z入力が無いため、Z落下のテスト用に直接Zを動かす。
+	{
+		float dz = 0.0f;
+		if (GetAsyncKeyState(VK_PRIOR) & 0x8000) { dz += 0.1f; }   // PageUp  : +Z
+		if (GetAsyncKeyState(VK_NEXT)  & 0x8000) { dz -= 0.1f; }   // PageDown: -Z
+		if (dz != 0.0f) { Math::Vector3 p = GetPos(); p.z += dz; SetPos(p); }
+	}
+
 	Character::Update();
+
+	// ── Z平面への復帰（2.5D）──
+	// 押し出し等でZがズレても、足場に乗っている間だけホームZ平面へ戻す。
+	// ★接地中のみ戻す：空中（Z端から外れて落下中）は戻さないので落下と両立する。
+	//   これで「押されて中途半端なZのまま床上で固定」を防ぎつつ、端を越えたら落ちる。
+	{
+		if (m_isGround)
+		{
+			Math::Vector3 zp = GetPos();
+			if (!m_homeZInit) { m_homeZ = zp.z; m_homeZInit = true; }   // 初回接地時に現在Zをホーム化
+			if (std::abs(zp.z - m_homeZ) > 1e-4f)
+			{
+				const float dt60 = KdFPSController::GetDt() * 60.0f;
+				const float k    = std::min(PlayerConst::ZReturnLerp * dt60, 1.0f);
+				zp.z = std::lerp(zp.z, m_homeZ, k);
+				if (std::abs(zp.z - m_homeZ) < PlayerConst::ZReturnSnap) { zp.z = m_homeZ; }
+				SetPos(zp);
+			}
+		}
+	}
 
 	// プレイヤー座標をログ出力
 	const Math::Vector3 pos = GetPos();
@@ -342,15 +393,19 @@ void Player::Update()
     // ClosedParasol: 傘所持 かつ 閉じているときのみ表示
     m_modelWork.SetNodeVisible("ClosedParasol",  m_hasParasol && !m_isParasolOpen);
 
-    // 剣: Attack 中は HandledSword ON / BackSword OFF
+    // 剣: Attack 中は HandledSword ON。背中の剣(BackSword)は全状態で非表示（無かったことに）
     m_modelWork.SetNodeVisible("HandledSword",  m_isAttacking);
-    m_modelWork.SetNodeVisible("BackSword",     !m_isAttacking);
+    m_modelWork.SetNodeVisible("BackSword",     false);
 
     // アニメーション更新
     m_animBlender.Update(m_modelWork, m_animSpeed);
 
     // ── 着地スクワッシュ検出 ────────────────────────────────
-    if (m_isGround && !m_wasGround) { m_squashTimer = JuiceConst::SquashDuration; }
+    if (m_isGround && !m_wasGround)
+    {
+        m_squashTimer = JuiceConst::SquashDuration;
+        SoundManager::Instance().PlaySE(SeId::Land, SoundConst::SeVolume);   // 着地SE
+    }
     if (m_squashTimer > 0.0f) { m_squashTimer -= KdFPSController::GetDt(); }
     m_wasGround = m_isGround;
 }
@@ -563,9 +618,9 @@ void Player::UpdateClearPose(float dt)
     if (!ChangeAnimIfExist("GetGravityCore", false)) { ChangeAnim("Idle", true); }
     m_animBlender.Update(m_modelWork, 1.0f);   // アニメ進行＋ノード行列再計算
 
-    // クリアポーズ中は持ち物を非表示（剣は背中へ収める。傘は開閉どちらも隠す）
+    // クリアポーズ中は持ち物を非表示（背中の剣も出さない。傘は開閉どちらも隠す）
     m_modelWork.SetNodeVisible("HandledSword",  false);
-    m_modelWork.SetNodeVisible("BackSword",     true);
+    m_modelWork.SetNodeVisible("BackSword",     false);
     m_modelWork.SetNodeVisible("OpenedParasol", false);
     m_modelWork.SetNodeVisible("ClosedParasol", false);
 
@@ -597,18 +652,32 @@ void Player::DrawLit()
 {
     if (m_modelWork.IsEnable())
     {
+        auto& shader = KdShaderManager::Instance().m_StandardShader;
+
+        // 死亡中：ディゾルブ（しきい値0→1で溶けて消える。溶け際を発光させる）
+        const bool dissolving = (m_dissolve > 0.0f);
+        if (dissolving)
+        {
+            const float         range = DeathConst::DissolveEdgeRange;
+            const Math::Vector3 edge(DeathConst::DissolveEdgeR, DeathConst::DissolveEdgeG, DeathConst::DissolveEdgeB);
+            shader.SetDissolve(m_dissolve, &range, &edge);
+        }
+
         if (m_damageFlashTimer > 0)
         {
             // 被ダメージ中は本体を赤く（緑青を落として赤を強調）。点滅させる
             const float k = static_cast<float>(m_damageFlashTimer) / PlayerConst::DamageFlashFrame;
             const float s = PlayerConst::DamageFlashStrength * k;
             const Math::Color red(1.0f, 1.0f - s, 1.0f - s, 1.0f);
-            KdShaderManager::Instance().m_StandardShader.DrawModel(m_modelWork, m_drawWorld, red);
+            shader.DrawModel(m_modelWork, m_drawWorld, red);
         }
         else
         {
-            KdShaderManager::Instance().m_StandardShader.DrawModel(m_modelWork, m_drawWorld);
+            shader.DrawModel(m_modelWork, m_drawWorld);
         }
+
+        // 他オブジェクトへ影響しないよう必ず戻す
+        if (dissolving) { shader.SetDissolve(0.0f); }
     }
 
     // 矢の描画
@@ -784,6 +853,7 @@ void Player::Jump()
         m_isGround   = false;
         m_state      = State::Jump;
         m_dashJumping = m_isDashing;   // ダッシュジャンプなら空中もダッシュ速度を維持（飛距離↑）
+        SoundManager::Instance().PlaySE(SeId::Jump, SoundConst::SeVolume);
     }
 }
 

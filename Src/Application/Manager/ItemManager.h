@@ -3,6 +3,7 @@
 #include "../GameObject/Item/HitBox.h"
 #include "../GameObject/Item/ParasolItem.h"
 #include "../GameObject/Item/RockDrop.h"
+#include "../GameObject/Item/RockGem.h"
 #include "../GameObject/Effect/PickupBurst.h"
 
 //==========================================================
@@ -36,11 +37,35 @@ public:
 	void ClearRocks();
 	int  GetRockCount() const { return m_rockCount; }
 
+	// ── カラフル岩（スターピース風・コインエディタで配置する収集アイテム）──
+	void SpawnRockGem(const Math::Vector3& pos);
+	void ClearRockGems();
+	void SaveRockGems() const;
+	void LoadRockGems();
+	void ResetRockGemsCollected();                              // ステージやり直しで未取得に戻す
+	int  GetRockGemCount() const { return static_cast<int>(m_rockGems.size()); }
+
+	// ── 左クリックでカメラから岩を撃ち出す（投擲物。保存しない／寿命で消える）──
+	void ShootRock(const Math::Vector3& start, const Math::Vector3& dir, float speed);
+	void ClearThrownRocks();
+
+	// マウスカーソルで岩を操作する入力（GameScene がカメラからレイを計算して渡す）
+	struct CursorMagnet
+	{
+		bool          valid    = false;        // この入力を有効にするか
+		Math::Vector3 rayOrigin = {};          // カーソル位置のワールドレイ始点（カメラ）
+		Math::Vector3 rayDir    = {};          // カーソル位置のワールドレイ方向（正規化）
+		bool          clicked   = false;       // このフレームに左クリックしたか
+	};
+
 	// 全アイテム更新 + プレイヤーの HitBox との取得判定
 	// 戻り値: 取得コイン数
 	// outParasolPickedUp: このフレームにパラソルを取得したか
 	// outRocksPicked: このフレームに取得した緑石(回復アイテム)の数
-	int  Update(HitBox& _playerHitBox, bool& outParasolPickedUp, int& outRocksPicked);
+	// outGemsPicked : このフレームに取得したカラフル岩(収集のみ)の数
+	// cursor        : カーソル磁石入力（吸い寄せ取得＋左クリックで飛ばす）
+	int  Update(HitBox& _playerHitBox, bool& outParasolPickedUp, int& outRocksPicked, int& outGemsPicked,
+		const CursorMagnet& cursor);
 
 	void DrawLit();
 	void DrawOutline();  // アイテムの原神式アウトライン
@@ -80,6 +105,8 @@ private:
 	std::list<std::shared_ptr<Coin>>        m_coins;
 	std::list<std::shared_ptr<ParasolItem>> m_parasols;
 	std::list<std::shared_ptr<RockDrop>>    m_rocks;
+	std::list<std::shared_ptr<RockGem>>     m_rockGems;   // 配置するカラフル岩（収集）
+	std::list<std::shared_ptr<RockGem>>     m_thrown;     // 左クリックで撃ち出した岩（投擲物・非保存）
 	std::list<std::shared_ptr<PickupBurst>> m_bursts;
 	int                                     m_rockCount = 0;   // 取得した岩石の累計
 };

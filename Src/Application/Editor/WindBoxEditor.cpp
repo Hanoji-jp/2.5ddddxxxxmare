@@ -10,28 +10,28 @@
 //----------------------------------------------------------
 void WindBoxEditor::DrawGui()
 {
-	if (!ImGui::Begin("Wind Box Editor"))
+	if (!ImGui::Begin(U8("風ボックス エディタ")))
 	{
 		ImGui::End();
 		return;
 	}
 
 	// ── 追加ボタン ─────────────────────────────────────────
-	if (ImGui::Button("Add Box"))
+	if (ImGui::Button(U8("ボックス追加")))
 	{
 		m_boxes.push_back(WindBoxData{});
 		m_selectedIndex = static_cast<int>(m_boxes.size()) - 1;
 		m_dirty = true;
 	}
 	ImGui::SameLine();
-	if (ImGui::Button("Save"))   { Save(); }
+	if (ImGui::Button(U8("保存")))   { Save(); }
 	ImGui::SameLine();
-	if (ImGui::Button("Reload")) { Load(); }
+	if (ImGui::Button(U8("再読込"))) { Load(); }
 
 	ImGui::Separator();
 
 	// ── リスト ─────────────────────────────────────────────
-	ImGui::Text("Wind Box List");
+	ImGui::Text(U8("風ボックス一覧"));
 	for (int i = 0; i < static_cast<int>(m_boxes.size()); ++i)
 	{
 		const auto& b = m_boxes[i];
@@ -55,14 +55,14 @@ void WindBoxEditor::DrawGui()
 	{
 		auto& b = m_boxes[m_selectedIndex];
 
-		ImGui::Text("Inspector [%d]", m_selectedIndex);
+		ImGui::Text(U8("インスペクタ [%d]"), m_selectedIndex);
 
 		// 有効フラグ
-		if (ImGui::Checkbox("Enabled", &b.enabled)) { m_dirty = true; }
+		if (ImGui::Checkbox(U8("有効"), &b.enabled)) { m_dirty = true; }
 
 		// 中心位置
 		float center[3] = { b.center.x, b.center.y, b.center.z };
-		if (ImGui::DragFloat3("Center", center, 0.1f))
+		if (ImGui::DragFloat3(U8("中心"), center, 0.1f))
 		{
 			b.center = { center[0], center[1], center[2] };
 			m_dirty  = true;
@@ -70,7 +70,7 @@ void WindBoxEditor::DrawGui()
 
 		// サイズ
 		float size[3] = { b.size.x, b.size.y, b.size.z };
-		if (ImGui::DragFloat3("Size", size, 0.1f, 0.1f, 100.0f))
+		if (ImGui::DragFloat3(U8("サイズ"), size, 0.1f, 0.1f, 100.0f))
 		{
 			b.size  = { size[0], size[1], size[2] };
 			m_dirty = true;
@@ -85,25 +85,25 @@ void WindBoxEditor::DrawGui()
 			else if (b.windDir.x < -0.5f) { cur = Dir::Left;  }
 
 			bool changed = false;
-			if (ImGui::RadioButton("Up",    cur == Dir::Up))    { b.windDir = {  0.0f, 1.0f, 0.0f }; changed = true; }
+			if (ImGui::RadioButton(U8("上"),    cur == Dir::Up))    { b.windDir = {  0.0f, 1.0f, 0.0f }; changed = true; }
 			ImGui::SameLine();
-			if (ImGui::RadioButton("Left",  cur == Dir::Left))  { b.windDir = { -1.0f, 0.0f, 0.0f }; changed = true; }
+			if (ImGui::RadioButton(U8("左"),  cur == Dir::Left))  { b.windDir = { -1.0f, 0.0f, 0.0f }; changed = true; }
 			ImGui::SameLine();
-			if (ImGui::RadioButton("Right", cur == Dir::Right)) { b.windDir = {  1.0f, 0.0f, 0.0f }; changed = true; }
+			if (ImGui::RadioButton(U8("右"), cur == Dir::Right)) { b.windDir = {  1.0f, 0.0f, 0.0f }; changed = true; }
 
 			if (changed) { m_dirty = true; }
 
-			ImGui::Text("Direction: (%.2f, %.2f, %.2f)", b.windDir.x, b.windDir.y, b.windDir.z);
+			ImGui::Text(U8("向き: (%.2f, %.2f, %.2f)"), b.windDir.x, b.windDir.y, b.windDir.z);
 		}
 
 		// 上昇力
-		if (ImGui::DragFloat("Power", &b.power, 0.001f, 0.0f, 1.0f))
+		if (ImGui::DragFloat(U8("強さ"), &b.power, 0.001f, 0.0f, 1.0f))
 		{
 			m_dirty = true;
 		}
 
 		// 風が届く距離（COL上端からの延長）
-		if (ImGui::DragFloat("Length", &b.length, 0.1f, 0.0f, 50.0f))
+		if (ImGui::DragFloat(U8("長さ"), &b.length, 0.1f, 0.0f, 50.0f))
 		{
 			m_dirty = true;
 		}
@@ -111,7 +111,7 @@ void WindBoxEditor::DrawGui()
 		ImGui::Spacing();
 
 		// 削除ボタン
-		if (ImGui::Button("Delete"))
+		if (ImGui::Button(U8("削除")))
 		{
 			m_boxes.erase(m_boxes.begin() + m_selectedIndex);
 			m_selectedIndex = -1;

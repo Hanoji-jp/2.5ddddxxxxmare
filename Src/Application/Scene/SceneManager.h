@@ -31,6 +31,14 @@ public :
 		m_nextSceneType = _nextScene;
 	}
 
+	// 現在と同じシーンを最初から再読込する（もういちど/やりなおす用）。
+	// SetNextScene(同一型) だけだと「型が同じ＝切替なし」で何も起きないため専用に用意。
+	void RestartScene()
+	{
+		m_nextSceneType = m_currentSceneType;
+		m_forceReload   = true;
+	}
+
 	// シーン切替直後の入力ロック中か（前シーンの押しっぱなし入力が
 	// 新シーンで即発火する“連打/持ち越し”を防ぐため、各UIの決定入力はこれを見る）
 	// ・一定フレーム経過 かつ 決定キー(Enter/Space/Tab)を一度離す までロック継続。
@@ -63,6 +71,9 @@ private :
 	
 	// 次のシーンの種類を保持している変数
 	SceneType m_nextSceneType = m_currentSceneType;
+
+	// 同一シーンの強制再読込フラグ（RestartScene 用）
+	bool m_forceReload = false;
 
 	// シーン切替直後に入力を無視するフレーム数（持ち越し/連打防止）
 	static constexpr int kInputLockFrames = 12;   // 約0.2秒(60fps)

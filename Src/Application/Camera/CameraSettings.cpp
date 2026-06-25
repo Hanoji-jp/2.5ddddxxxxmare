@@ -1,4 +1,4 @@
-#include "../../Pch.h"
+﻿#include "../../Pch.h"
 #include "CameraSettings.h"
 #include <fstream>
 #include <sstream>
@@ -8,54 +8,54 @@
 //----------------------------------------------------------
 void CameraSettings::DrawGui()
 {
-    if (!ImGui::Begin("Camera Settings"))
+    if (!ImGui::Begin(U8("カメラ設定")))
     {
         ImGui::End();
         return;
     }
 
-    if (ImGui::Button("Save CSV")) { Save(); }
+    if (ImGui::Button(U8("CSV保存"))) { Save(); }
     ImGui::SameLine();
-    if (ImGui::Button("Load CSV")) { Load(); }
+    if (ImGui::Button(U8("CSV読込"))) { Load(); }
 
     ImGui::Separator();
 
-    ImGui::Text("-- Basic Offset --");
-    ImGui::DragFloat("OffsetX (right)",   &OffsetX,          0.05f, -50.0f,  50.0f);
-    ImGui::DragFloat("OffsetY (up)",      &OffsetY,          0.05f, -50.0f,  50.0f);
-    ImGui::DragFloat("OffsetZ (depth)",   &OffsetZ,          0.1f,  -100.0f, -1.0f);
+    ImGui::Text(U8("-- 基本オフセット --"));
+    ImGui::DragFloat(U8("オフセットX（右）"),   &OffsetX,          0.05f, -50.0f,  50.0f);
+    ImGui::DragFloat(U8("オフセットY（上）"),   &OffsetY,          0.05f, -50.0f,  50.0f);
+    ImGui::DragFloat(U8("オフセットZ（奥行き）"), &OffsetZ,        0.1f,  -100.0f, -1.0f);
 
     ImGui::Separator();
-    ImGui::Text("-- Follow --");
-    ImGui::DragFloat("PosLerp",           &PosLerp,          0.005f, 0.01f, 1.0f);
-    ImGui::DragFloat("LookAtLerp",        &LookAtLerp,       0.005f, 0.01f, 1.0f);
-    ImGui::DragFloat("FollowWeightX",     &FollowWeightX,    0.01f,  0.0f,  1.0f);
-    ImGui::DragFloat("FollowWeightY",     &FollowWeightY,    0.01f,  0.0f,  1.0f);
-    ImGui::DragFloat("MinFollowWeightX",  &MinFollowWeightX, 0.005f, 0.0f,  1.0f);
-    ImGui::DragFloat("MinFollowWeightY",  &MinFollowWeightY, 0.005f, 0.0f,  1.0f);
+    ImGui::Text(U8("-- 追従 --"));
+    ImGui::DragFloat(U8("位置補間"),           &PosLerp,          0.005f, 0.01f, 1.0f);
+    ImGui::DragFloat(U8("注視点補間"),         &LookAtLerp,       0.005f, 0.01f, 1.0f);
+    ImGui::DragFloat(U8("追従重みX"),          &FollowWeightX,    0.01f,  0.0f,  1.0f);
+    ImGui::DragFloat(U8("追従重みY"),          &FollowWeightY,    0.01f,  0.0f,  1.0f);
+    ImGui::DragFloat(U8("最小追従重みX"),      &MinFollowWeightX, 0.005f, 0.0f,  1.0f);
+    ImGui::DragFloat(U8("最小追従重みY"),      &MinFollowWeightY, 0.005f, 0.0f,  1.0f);
 
     ImGui::Separator();
-    ImGui::Text("-- LookAt --");
-    ImGui::DragFloat("LookAtHeight",      &LookAtHeight,     0.05f, -10.0f, 20.0f);
-    ImGui::DragFloat("LookAheadX",        &LookAheadX,       0.05f, -20.0f, 20.0f);
-    ImGui::DragFloat("LookAheadY",        &LookAheadY,       0.05f, -10.0f, 10.0f);
+    ImGui::Text(U8("-- 注視 --"));
+    ImGui::DragFloat(U8("注視の高さ"),         &LookAtHeight,     0.05f, -10.0f, 20.0f);
+    ImGui::DragFloat(U8("先読みX"),            &LookAheadX,       0.05f, -20.0f, 20.0f);
+    ImGui::DragFloat(U8("先読みY"),            &LookAheadY,       0.05f, -10.0f, 10.0f);
 
     ImGui::Separator();
-    ImGui::Text("-- Float Bob --");
-    ImGui::DragFloat("FloatAmplitude",    &FloatAmplitude,   0.01f,  0.0f,  5.0f);
-    ImGui::DragFloat("FloatSpeed",        &FloatSpeed,       0.01f,  0.0f,  10.0f);
+    ImGui::Text(U8("-- 浮遊（ボブ）--"));
+    ImGui::DragFloat(U8("浮遊の振幅"),         &FloatAmplitude,   0.01f,  0.0f,  5.0f);
+    ImGui::DragFloat(U8("浮遊の速さ"),         &FloatSpeed,       0.01f,  0.0f,  10.0f);
 
     ImGui::Separator();
-    ImGui::Text("-- Roll --");
-    ImGui::DragFloat("RollMaxDeg",        &RollMaxDeg,       0.1f,   0.0f,  30.0f);
-    ImGui::DragFloat("RollLerp",          &RollLerp,         0.005f, 0.01f, 1.0f);
-    ImGui::DragFloat("RollSensitivity",   &RollSensitivity,  0.005f, 0.0f,  2.0f);
+    ImGui::Text(U8("-- ロール --"));
+    ImGui::DragFloat(U8("ロール最大角"),       &RollMaxDeg,       0.1f,   0.0f,  30.0f);
+    ImGui::DragFloat(U8("ロール補間"),         &RollLerp,         0.005f, 0.01f, 1.0f);
+    ImGui::DragFloat(U8("ロール感度"),         &RollSensitivity,  0.005f, 0.0f,  2.0f);
 
     ImGui::Separator();
-    ImGui::Text("-- Wall Clamp Zoom --");
-    ImGui::DragFloat("WallZoomMaxRatio",   &WallZoomMaxRatio,   0.01f, 0.0f, 1.0f);
-    ImGui::DragFloat("WallZoomLerp",       &WallZoomLerp,       0.005f,0.01f,1.0f);
-    ImGui::DragFloat("WallZoomSensitivity",&WallZoomSensitivity,0.05f, 0.0f,10.0f);
+    ImGui::Text(U8("-- 壁ズーム --"));
+    ImGui::DragFloat(U8("壁ズーム最大比"),     &WallZoomMaxRatio,   0.01f, 0.0f, 1.0f);
+    ImGui::DragFloat(U8("壁ズーム補間"),       &WallZoomLerp,       0.005f,0.01f,1.0f);
+    ImGui::DragFloat(U8("壁ズーム感度"),       &WallZoomSensitivity,0.05f, 0.0f,10.0f);
 
     ImGui::End();
 }

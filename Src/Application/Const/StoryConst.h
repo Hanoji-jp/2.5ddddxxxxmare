@@ -34,13 +34,29 @@ namespace StoryConst
 	constexpr float CurlShadeMin   = 0.35f;   // カール部の最暗ブライト（丸み表現）
 
 	//----------------------------------------------------------
+	// マウスドラッグでめくる（ページ上を左ドラッグ → めくり角が変わる）
+	//----------------------------------------------------------
+	constexpr float DragRangeRatio  = 0.8f;   // ページ幅のこの割合ぶん左へdrag＝めくり切り
+	constexpr float DragCommit      = 0.5f;   // 離した時このめくり量以上なら確定して進む
+	constexpr float DragReturnSpeed = 5.0f;   // 確定せず離した時、元へ戻る速さ(1/秒)
+
+	// 角めくり（コーナーピール）：掴んだ角をシリンダー状に丸める（厚紙の硬いカール）
+	constexpr int   PeelGridX       = 40;     // メッシュ分割（横）多いほど滑らか
+	constexpr int   PeelGridY       = 28;     // メッシュ分割（縦）
+	constexpr float PeelRadiusRatio = 0.22f;  // カールの半径（ページ幅比）。大きいほど厚紙＝硬い丸み
+
+	//----------------------------------------------------------
 	// フォント / プロンプト
 	//----------------------------------------------------------
 	constexpr int          FontNo      = 0;
 	constexpr int          FontHeight  = 30;
 	constexpr const char*  FontName    = FontConst::GameFontName;
-	constexpr const char*  PromptText  = "PRESS ENTER";
 	constexpr const char*  SkipText    = "TAB : SKIP";
-	constexpr float        PromptYRatio = 0.42f;  // 画面下寄り（中心原点・+Y上）
-	constexpr float        SkipYRatio   = 0.46f;  // さらに下
+	constexpr float        SkipYRatio   = 0.46f;  // 画面下
+
+	// 最初のページだけ「マウスでめくる」を薄く大きく表示
+	constexpr int          BigFontNo     = 1;
+	constexpr int          BigFontHeight = 92;
+	constexpr const char*  HintText      = "マウスでめくる";
+	constexpr float        HintAlpha     = 0.16f;  // うっすら
 }

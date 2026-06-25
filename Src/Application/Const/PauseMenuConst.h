@@ -10,7 +10,7 @@
 namespace PauseMenuConst
 {
 	// 項目
-	enum Item { Resume = 0, StageSelect, Title, Count };
+	enum Item { Resume = 0, Settings, Retry, StageSelect, Title, Count };
 
 	// フォント（他シーンと別番号にして衝突を避ける）
 	constexpr int          FontNo     = 1;
@@ -24,6 +24,8 @@ namespace PauseMenuConst
 	// 表示テキスト（日本語）
 	constexpr const char*  TitleText       = "ポーズ";
 	constexpr const char*  ItemResume      = "つづける";
+	constexpr const char*  ItemSettings    = "せってい";
+	constexpr const char*  ItemRetry       = "やりなおす";
 	constexpr const char*  ItemStageSelect = "ステージせんたく";
 	constexpr const char*  ItemTitle       = "タイトルへ";
 

@@ -6,13 +6,13 @@
 
 void WarpHoleEditor::DrawGui()
 {
-	if (!ImGui::Begin("WarpHole Editor"))
+	if (!ImGui::Begin(U8("ワープホール エディタ")))
 	{
 		ImGui::End();
 		return;
 	}
 
-	if (ImGui::Button("Add WarpHole"))
+	if (ImGui::Button(U8("ワープホール追加")))
 	{
 		m_holes.push_back(WarpHoleData{});
 		m_selectedIndex = static_cast<int>(m_holes.size()) - 1;
@@ -20,7 +20,7 @@ void WarpHoleEditor::DrawGui()
 	}
 
 	ImGui::Separator();
-	ImGui::Text("WarpHole List");
+	ImGui::Text(U8("ワープホール一覧"));
 
 	for (int i = 0; i < static_cast<int>(m_holes.size()); ++i)
 	{
@@ -38,24 +38,24 @@ void WarpHoleEditor::DrawGui()
 	if (m_selectedIndex >= 0 && m_selectedIndex < static_cast<int>(m_holes.size()))
 	{
 		auto& h = m_holes[m_selectedIndex];
-		ImGui::Text("Inspector [%d]", m_selectedIndex);
+		ImGui::Text(U8("インスペクタ [%d]"), m_selectedIndex);
 
 		float entry[3] = { h.EntryPos.x, h.EntryPos.y, h.EntryPos.z };
-		if (ImGui::DragFloat3("Entry Pos", entry, 0.1f))
+		if (ImGui::DragFloat3(U8("入口位置"), entry, 0.1f))
 		{
 			h.EntryPos = { entry[0], entry[1], entry[2] };
 			m_dirty = true;
 		}
 
 		float exitP[3] = { h.ExitPos.x, h.ExitPos.y, h.ExitPos.z };
-		if (ImGui::DragFloat3("Exit Pos", exitP, 0.1f))
+		if (ImGui::DragFloat3(U8("出口位置"), exitP, 0.1f))
 		{
 			h.ExitPos = { exitP[0], exitP[1], exitP[2] };
 			m_dirty = true;
 		}
 
 		float exitDir[3] = { h.ExitDir.x, h.ExitDir.y, h.ExitDir.z };
-		if (ImGui::DragFloat3("Exit Dir", exitDir, 0.01f, -1.0f, 1.0f))
+		if (ImGui::DragFloat3(U8("出口の向き"), exitDir, 0.01f, -1.0f, 1.0f))
 		{
 			h.ExitDir = Math::Vector3(exitDir[0], exitDir[1], exitDir[2]);
 			h.ExitDir.Normalize();
@@ -65,29 +65,29 @@ void WarpHoleEditor::DrawGui()
 		// ---- 口元（開口部）の向き ----
 		//   (0,0,0) なら自動（入口⇔出口の直線方向）。中継点の向きに影響されない。
 		ImGui::Separator();
-		ImGui::TextDisabled("Mouth Dir (0,0,0 = Auto)");
+		ImGui::TextDisabled(U8("出入口の向き (0,0,0=自動)"));
 
 		float entryMouth[3] = { h.EntryMouthDir.x, h.EntryMouthDir.y, h.EntryMouthDir.z };
-		if (ImGui::DragFloat3("Entry Mouth Dir", entryMouth, 0.01f, -1.0f, 1.0f))
+		if (ImGui::DragFloat3(U8("入口の口向き"), entryMouth, 0.01f, -1.0f, 1.0f))
 		{
 			h.EntryMouthDir = { entryMouth[0], entryMouth[1], entryMouth[2] };
 			m_dirty = true;
 		}
 		ImGui::SameLine();
-		if (ImGui::Button("Reset##EntryMouth"))
+		if (ImGui::Button(U8("リセット##EntryMouth")))
 		{
 			h.EntryMouthDir = { 0.0f, 0.0f, 0.0f };
 			m_dirty = true;
 		}
 
 		float exitMouth[3] = { h.ExitMouthDir.x, h.ExitMouthDir.y, h.ExitMouthDir.z };
-		if (ImGui::DragFloat3("Exit Mouth Dir", exitMouth, 0.01f, -1.0f, 1.0f))
+		if (ImGui::DragFloat3(U8("出口の口向き"), exitMouth, 0.01f, -1.0f, 1.0f))
 		{
 			h.ExitMouthDir = { exitMouth[0], exitMouth[1], exitMouth[2] };
 			m_dirty = true;
 		}
 		ImGui::SameLine();
-		if (ImGui::Button("Reset##ExitMouth"))
+		if (ImGui::Button(U8("リセット##ExitMouth")))
 		{
 			h.ExitMouthDir = { 0.0f, 0.0f, 0.0f };
 			m_dirty = true;
@@ -95,7 +95,7 @@ void WarpHoleEditor::DrawGui()
 		ImGui::Separator();
 
 		bool enabled = h.Enabled;
-		if (ImGui::Checkbox("Enabled", &enabled))
+		if (ImGui::Checkbox(U8("有効"), &enabled))
 		{
 			h.Enabled  = enabled;
 			m_dirty    = true;
@@ -103,7 +103,7 @@ void WarpHoleEditor::DrawGui()
 
 		// テレポート型かどうか
 		bool teleport = h.Teleport;
-		if (ImGui::Checkbox("Teleport (暗転瞬間移動)", &teleport))
+		if (ImGui::Checkbox(U8("テレポート（暗転瞬間移動）"), &teleport))
 		{
 			h.Teleport = teleport;
 			m_dirty    = true;
@@ -111,12 +111,12 @@ void WarpHoleEditor::DrawGui()
 		if (h.Teleport)
 		{
 			ImGui::SameLine();
-			ImGui::TextDisabled("← Waypoints は使用されません");
+			ImGui::TextDisabled(U8("← 経由点は使用されません"));
 		}
 
 		// 一歩通行 / 双方向
 		bool oneWay = h.OneWay;
-		if (ImGui::Checkbox("One Way (一歩通行)", &oneWay))
+		if (ImGui::Checkbox(U8("一方通行"), &oneWay))
 		{
 			h.OneWay = oneWay;
 			m_dirty  = true;
@@ -126,8 +126,8 @@ void WarpHoleEditor::DrawGui()
 
 		// ---- Waypoint リスト ----
 		ImGui::Separator();
-		ImGui::Text("Waypoints (%d)", static_cast<int>(h.Waypoints.size()));
-		if (ImGui::Button("Add Waypoint"))
+		ImGui::Text(U8("経由点 (%d)"), static_cast<int>(h.Waypoints.size()));
+		if (ImGui::Button(U8("経由点追加")))
 		{
 			// 最後のポイントの少し先に追加
 			Math::Vector3 last = h.Waypoints.empty() ? h.EntryPos : h.Waypoints.back();
@@ -146,7 +146,7 @@ void WarpHoleEditor::DrawGui()
 				m_dirty = true;
 			}
 			ImGui::SameLine();
-			if (ImGui::Button("Del"))
+			if (ImGui::Button(U8("削除")))
 			{
 				h.Waypoints.erase(h.Waypoints.begin() + wi);
 				m_dirty = true;
@@ -158,7 +158,7 @@ void WarpHoleEditor::DrawGui()
 		ImGui::Separator();
 
 		ImGui::Spacing();
-		if (ImGui::Button("Delete"))
+		if (ImGui::Button(U8("削除")))
 		{
 			m_holes.erase(m_holes.begin() + m_selectedIndex);
 			m_selectedIndex = -1;
@@ -167,9 +167,9 @@ void WarpHoleEditor::DrawGui()
 	}
 
 	ImGui::Separator();
-	if (ImGui::Button("Save")) { Save(); }
+	if (ImGui::Button(U8("保存"))) { Save(); }
 	ImGui::SameLine();
-	if (ImGui::Button("Load")) { Load(); }
+	if (ImGui::Button(U8("読込"))) { Load(); }
 
 	ImGui::End();
 }

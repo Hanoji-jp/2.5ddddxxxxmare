@@ -88,9 +88,12 @@ Math::Vector3 SideScrollCamera::CalcTargetLookAt(const Math::Vector3& _targetPos
 
 void SideScrollCamera::Update(const Math::Vector3& _targetPos, const Math::Vector3& _upDir)
 {
-	// upDirをSlerpで滑らかに追従（急な切り替えを防ぐ）
+	// upDirをSlerpで滑らかに追従（急な切り替えを防ぐ）。
+	// フレームレート非依存：60fpsで kUpSlerpSpeed に一致する指数補間にする。
 	constexpr float kUpSlerpSpeed = 0.05f;
-	m_upDir = Math::Vector3::Lerp(m_upDir, _upDir, kUpSlerpSpeed);
+	const float upDt60   = KdFPSController::GetDt() * 60.0f;
+	const float upFactor = 1.0f - std::powf(1.0f - kUpSlerpSpeed, upDt60);
+	m_upDir = Math::Vector3::Lerp(m_upDir, _upDir, upFactor);
 	m_upDir.Normalize();
 
 	// upDir.yが負 → 重力反転中（上下逆）

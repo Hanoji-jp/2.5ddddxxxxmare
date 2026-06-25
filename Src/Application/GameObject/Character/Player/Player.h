@@ -156,6 +156,20 @@ private:
     // XZ移動の慣性速度（加減速に使用）
     Math::Vector3 m_moveVelocity  = {};
 
+    // ── Z平面固定（2.5D）：移動床等で押されたZを戻す基準（ホームZ）──
+    float m_homeZ     = 0.0f;
+    bool  m_homeZInit = false;   // 初回フレームで現在Zをホームとして取り込む
+
+    // ── ディゾルブ（0=通常 / 1=溶けきって消滅）──
+    // 死亡で 0→1（溶ける）、復活で 1→0（逆再生で再構成）。
+    float m_dissolve   = 0.0f;
+    bool  m_respawning = false;   // 復活ディゾルブ（逆再生）中か
+
+public:
+    // 復活時：ディゾルブを満タン(1)にしてから逆再生で戻す（Revive 後に呼ぶ）
+    void TriggerRespawnDissolve() { m_dissolve = 1.0f; m_respawning = true; }
+private:
+
     // 被ダメージ後の無敵タイマー（フレーム。> 0 の間は再被弾しない）
     int m_invincibleTimer = 0;
 

@@ -40,6 +40,7 @@ private:
 	Math::Vector3 m_center  = {};
 	Math::Vector3 m_size    = { 1.0f, 1.0f, 1.0f };
 	bool          m_enabled = true;
+	SpikeBoxConst::SpikeDir m_dir = SpikeBoxConst::SpikeDir::Up;   // 棘の向き
 
 	std::shared_ptr<KdModelWork> m_boxModel;
 	Math::Matrix                 m_worldMat = Math::Matrix::Identity;

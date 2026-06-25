@@ -9,14 +9,14 @@
 //----------------------------------------------------------
 void MovingFloorEditor::DrawGui()
 {
-	if (!ImGui::Begin("Moving Floor Editor"))
+	if (!ImGui::Begin(U8("移動床 エディタ")))
 	{
 		ImGui::End();
 		return;
 	}
 
 	// ── 追加ボタン ──────────────────────────────────────────
-	if (ImGui::Button("Add Floor"))
+	if (ImGui::Button(U8("床を追加")))
 	{
 		MovingFloorData d;
 		m_floors.push_back(d);
@@ -24,14 +24,14 @@ void MovingFloorEditor::DrawGui()
 		m_dirty = true;
 	}
 	ImGui::SameLine();
-	if (ImGui::Button("Save")) { Save(); }
+	if (ImGui::Button(U8("保存"))) { Save(); }
 	ImGui::SameLine();
-	if (ImGui::Button("Reload")) { Load(); }
+	if (ImGui::Button(U8("再読込"))) { Load(); }
 
 	ImGui::Separator();
 
 	// ── リスト ──────────────────────────────────────────────
-	ImGui::Text("Floor List");
+	ImGui::Text(U8("床一覧"));
 	const char* axisNames[] = { "X", "Y", "Z" };
 	for (int i = 0; i < static_cast<int>(m_floors.size()); ++i)
 	{
@@ -55,11 +55,11 @@ void MovingFloorEditor::DrawGui()
 	{
 		auto& f = m_floors[m_selectedIndex];
 
-		ImGui::Text("Inspector [%d]", m_selectedIndex);
+		ImGui::Text(U8("インスペクタ [%d]"), m_selectedIndex);
 
 		// 中心位置
 		float center[3] = { f.center.x, f.center.y, f.center.z };
-		if (ImGui::DragFloat3("Center", center, 0.1f))
+		if (ImGui::DragFloat3(U8("中心"), center, 0.1f))
 		{
 			f.center = { center[0], center[1], center[2] };
 			m_dirty  = true;
@@ -67,26 +67,26 @@ void MovingFloorEditor::DrawGui()
 
 		// 移動軸
 		int axisIdx = static_cast<int>(f.axis);
-		if (ImGui::Combo("Axis", &axisIdx, axisNames, 3))
+		if (ImGui::Combo(U8("軸"), &axisIdx, axisNames, 3))
 		{
 			f.axis  = static_cast<MovingFloorData::Axis>(axisIdx);
 			m_dirty = true;
 		}
 
 		// 移動距離（片道）
-		if (ImGui::DragFloat("Range", &f.range, 0.1f, 0.1f, 100.0f))
+		if (ImGui::DragFloat(U8("可動範囲"), &f.range, 0.1f, 0.1f, 100.0f))
 		{
 			m_dirty = true;
 		}
 
 		// 移動速度
-		if (ImGui::DragFloat("Speed", &f.speed, 0.1f, 0.1f, 50.0f))
+		if (ImGui::DragFloat(U8("速さ"), &f.speed, 0.1f, 0.1f, 50.0f))
 		{
 			m_dirty = true;
 		}
 
 		// 折り返し一時停止
-		if (ImGui::DragFloat("Wait Time (s)", &f.waitTime, 0.05f, 0.0f, 10.0f))
+		if (ImGui::DragFloat(U8("待ち時間(秒)"), &f.waitTime, 0.05f, 0.0f, 10.0f))
 		{
 			m_dirty = true;
 		}
@@ -96,10 +96,10 @@ void MovingFloorEditor::DrawGui()
 			const bool isY = (f.axis == MovingFloorData::Axis::Y);
 			const char* label0 = isY ? "Bottom" : "Left";
 			const char* label2 = isY ? "Top"    : "Right";
-			const char* phaseNames[] = { label0, "Center", label2 };
+			const char* phaseNames[] = { label0, U8("中央"), label2 };
 			// StartPhase: NegEnd=-1, Center=0, PosEnd=1 → combo index: 0,1,2
 			int phaseIdx = static_cast<int>(f.startPhase) + 1;
-			if (ImGui::Combo("Start Position", &phaseIdx, phaseNames, 3))
+			if (ImGui::Combo(U8("開始位置"), &phaseIdx, phaseNames, 3))
 			{
 				f.startPhase = static_cast<MovingFloorData::StartPhase>(phaseIdx - 1);
 				m_dirty = true;
@@ -108,7 +108,7 @@ void MovingFloorEditor::DrawGui()
 
 		// サイズ
 		float size[3] = { f.size.x, f.size.y, f.size.z };
-		if (ImGui::DragFloat3("Size", size, 0.05f, 0.1f, 50.0f))
+		if (ImGui::DragFloat3(U8("サイズ"), size, 0.05f, 0.1f, 50.0f))
 		{
 			f.size  = { size[0], size[1], size[2] };
 			m_dirty = true;
@@ -116,9 +116,9 @@ void MovingFloorEditor::DrawGui()
 
 		ImGui::Spacing();
 		ImGui::Separator();
-		ImGui::Text("Gravity Face Settings");
+		ImGui::Text(U8("重力フェイス設定"));
 
-		if (ImGui::Checkbox("Normal Gravity (Down)", &f.bNormalGravity)) { m_dirty = true; }
+		if (ImGui::Checkbox(U8("通常重力（下）"), &f.bNormalGravity)) { m_dirty = true; }
 		if (f.bNormalGravity)
 		{
 			ImGui::SameLine();
@@ -126,29 +126,29 @@ void MovingFloorEditor::DrawGui()
 		}
 		else
 		{
-			const char* modeNames[] = { "Inward", "Outward", "Inherit", "Down", "Up", "Left", "Right" };
+			const char* modeNames[] = { U8("内向き"), U8("外向き"), U8("継承"), U8("下"), U8("上"), U8("左"), U8("右") };
 
 			int topMode = static_cast<int>(f.faceTop);
-			if (ImGui::Combo("Top Face",    &topMode, modeNames, IM_ARRAYSIZE(modeNames)))
+			if (ImGui::Combo(U8("上面"),    &topMode, modeNames, IM_ARRAYSIZE(modeNames)))
 			{ f.faceTop    = static_cast<BoxFaceGravityMode>(topMode);    m_dirty = true; }
 
 			int bottomMode = static_cast<int>(f.faceBottom);
-			if (ImGui::Combo("Bottom Face", &bottomMode, modeNames, IM_ARRAYSIZE(modeNames)))
+			if (ImGui::Combo(U8("下面"), &bottomMode, modeNames, IM_ARRAYSIZE(modeNames)))
 			{ f.faceBottom = static_cast<BoxFaceGravityMode>(bottomMode); m_dirty = true; }
 
 			int leftMode = static_cast<int>(f.faceLeft);
-			if (ImGui::Combo("Left Face",   &leftMode, modeNames, IM_ARRAYSIZE(modeNames)))
+			if (ImGui::Combo(U8("左面"),   &leftMode, modeNames, IM_ARRAYSIZE(modeNames)))
 			{ f.faceLeft   = static_cast<BoxFaceGravityMode>(leftMode);   m_dirty = true; }
 
 			int rightMode = static_cast<int>(f.faceRight);
-			if (ImGui::Combo("Right Face",  &rightMode, modeNames, IM_ARRAYSIZE(modeNames)))
+			if (ImGui::Combo(U8("右面"),  &rightMode, modeNames, IM_ARRAYSIZE(modeNames)))
 			{ f.faceRight  = static_cast<BoxFaceGravityMode>(rightMode);  m_dirty = true; }
 		}
 
 		ImGui::Spacing();
 
 		// 削除ボタン
-		if (ImGui::Button("Delete"))
+		if (ImGui::Button(U8("削除")))
 		{
 			m_floors.erase(m_floors.begin() + m_selectedIndex);
 			m_selectedIndex = -1;

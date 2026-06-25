@@ -12,9 +12,13 @@
 #include"../../Const/FontConst.h"
 #include"../../Const/StageSelectConst.h"
 #include"../../Const/ItemConst.h"
+#include"../../Const/ItemMagnetConst.h"
 #include"../../Camera/CameraSettings.h"
 #include"../../Manager/ModelManager.h"
 #include"../../Manager/StageManager.h"
+#include"../../Manager/SoundManager.h"
+#include"../../Manager/CursorManager.h"
+#include"../../Const/SoundConst.h"
 #include"../../Util/TextFx.h"
 #include"../../Util/CoreIcon.h"
 #include"../../../Framework/Utility/KdDebug/KdDebugGUI.h"
@@ -62,6 +66,37 @@ void GameScene::Event()
 	// 操作説明（A/D/Spaceを全部押したら消える）。早期returnより前で毎フレーム更新。
 	UpdateControlHint();
 
+	// ショーケース中・クリア演出中は操作不要なので自前カーソルを非表示にする。
+	// ただしポーズメニュー中はメニューをクリック操作するためカーソルを出す。
+	CursorManager::Instance().SetSuppressed(
+		!m_menuOpen && (m_clearActive || m_showcaseState != ShowcaseState::Off));
+
+	// ── BGM：飛来イントロ中・ショーケース中は流さない。着地して通常プレイになったら流す ──
+	//   ※ショーケースは下のブロックで早期returnするため、BGM管理は必ずその前で行う。
+	//     PlayBGM は同曲なら何もしないので毎フレーム呼んでOK（全ステージ共通）。
+	{
+		if (m_clearActive)
+		{
+			// クリア時はステージ曲を止めてクリアSEを聴かせる
+			SoundManager::Instance().StopBGM();
+		}
+		else if (m_introCutscene || m_introLanding)
+		{
+			// 「飛んでくる」演出中は無音（StageFlyInのSEを聴かせ、着地でステージBGM開始）
+			SoundManager::Instance().StopBGM();
+		}
+		else if (m_showcaseState != ShowcaseState::Off)
+		{
+			// ステージ紹介カメラ中は専用BGM（1曲）
+			SoundManager::Instance().PlayBGM(SoundConst::BgmShowcase, SoundConst::BgmVolume);
+		}
+		else
+		{
+			const int stageId0 = StageManager::Instance().GetStageIndex() - 1;
+			SoundManager::Instance().PlayBGM(SoundConst::BgmForStage(stageId0), SoundConst::BgmVolume);
+		}
+	}
+
 	// ── ステージ見せカメラ：フライスルー → 黒帯が中央へ閉じて暗転 → 開いてゲームへ ──
 	{
 		const float dt = KdFPSController::GetDt();
@@ -106,7 +141,21 @@ void GameScene::Event()
 	// ── ポーズメニュー（TAB で開閉。ESC はアプリ終了に使われるため使わない）──
 	{
 		const bool tab = (GetAsyncKeyState(VK_TAB) & 0x8000) != 0;
-		if (tab && !m_menuEscPrev) { m_menuOpen = !m_menuOpen; m_menuIndex = 0; }
+		// 設定ウィンドウが開いている間は TAB を設定側に渡す（ポーズは閉じない）
+		if (tab && !m_menuEscPrev && !m_settingsMenu.IsOpen())
+		{
+			m_menuOpen = !m_menuOpen; m_menuIndex = 0;
+			// 再生中のSEを一時停止/再開（開く時はSE停止→開閉SEを鳴らす順に）
+			if (m_menuOpen) { SoundManager::Instance().PauseAllSE(); }
+			else            { SoundManager::Instance().ResumeAllSE(); }
+			// 開閉SE
+			SoundManager::Instance().PlaySE(m_menuOpen ? SeId::PauseOpen : SeId::PauseClose,
+				SoundConst::SeVolume);
+			// ポーズ中はBGMをこもらせつつ音量も下げる（解除で元に戻す）
+			SoundManager::Instance().SetBgmMuffle(m_menuOpen);
+			SoundManager::Instance().SetBgmVolumeScale(
+				m_menuOpen ? SoundConst::PauseBgmVolumeScale : 1.0f);
+		}
 		m_menuEscPrev = tab;
 	}
 
@@ -126,6 +175,17 @@ void GameScene::Event()
 			KdDebugGUI::Instance().AddLog("[SAVE] セーブデータをリセットしました\n");
 		}
 		m_resetKeyPrev = kR;
+	}
+
+	// ── デバッグ：F10キーでステージクリアを即発火（クリア演出→リザルトへ）──
+	{
+		const bool kClear = (GetAsyncKeyState(VK_F10) & 0x8000) != 0;
+		if (kClear && !m_debugClearPrev && !m_clearActive && m_spPlayer)
+		{
+			StartStageClear(m_spPlayer->GetPos());
+			KdDebugGUI::Instance().AddLog("[DEBUG] ステージクリア（F10）\n");
+		}
+		m_debugClearPrev = kClear;
 	}
 
 	// ── エディタ画面トグル（F3）：ゲームをImGuiウィンドウ表示 ⇔ 通常フルスクリーン ──
@@ -376,6 +436,7 @@ void GameScene::Event()
 			m_deathTimer    = 0.0f;
 			m_deathRevived  = false;
 			m_lifeLostSePlayed = false;           // 減るSEの再生フラグをリセット
+			SoundManager::Instance().PlaySE(SeId::Death, SoundConst::SeVolume);
 			m_deathCount++;                       // この死亡をカウント（上限到達でリトライ）
 			m_deathCamFocus = m_spPlayer->GetPos() + m_spPlayer->GetUpDir() * DeathConst::CamFocusHeight;
 		}
@@ -1088,12 +1149,48 @@ void GameScene::Event()
 		{
 			if (cp->IsActivated())
 			{
+				const Math::Vector3 cpPos = cp->GetPos();
+
+				// 「新しいチェックポイントを初めて踏んだ瞬間」だけ取得演出を出す
+				const bool isNew = !m_cpFxInit || (cpPos - m_cpFxPos).LengthSquared() > 0.01f;
+
 				// このチェックポイントを踏んだ → 以降はここに復活
 				m_checkpointReached = true;
-				m_respawnPos = cp->GetPos();
+				m_respawnPos = cpPos;
 				for (auto& other : m_checkpoints)
 				{
 					if (other != cp) { other->Deactivate(); }
+				}
+
+				if (isNew)
+				{
+					m_cpFxInit = true;
+					m_cpFxPos  = cpPos;
+
+					const Math::Vector3 up = m_spPlayer ? m_spPlayer->GetUpDir() : Math::Vector3{ 0.0f, 1.0f, 0.0f };
+					const Math::Vector3 fxPos = cpPos + up * 1.0f;
+
+					// カラフルな星バースト（虹色で複数回）
+					const Math::Color cols[5] = {
+						{ 1.0f, 0.35f, 0.35f, 1.0f },   // 赤
+						{ 1.0f, 0.85f, 0.30f, 1.0f },   // 黄
+						{ 0.35f, 1.0f, 0.45f, 1.0f },   // 緑
+						{ 0.35f, 0.65f, 1.0f, 1.0f },   // 青
+						{ 0.85f, 0.45f, 1.0f, 1.0f },   // 紫
+					};
+					for (const auto& c : cols)
+					{
+						m_itemManager.SpawnBurstAt(fxPos, c, PickupBurst::Style::Full);
+					}
+
+					// プレイヤーを白く発光
+					if (m_spPlayer) { m_spPlayer->TriggerPickupGlow(Math::Color{ 1.0f, 1.0f, 1.0f, 1.0f }); }
+
+					// 一瞬止める（ヒットストップ）
+					TriggerHitStop(SparkleConst::PickupBurstLife);
+
+					// 取得SE
+					SoundManager::Instance().PlaySE(SeId::Checkpoint, SoundConst::SeVolume);
 				}
 			}
 		}
@@ -1117,6 +1214,7 @@ void GameScene::Event()
 				m_hpShakeTimer = UIConst::HpShakeTime;   // 星HPを揺らす
 				if (m_pCamera) { m_pCamera->TriggerShake(JuiceConst::ShakeHitStr); }
 				SpawnDamageBurst();   // 体全体から赤boxパーティクルが弾ける
+				SoundManager::Instance().PlaySE(SeId::Damage, SoundConst::SeVolume);
 			}
 			m_prevPlayerHp = curHp;
 		}
@@ -1169,11 +1267,55 @@ void GameScene::Event()
 		// ── アイテム更新・取得判定 ──────────────────────
 		bool parasolPickedUp = false;
 		int  rocksPicked = 0;
-		const int gotCoins = m_itemManager.Update(m_spPlayer->GetPickupHitBox(), parasolPickedUp, rocksPicked);
+		int  gemsPicked  = 0;
+
+		// カーソル磁石：通常プレイ中のみ、カーソル位置のワールドレイを計算して渡す。
+		ItemManager::CursorMagnet cm;
+		const bool cursorPlay = !m_editorMode && !m_menuOpen && !m_gameOverActive && !m_convoActive
+			&& !m_clearActive && m_showcaseState == ShowcaseState::Off
+			&& !m_introCutscene && !m_introLanding
+			&& CursorManager::Instance().IsActive();
+		if (cursorPlay)
+		{
+			const auto& bb = KdDirect3D::Instance().GetBackBuffer();
+			const float bw = static_cast<float>(bb->GetInfo().Width);
+			const float bh = static_cast<float>(bb->GetInfo().Height);
+			const float ndcX = CursorManager::Instance().PosX() / (bw * 0.5f);
+			const float ndcY = CursorManager::Instance().PosY() / (bh * 0.5f);
+			const auto& cam = KdShaderManager::Instance().GetCameraCB();
+			const Math::Matrix invVP = (cam.mView * cam.mProj).Invert();
+			Math::Vector4 n4 = Math::Vector4::Transform(Math::Vector4(ndcX, ndcY, 0.0f, 1.0f), invVP);
+			Math::Vector4 f4 = Math::Vector4::Transform(Math::Vector4(ndcX, ndcY, 1.0f, 1.0f), invVP);
+			if (std::abs(n4.w) > 1e-6f && std::abs(f4.w) > 1e-6f)
+			{
+				n4 /= n4.w; f4 /= f4.w;
+				const Math::Vector3 o(n4.x, n4.y, n4.z);
+				const Math::Vector3 fp(f4.x, f4.y, f4.z);
+				Math::Vector3 dir = fp - o;
+				if (dir.LengthSquared() > 1e-6f) { dir.Normalize(); }
+				cm.valid     = true;
+				cm.rayOrigin = o;
+				cm.rayDir    = dir;
+				cm.clicked   = CursorManager::Instance().Clicked();
+
+				// 左クリック：所持rockを1消費して、カメラの位置からクリック方向へ撃ち出す
+				if (cm.clicked && m_coreTotal > 0)
+				{
+					const Math::Vector3 start = o + dir * ItemMagnetConst::FlingStartAhead;
+					m_itemManager.ShootRock(start, dir, ItemMagnetConst::FlingSpeed);
+					--m_coreTotal;
+					m_corePopTimer = UIConst::CorePopTime;   // カウンターをポップ
+					SoundManager::Instance().PlaySE(SeId::Pickup, SoundConst::SeVolume);
+				}
+			}
+		}
+
+		const int gotCoins = m_itemManager.Update(m_spPlayer->GetPickupHitBox(), parasolPickedUp, rocksPicked, gemsPicked, cm);
 		if (gotCoins > 0)
 		{
 			m_coinTotal   += gotCoins;
 			m_coinPopTimer = UIConst::CoinPopTime;   // 取得でカウンターをポップ
+			SoundManager::Instance().PlaySE(SeId::Coin, SoundConst::SeVolume);
 		}
 		if (rocksPicked > 0)
 		{
@@ -1183,9 +1325,18 @@ void GameScene::Event()
 			// 取得数を右上カウンター（いわ/エメラルド）に反映＋取得ポップ
 			m_coreTotal   += rocksPicked;
 			m_corePopTimer = UIConst::CorePopTime;
+			SoundManager::Instance().PlaySE(SeId::Pickup, SoundConst::SeVolume);
+		}
+		if (gemsPicked > 0)
+		{
+			// カラフル岩(スターピース)＝収集のみ：右上カウンターに加算＋ポップ（回復なし）
+			m_coreTotal   += gemsPicked;
+			m_corePopTimer = UIConst::CorePopTime;
+			SoundManager::Instance().PlaySE(SeId::Pickup, SoundConst::SeVolume);
 		}
 		if (parasolPickedUp)
 		{
+			SoundManager::Instance().PlaySE(SeId::ParasolGet, SoundConst::SeVolume);
 			m_spPlayer->GiveParasol();
 			// ユニーク取得時のみ：メインバーストが終わるまで停止（その後に余韻が流れる）
 			TriggerHitStop(SparkleConst::PickupBurstLife);
@@ -1248,6 +1399,7 @@ void GameScene::Event()
 				{
 					// ぺちゃんこ演出開始（即死ではなく 0.35 秒後に消える）
 					sp->StartStomp();
+					SoundManager::Instance().PlaySE(SeId::Stomp, SoundConst::SeVolume);
 
 					// プレイヤーは演出を待たず即座に跳ね返す
 					const Math::Vector3 up = sp->GetPhysicsUpDir();
@@ -2161,6 +2313,22 @@ void GameScene::UpdatePauseMenu()
 {
 	m_menuBlinkTimer += KdFPSController::GetDt();
 
+	// 設定ウィンドウが開いている間はそちらに入力を渡す（ポーズ操作は止める）
+	if (m_settingsMenu.IsOpen())
+	{
+		m_settingsMenu.Update();
+		// 設定を閉じた瞬間に「押しっぱなしのEnter/W/S」がポーズ側で誤発火しないよう、
+		// エッジ用の prev を現在の押下状態に合わせておく（貫通防止）。
+		const bool navHeld =
+			((GetAsyncKeyState('W') & 0x8000) != 0) || ((GetAsyncKeyState(VK_UP)   & 0x8000) != 0) ||
+			((GetAsyncKeyState('S') & 0x8000) != 0) || ((GetAsyncKeyState(VK_DOWN) & 0x8000) != 0);
+		const bool decideHeld =
+			((GetAsyncKeyState(VK_RETURN) & 0x8000) != 0) || ((GetAsyncKeyState(VK_SPACE) & 0x8000) != 0);
+		m_menuNavPrev     = navHeld;
+		m_menuConfirmPrev = decideHeld;
+		return;
+	}
+
 	// 上下で選択（W/S または ↑↓）
 	const bool up   = ((GetAsyncKeyState('W') & 0x8000) != 0) || ((GetAsyncKeyState(VK_UP)   & 0x8000) != 0);
 	const bool down = ((GetAsyncKeyState('S') & 0x8000) != 0) || ((GetAsyncKeyState(VK_DOWN) & 0x8000) != 0);
@@ -2169,6 +2337,7 @@ void GameScene::UpdatePauseMenu()
 	{
 		if (up) { m_menuIndex = (m_menuIndex + PauseMenuConst::Count - 1) % PauseMenuConst::Count; }
 		else    { m_menuIndex = (m_menuIndex + 1) % PauseMenuConst::Count; }
+		SoundManager::Instance().PlaySE(SeId::MenuMove, SoundConst::SeVolume);
 	}
 	m_menuNavPrev = nav;
 
@@ -2178,21 +2347,63 @@ void GameScene::UpdatePauseMenu()
 		m_pauseExitFade += PauseMenuConst::ExitFadeSpeed * KdFPSController::GetDt();
 		if (m_pauseExitFade >= 1.0f)
 		{
-			SceneManager::Instance().SetNextScene(
-				m_pauseExitTarget == 1 ? SceneManager::SceneType::Title
-									   : SceneManager::SceneType::StageSelect);
+			if (m_pauseExitTarget == 2)
+			{
+				// やりなおす：同じステージを最初から再読込
+				SceneManager::Instance().RestartScene();
+			}
+			else
+			{
+				SceneManager::Instance().SetNextScene(
+					m_pauseExitTarget == 1 ? SceneManager::SceneType::Title
+										   : SceneManager::SceneType::StageSelect);
+			}
 		}
 		return;
 	}
 
-	// 決定（Enter / Space）
-	const bool confirm = ((GetAsyncKeyState(VK_RETURN) & 0x8000) != 0) || ((GetAsyncKeyState(VK_SPACE) & 0x8000) != 0);
-	if (confirm && !m_menuConfirmPrev)
+	// マウス：ホバーで選択／クリックで決定
+	bool mouseConfirm = false;
 	{
+		auto& cur = CursorManager::Instance();
+		if (cur.IsActive())
+		{
+			using namespace PauseMenuConst;
+			const float hw       = PanelFullW * 0.5f; (void)hw;
+			const float panelH   = BannerH + ContentPadTop + Count * ItemRowH + ContentPadBottom;
+			const float hh       = panelH * 0.5f;
+			const float bannerCY = hh - BannerH * 0.5f;
+			const float firstItemY = bannerCY - BannerH * 0.5f - ContentPadTop - ItemRowH * 0.5f;
+			const float barHalfW = (PanelFullW - SidePad * 2.0f) * 0.5f;
+			for (int i = 0; i < Count; ++i)
+			{
+				const float y = firstItemY - i * ItemRowH;
+				if (!cur.HitRect(0.0f, y, barHalfW, ItemRowH * 0.5f)) { continue; }
+				if (m_menuIndex != i) { m_menuIndex = i; SoundManager::Instance().PlaySE(SeId::MenuMove, SoundConst::SeVolume); }
+				if (cur.Clicked()) { mouseConfirm = true; }
+				break;
+			}
+		}
+	}
+
+	// 決定（Enter / Space / マウスクリック）
+	const bool confirm = ((GetAsyncKeyState(VK_RETURN) & 0x8000) != 0) || ((GetAsyncKeyState(VK_SPACE) & 0x8000) != 0);
+	if ((confirm && !m_menuConfirmPrev) || mouseConfirm)
+	{
+		SoundManager::Instance().PlaySE(SeId::MenuDecide, SoundConst::SeVolume);
 		switch (m_menuIndex)
 		{
 		case PauseMenuConst::Resume:
 			m_menuOpen = false;
+			SoundManager::Instance().ResumeAllSE();                // 一時停止したSEを再開
+			SoundManager::Instance().SetBgmMuffle(false);          // こもり解除
+			SoundManager::Instance().SetBgmVolumeScale(1.0f);      // 音量を元に戻す
+			break;
+		case PauseMenuConst::Settings:
+			m_settingsMenu.Open();   // 設定ウィンドウを開く（ポーズの上に重ねる）
+			break;
+		case PauseMenuConst::Retry:
+			m_pauseExitFade = 0.0f; m_pauseExitTarget = 2;   // 暗転してから同ステージ再読込
 			break;
 		case PauseMenuConst::StageSelect:
 			m_pauseExitFade = 0.0f; m_pauseExitTarget = 0;   // 暗転してから遷移
@@ -2291,7 +2502,7 @@ void GameScene::DrawPauseMenu()
 	// ── 項目（バナー直下から下へ等間隔）──
 	const float firstItemY = bannerCY - BannerH * 0.5f - ContentPadTop - ItemRowH * 0.5f;
 	const float barHalfW   = (PanelFullW - SidePad * 2.0f) * 0.5f;
-	const char* items[Count] = { ItemResume, ItemStageSelect, ItemTitle };
+	const char* items[Count] = { ItemResume, ItemSettings, ItemRetry, ItemStageSelect, ItemTitle };
 	const float blink = 0.5f + 0.5f * std::sinf(m_menuBlinkTimer * BlinkSpeed);
 	for (int i = 0; i < Count; ++i)
 	{
@@ -2326,6 +2537,9 @@ void GameScene::DrawPauseMenu()
 		const Math::Color black(0.0f, 0.0f, 0.0f, a);
 		sprite.DrawBox(0, 0, sw, sh, &black, true);
 	}
+
+	// 設定ウィンドウ（開いていればポーズの上に重ねて描画）
+	m_settingsMenu.Draw();
 }
 
 //----------------------------------------------------------
@@ -2342,17 +2556,37 @@ void GameScene::UpdateGameOver()
 	{
 		if (up) { m_gameOverIndex = (m_gameOverIndex + GameOverConst::Count - 1) % GameOverConst::Count; }
 		else    { m_gameOverIndex = (m_gameOverIndex + 1) % GameOverConst::Count; }
+		SoundManager::Instance().PlaySE(SeId::MenuMove, SoundConst::SeVolume);
 	}
 	m_gameOverNavPrev = nav;
 
-	const bool confirm = ((GetAsyncKeyState(VK_RETURN) & 0x8000) != 0) || ((GetAsyncKeyState(VK_SPACE) & 0x8000) != 0);
-	if (confirm && !m_gameOverConfPrev)
+	// マウス：ホバーで選択／クリックで決定
+	bool mouseConfirm = false;
 	{
+		auto& cur = CursorManager::Instance();
+		if (cur.IsActive())
+		{
+			using namespace GameOverConst;
+			for (int i = 0; i < Count; ++i)
+			{
+				const float y = ItemStartY - i * ItemGapPx;
+				if (!cur.HitRect(0.0f, y, 220.0f, ItemGapPx * 0.45f)) { continue; }
+				if (m_gameOverIndex != i) { m_gameOverIndex = i; SoundManager::Instance().PlaySE(SeId::MenuMove, SoundConst::SeVolume); }
+				if (cur.Clicked()) { mouseConfirm = true; }
+				break;
+			}
+		}
+	}
+
+	const bool confirm = ((GetAsyncKeyState(VK_RETURN) & 0x8000) != 0) || ((GetAsyncKeyState(VK_SPACE) & 0x8000) != 0);
+	if ((confirm && !m_gameOverConfPrev) || mouseConfirm)
+	{
+		SoundManager::Instance().PlaySE(SeId::MenuDecide, SoundConst::SeVolume);
 		switch (m_gameOverIndex)
 		{
 		case GameOverConst::Retry:
-			// 同じステージを最初からやり直し（シーン再構築）
-			SceneManager::Instance().SetNextScene(SceneManager::SceneType::Game);
+			// 同じステージを最初からやり直し（同一シーンの強制再読込）
+			SceneManager::Instance().RestartScene();
 			break;
 		case GameOverConst::StageSelect:
 			SceneManager::Instance().SetNextScene(SceneManager::SceneType::StageSelect);
@@ -2377,12 +2611,7 @@ void GameScene::DrawGameOver()
 	const int sh = static_cast<int>(bb->GetInfo().Height);
 
 	const float appear = std::clamp(m_gameOverTimer / FadeInTime, 0.0f, 1.0f);
-
-	// 背景を濃く暗転
-	{
-		const Math::Color dim(0.0f, 0.0f, 0.0f, DimAlpha * appear);
-		sprite.DrawBox(0, 0, sw, sh, &dim, true);
-	}
+	const float a      = appear;
 
 	// 中央寄せ＋右下シャドウのテキスト（計測も描画も同じフォントスプライト）
 	auto drawCentered = [&](int fontNo, const char* text, float cx, float y, const Math::Color& col)
@@ -2403,57 +2632,65 @@ void GameScene::DrawGameOver()
 		sprite.DrawFont(fs, pos, &col, 0);
 	};
 
-	// レイアウト（パネルは画面中央。出現でわずかに上からスライド）
-	const float hw     = PanelFullW * 0.5f;
-	const float panelH = BannerH + ContentPadTop + Count * ItemRowH + ContentPadBottom;
-	const float hh     = panelH * 0.5f;
-	const float panelCY = (1.0f - appear) * 30.0f;   // 上から少し降りてくる
-	const float top     = panelCY + hh;
-	const float a       = appear;
-
-	// パネル（影 → 赤縁 → 暗赤本体、すべて角丸）
+	// ── 背景：画面全体を濃く暗転（わずかに赤を含む）──
 	{
-		const int ct = PanelEdgeThickness;
-		const Math::Color shadow(0.0f, 0.0f, 0.0f, PanelShadowA * a);
-		sprite.DrawRoundedBox(6, static_cast<int>(panelCY) - 6, static_cast<int>(hw) + ct, static_cast<int>(hh) + ct,
-			PanelRadius + ct, &shadow, PanelCornerSegs);
-		const Math::Color edge(PanelEdgeR, PanelEdgeG, PanelEdgeB, PanelEdgeA);
-		sprite.DrawRoundedBox(0, static_cast<int>(panelCY), static_cast<int>(hw) + ct, static_cast<int>(hh) + ct,
-			PanelRadius + ct, &edge, PanelCornerSegs);
-		const Math::Color body(PanelBodyR, PanelBodyG, PanelBodyB, PanelBodyA * a);
-		sprite.DrawRoundedBox(0, static_cast<int>(panelCY), static_cast<int>(hw), static_cast<int>(hh),
-			PanelRadius, &body, PanelCornerSegs);
+		const Math::Color dim(0.05f, 0.0f, 0.01f, DimAlpha * appear);
+		sprite.DrawBox(0, 0, sw, sh, &dim, true);
 	}
 
-	// 上部バナー（赤）＋タイトル
-	const float bannerCY = top - BannerH * 0.5f;
+	const float pulse = 0.5f + 0.5f * std::sinf(m_gameOverTimer * TitlePulse);
+	const float titleY = sh * TitleYRatio;
+
+	// ── タイトル背後の赤グロー（加算で柔らかく脈動）──
 	{
-		const Math::Color banner(BannerR, BannerG, BannerB, BannerA * a);
-		sprite.DrawRoundedBox(0, static_cast<int>(bannerCY), static_cast<int>(hw), static_cast<int>(BannerH * 0.5f),
-			PanelRadius, &banner, PanelCornerSegs);
-		const Math::Color titleCol(BannerTextR, BannerTextG, BannerTextB, a);
-		drawCentered(TitleFontNo, TitleText, 0.0f, bannerCY, titleCol);
+		auto& sm = KdShaderManager::Instance();
+		sm.ChangeBlendState(KdBlendState::Add);
+		constexpr int LAYERS = 10;
+		for (int li = LAYERS - 1; li >= 0; --li)
+		{
+			const float u   = static_cast<float>(li) / (LAYERS - 1);
+			const int   rad = static_cast<int>(60.0f + u * 220.0f);
+			const float ga  = TitleGlowMax * (0.18f) * (1.0f - u) * (0.6f + 0.4f * pulse) * appear;
+			const Math::Color gc(TitleColR, TitleColG * 0.4f, TitleColB * 0.4f, ga);
+			sprite.DrawCircle(0, static_cast<int>(titleY), rad, &gc, true);
+		}
+		sm.UndoBlendState();
 	}
 
-	// 項目
-	const float firstItemY = bannerCY - BannerH * 0.5f - ContentPadTop - ItemRowH * 0.5f;
-	const float barHalfW   = (PanelFullW - SidePad * 2.0f) * 0.5f;
+	// ── タイトル「ゲームオーバー」：大きく中央上、赤く脈動 ──
+	{
+		const float br = 0.80f + 0.20f * pulse;
+		const Math::Color titleCol(TitleColR * br, TitleColG, TitleColB, appear);
+		drawCentered(TitleFontNo, TitleText, 0.0f, titleY, titleCol);
+	}
+
+	// ── タイトル下の区切り線（赤・出現で横に伸びる）──
+	{
+		const int dw = static_cast<int>(DividerHalfW * appear);
+		const Math::Color div(PanelEdgeR, PanelEdgeG, PanelEdgeB, 0.7f * appear);
+		sprite.DrawBox(0, static_cast<int>(titleY - DividerGap), dw, static_cast<int>(DividerH), &div, true);
+	}
+
+	// ── 項目（中央・縦並び。選択は明るく＋下線、点滅）──
 	const char* items[Count] = { ItemRetry, ItemStageSelect, ItemTitle };
 	const float blink = 0.5f + 0.5f * std::sinf(m_gameOverTimer * BlinkSpeed);
 	for (int i = 0; i < Count; ++i)
 	{
 		const bool  sel = (i == m_gameOverIndex);
-		const float y   = firstItemY - i * ItemRowH;
+		const float y   = ItemStartY - i * ItemGapPx;
+
+		const Math::Color col = sel
+			? Math::Color(1.0f, 0.95f, 0.92f, a)
+			: Math::Color(0.78f, 0.70f, 0.70f, 0.8f * a);
+		drawCentered(FontNo, items[i], 0.0f, y, col);
+
+		// 選択中：下線（赤・点滅）
 		if (sel)
 		{
-			const Math::Color bar(HighlightR, HighlightG, HighlightB, (HighlightA + HighlightBlinkA * blink) * a);
-			sprite.DrawRoundedBox(0, static_cast<int>(y), static_cast<int>(barHalfW), static_cast<int>(HighlightH * 0.5f),
-				PanelRadius, &bar, PanelCornerSegs);
+			const float ua = (0.55f + 0.45f * blink) * a;
+			const Math::Color uc(HighlightR, HighlightG, HighlightB, ua);
+			sprite.DrawBox(0, static_cast<int>(y - 26.0f), static_cast<int>(ItemUnderlineW), 2, &uc, true);
 		}
-		const Math::Color col = sel
-			? Math::Color(1.0f, 0.92f, 0.9f, a)
-			: Math::Color(0.8f, 0.72f, 0.72f, 0.85f * a);
-		drawCentered(FontNo, items[i], 0.0f, y, col);
 	}
 }
 
@@ -2767,38 +3004,38 @@ void GameScene::DrawGui()
 {
 	// ── エディタ操作パネル ──（既定で中央ドックへ。別ウィンドウ化で見失わないように）
 	ImGui::SetNextWindowDockID(ImGui::GetID("##MainDockSpace"), ImGuiCond_FirstUseEver);
-	if (ImGui::Begin("Editor"))
+	if (ImGui::Begin(U8("エディタ")))
 	{
 		ImGui::TextColored({ 0.6f, 1.0f, 0.8f, 1.0f }, "Editor Controls");
 		ImGui::Separator();
 
 		// エディタ画面（ゲームをImGuiウィンドウ表示）⇔ 通常フルスクリーン
-		ImGui::Checkbox("Editor Screen (F3)", &m_editorScreen);
+		ImGui::Checkbox(U8("エディタ画面 (F3)"), &m_editorScreen);
 		// デバッグ可視化（デッドゾーン/コアリア/各ゾーン枠）1キーと連動
-		ImGui::Checkbox("Show Debug Zones (1)", &m_debugZonesVisible);
+		ImGui::Checkbox(U8("デバッグ表示 (1)"), &m_debugZonesVisible);
 		// 他オブジェクトのUpdateを止める（プレイヤー操作は常にロック）
-		ImGui::Checkbox("Freeze World (stop other Update)", &m_editorFreeze);
+		ImGui::Checkbox(U8("ワールド停止（他の更新を止める）"), &m_editorFreeze);
 
 		// ── オブジェクト操作（マウス選択＋ドラッグ移動／生成／コピー）──
 		if (m_editorMode)
 		{
 			ImGui::Separator();
 			ImGui::TextColored({ 1.0f, 0.9f, 0.4f, 1.0f }, "Object Editing");
-			ImGui::TextWrapped("Left-click an object to select. Drag the X/Y/Z axis handle to move along that axis. Ctrl+Z undo / Ctrl+Y redo.");
+			ImGui::TextWrapped(U8("オブジェクトを左クリックで選択。X/Y/Z軸ハンドルをドラッグでその軸に移動。Ctrl+Zで元に戻す / Ctrl+Yでやり直し。"));
 
 			// グリッドスナップ（カクカク移動）
-			ImGui::Checkbox("Grid Snap", &m_snapEnabled);
+			ImGui::Checkbox(U8("グリッドスナップ"), &m_snapEnabled);
 			ImGui::SameLine();
 			ImGui::SetNextItemWidth(90.0f);
-			ImGui::DragFloat("Grid Size", &m_snapSize, 0.1f, 0.1f, 100.0f, "%.2f");
+			ImGui::DragFloat(U8("グリッド幅"), &m_snapSize, 0.1f, 0.1f, 100.0f, "%.2f");
 
 			// 選択中の表示＋コピー
 			if (m_selEntry >= 0 && m_selEntry < static_cast<int>(m_editEntries.size()))
 			{
 				const EditEntry& sel = m_editEntries[m_selEntry];
-				ImGui::Text("Selected: %s", sel.label.c_str());
-				ImGui::Text("Pos: %.1f, %.1f, %.1f", sel.pos.x, sel.pos.y, sel.pos.z);
-				if (ImGui::Button("Copy Selected"))
+				ImGui::Text(U8("選択中: %s"), sel.label.c_str());
+				ImGui::Text(U8("位置: %.1f, %.1f, %.1f"), sel.pos.x, sel.pos.y, sel.pos.z);
+				if (ImGui::Button(U8("選択をコピー")))
 				{
 					if (sel.dup)
 					{
@@ -2815,27 +3052,27 @@ void GameScene::DrawGui()
 			}
 			else
 			{
-				ImGui::TextDisabled("Selected: (none)");
+				ImGui::TextDisabled(U8("選択中: (なし)"));
 			}
-			ImGui::Text("Undo: %d  Redo: %d",
+			ImGui::Text(U8("元に戻す: %d  やり直し: %d"),
 				static_cast<int>(m_undoStack.size()), static_cast<int>(m_redoStack.size()));
-			if (ImGui::Button("Undo (Ctrl+Z)")) { EditUndo(); } ImGui::SameLine();
-			if (ImGui::Button("Redo (Ctrl+Y)")) { EditRedo(); }
+			if (ImGui::Button(U8("元に戻す (Ctrl+Z)"))) { EditUndo(); } ImGui::SameLine();
+			if (ImGui::Button(U8("やり直し (Ctrl+Y)"))) { EditRedo(); }
 
 			// 現在位置（カメラ前方）に新規生成
-			ImGui::Text("Create at view:");
-			if (ImGui::Button("Planet"))      { SpawnAtCursor(EditKind::Planet); }      ImGui::SameLine();
-			if (ImGui::Button("WindBox"))     { SpawnAtCursor(EditKind::WindBox); }     ImGui::SameLine();
-			if (ImGui::Button("SpikeBox"))    { SpawnAtCursor(EditKind::SpikeBox); }
-			if (ImGui::Button("GravityCore")) { SpawnAtCursor(EditKind::GravityCore); } ImGui::SameLine();
-			if (ImGui::Button("MovingFloor")) { SpawnAtCursor(EditKind::MovingFloor); }
-			if (ImGui::Button("ManualZone"))  { SpawnAtCursor(EditKind::ManualZone); }  ImGui::SameLine();
-			if (ImGui::Button("DeadZone"))    { SpawnAtCursor(EditKind::DeadZone); }    ImGui::SameLine();
-			if (ImGui::Button("Corelia"))     { SpawnAtCursor(EditKind::Corelia); }
+			ImGui::Text(U8("視点に生成:"));
+			if (ImGui::Button(U8("惑星")))      { SpawnAtCursor(EditKind::Planet); }      ImGui::SameLine();
+			if (ImGui::Button(U8("風ボックス")))     { SpawnAtCursor(EditKind::WindBox); }     ImGui::SameLine();
+			if (ImGui::Button(U8("スパイクボックス")))    { SpawnAtCursor(EditKind::SpikeBox); }
+			if (ImGui::Button(U8("重力コア"))) { SpawnAtCursor(EditKind::GravityCore); } ImGui::SameLine();
+			if (ImGui::Button(U8("移動床"))) { SpawnAtCursor(EditKind::MovingFloor); }
+			if (ImGui::Button(U8("手動ゾーン")))  { SpawnAtCursor(EditKind::ManualZone); }  ImGui::SameLine();
+			if (ImGui::Button(U8("デッドゾーン")))    { SpawnAtCursor(EditKind::DeadZone); }    ImGui::SameLine();
+			if (ImGui::Button(U8("コアリア")))     { SpawnAtCursor(EditKind::Corelia); }
 		}
 
 		ImGui::Separator();
-		if (ImGui::Button("Save All"))
+		if (ImGui::Button(U8("全部保存")))
 		{
 			// 全エディタ/マネージャのデータを一括保存
 			PlanetGravityManager::Instance().Save();
@@ -2853,13 +3090,14 @@ void GameScene::DrawGui()
 			m_enemyEditor.Save();
 			m_itemManager.Save();          // コイン
 			m_itemManager.SaveParasols();  // パラソル
+			m_itemManager.SaveRockGems();  // カラフル岩
 			SaveSpawn();                   // スポーン＋導入開始位置
 			SaveSunLight();                // 太陽光
 			CameraSettings::Instance().Save();
 			KdDebugGUI::Instance().AddLog("[Editor] Saved ALL (planets/zones/items/spawn/etc.)\n");
 		}
 		ImGui::SameLine();
-		if (ImGui::Button("Reload All"))
+		if (ImGui::Button(U8("全部再読込")))
 		{
 			ManualGravityZoneManager::Instance().Load();
 			DeadZoneManager::Instance().Load();
@@ -2868,7 +3106,7 @@ void GameScene::DrawGui()
 		}
 
 		ImGui::Separator();
-		ImGui::Text("Zones: %d / DeadZones: %d / Corelia: %d",
+		ImGui::Text(U8("ゾーン: %d / デッドゾーン: %d / コアリア: %d"),
 			static_cast<int>(ManualGravityZoneManager::Instance().GetZoneCount()),
 			static_cast<int>(DeadZoneManager::Instance().GetZoneCount()),
 			CoreliaManager::Instance().GetNpcCount());
@@ -2900,37 +3138,37 @@ void GameScene::DrawGui()
 
 	// アイテムエディター（常時表示）
 	m_itemManager.DrawGui();
-	if (ImGui::Begin("Sun Light"))
+	if (ImGui::Begin(U8("太陽光")))
 	{
 		// 平行光の方向
-		if (ImGui::DragFloat3("Direction", &m_sunDir.x, 0.01f, -1.0f, 1.0f))
+		if (ImGui::DragFloat3(U8("向き"), &m_sunDir.x, 0.01f, -1.0f, 1.0f))
 		{
 			ApplySunLight();
 		}
 
 		// 平行光の色
-		if (ImGui::ColorEdit3("Sun Color", &m_sunColor.x))
+		if (ImGui::ColorEdit3(U8("太陽の色"), &m_sunColor.x))
 		{
 			ApplySunLight();
 		}
 
 		// 環境光の色と強度（アルファが全体の明るさ）
-		if (ImGui::ColorEdit4("Ambient Color", &m_ambientColor.x))
+		if (ImGui::ColorEdit4(U8("環境光の色"), &m_ambientColor.x))
 		{
 			ApplySunLight();
 		}
 		ImGui::SameLine();
-		ImGui::TextDisabled("(A=Intensity)");
+		ImGui::TextDisabled(U8("(A=強さ)"));
 
 		ImGui::Separator();
 
 		// 保存・読み込み
-		if (ImGui::Button("Save Sun Light"))
+		if (ImGui::Button(U8("太陽光を保存")))
 		{
 			SaveSunLight();
 		}
 		ImGui::SameLine();
-		if (ImGui::Button("Load Sun Light"))
+		if (ImGui::Button(U8("太陽光を読込")))
 		{
 			LoadSunLight();
 			ApplySunLight();
@@ -2939,9 +3177,9 @@ void GameScene::DrawGui()
 	ImGui::End();
 
 	// ポイントライトエディター
-	if (ImGui::Begin("Point Lights"))
+	if (ImGui::Begin(U8("ポイントライト")))
 	{
-		if (ImGui::Button("Add Light"))
+		if (ImGui::Button(U8("ライト追加")))
 		{
 			auto spLight = std::make_shared<PointLightObject>();
 			m_pointLights.push_back(spLight);
@@ -2970,21 +3208,21 @@ void GameScene::DrawGui()
 	}
 
 	// スポーン位置エディター
-	if (ImGui::Begin("Spawn Settings"))
+	if (ImGui::Begin(U8("スポーン設定")))
 	{
 		// 初期リスポーン（着地）位置
 		ImGui::TextColored({ 0.7f, 1.0f, 0.8f, 1.0f }, "Respawn / Landing");
 		float pos[3] = { m_spawnPos.x, m_spawnPos.y, m_spawnPos.z };
-		if (ImGui::DragFloat3("Spawn Position", pos, 0.1f))
+		if (ImGui::DragFloat3(U8("スポーン位置"), pos, 0.1f))
 		{
 			m_spawnPos = { pos[0], pos[1], pos[2] };
 		}
-		if (ImGui::Button("Apply (Respawn)"))
+		if (ImGui::Button(U8("適用（リスポーン）")))
 		{
 			if (m_spPlayer) { m_spPlayer->SetPos(m_spawnPos); }
 		}
 		ImGui::SameLine();
-		if (ImGui::Button("Spawn = Player") && m_spPlayer)
+		if (ImGui::Button(U8("スポーン=プレイヤー位置")) && m_spPlayer)
 		{
 			m_spawnPos = m_spPlayer->GetPos();
 		}
@@ -2994,24 +3232,24 @@ void GameScene::DrawGui()
 		// 導入カットシーンの「飛んでくる」開始位置
 		ImGui::TextColored({ 1.0f, 0.9f, 0.4f, 1.0f }, "Intro Start (fly-in)");
 		float ipos[3] = { m_introStartPos.x, m_introStartPos.y, m_introStartPos.z };
-		if (ImGui::DragFloat3("Intro Start Position", ipos, 0.1f))
+		if (ImGui::DragFloat3(U8("イントロ開始位置"), ipos, 0.1f))
 		{
 			m_introStartPos = { ipos[0], ipos[1], ipos[2] };
 		}
 		// エディタカメラの位置を開始位置に採用（見ている位置から飛ばす）
-		if (ImGui::Button("Intro = Camera") && m_pEditorCam)
+		if (ImGui::Button(U8("イントロ=カメラ位置")) && m_pEditorCam)
 		{
 			m_introStartPos = m_pEditorCam->GetPos();
 		}
 		ImGui::SameLine();
 		// その場でカットシーンを再生して確認
-		if (ImGui::Button("Test Intro"))
+		if (ImGui::Button(U8("イントロ確認")))
 		{
 			StartIntroCutscene();
 		}
 
 		ImGui::Separator();
-		if (ImGui::Button("Save"))
+		if (ImGui::Button(U8("保存")))
 		{
 			SaveSpawn();
 		}
@@ -3019,9 +3257,9 @@ void GameScene::DrawGui()
 	ImGui::End();
 
 	// ─── StarBurst Viewer（手動テスト）───────────────────────────
-	if (ImGui::Begin("StarBurst Viewer"))
+	if (ImGui::Begin(U8("スターバースト確認")))
 	{
-		if (ImGui::Button("Play Burst at Player"))
+		if (ImGui::Button(U8("プレイヤー位置でバースト")))
 		{
 			m_starBurstTestRequest = true;
 		}
@@ -3035,21 +3273,21 @@ void GameScene::DrawGui()
 	// 
 	// 
 	// Viewer ─────────────────────────────────────────
-	if (ImGui::Begin("Effekseer Viewer"))
+	if (ImGui::Begin(U8("Effekseer確認")))
 	{
-		ImGui::InputText("Effect File", m_efkViewerPath, sizeof(m_efkViewerPath));
-		ImGui::DragFloat("Scale",       &m_efkViewerScale, 0.1f, 0.1f, 100.0f);
-		ImGui::DragFloat("Speed",       &m_efkViewerSpeed, 0.05f, 0.01f, 10.0f);
-		ImGui::Checkbox("Loop",         &m_efkViewerLoop);
+		ImGui::InputText(U8("エフェクトファイル"), m_efkViewerPath, sizeof(m_efkViewerPath));
+		ImGui::DragFloat(U8("スケール"),       &m_efkViewerScale, 0.1f, 0.1f, 100.0f);
+		ImGui::DragFloat(U8("速さ"),       &m_efkViewerSpeed, 0.05f, 0.01f, 10.0f);
+		ImGui::Checkbox(U8("ループ"),         &m_efkViewerLoop);
 
-		if (ImGui::Button("Play"))
+		if (ImGui::Button(U8("再生")))
 		{
 			const Math::Vector3 playPos = m_spPlayer ? m_spPlayer->GetPos() : Math::Vector3::Zero;
 			KdEffekseerManager::GetInstance().Play(
 				m_efkViewerPath, playPos, m_efkViewerScale, m_efkViewerSpeed, m_efkViewerLoop);
 		}
 		ImGui::SameLine();
-		if (ImGui::Button("Stop All"))
+		if (ImGui::Button(U8("全停止")))
 		{
 			KdEffekseerManager::GetInstance().StopAllEffect();
 		}
@@ -3727,12 +3965,14 @@ void GameScene::UpdateCorelia()
 			{
 				++m_convoPage;
 				m_convoText = m_convoPages[m_convoPage];
+				SoundManager::Instance().PlaySE(SeId::CoreliaTalk, SoundConst::SeVolume);
 			}
 			else
 			{
 				m_convoActive = false;
 				m_convoZoom   = 0.0f;
 				if (m_pCamera) { m_pCamera->ClearOffsetZOverride(); }
+				SoundManager::Instance().PlaySE(SeId::MenuCancel, SoundConst::SeVolume);
 			}
 		}
 		return;
@@ -3767,6 +4007,7 @@ void GameScene::UpdateCorelia()
 				m_convoPage   = 0;
 				m_convoText   = m_convoPages[0];
 				m_convoActive = true;
+				SoundManager::Instance().PlaySE(SeId::CoreliaTalk, SoundConst::SeVolume);
 			}
 		}
 	}
@@ -3975,6 +4216,7 @@ void GameScene::StartStageClear(const Math::Vector3& corePos)
 	if (m_clearActive) { return; }
 	m_clearActive = true;
 	m_clearTimer  = 0.0f;
+	SoundManager::Instance().PlaySE(SeId::Clear, SoundConst::SeVolume);
 	m_clearDecideFlashed = false;
 	m_clearYaw    = ClearConst::CamStartYawDeg;   // 振り子バネの初期角
 	m_clearYawVel = 0.0f;
@@ -4210,11 +4452,15 @@ void GameScene::UpdateControlHint()
 		if (m_ctrlGotA && m_ctrlGotD && m_ctrlGotJump) { m_ctrlHintDone = true; }   // 全部押した→消す
 	}
 
-	// フェード：表示中は1へ、押し切ったら0へ
+	// フェード：通常は1へ。押し切った／死亡・ゲームオーバー・カットシーン・会話中は0へ。
+	// （死亡時に出っぱなしになるのを防ぐ。完了でなければ復活後にまたフェードインする）
+	const bool fadeOut = m_ctrlHintDone || m_deathActive || m_gameOverActive
+		|| m_introCutscene || m_introLanding || m_convoActive;
 	const float spd = dt / std::max(IntroConst::ArrivalFadeTime, 0.01f);
-	if (m_ctrlHintDone) { m_ctrlHintAlpha -= spd; }
-	else                { m_ctrlHintAlpha += spd; }
+	if (fadeOut) { m_ctrlHintAlpha -= spd; }
+	else         { m_ctrlHintAlpha += spd; }
 	m_ctrlHintAlpha = std::clamp(m_ctrlHintAlpha, 0.0f, 1.0f);
+	// 「全部押して完了」したときだけ完全終了。死亡等の一時フェードでは終了させない。
 	if (m_ctrlHintDone && m_ctrlHintAlpha <= 0.0f) { m_ctrlHintActive = false; }
 }
 
@@ -4435,11 +4681,11 @@ void GameScene::DrawShowcasePreview()
 //----------------------------------------------------------
 void GameScene::DrawShowcasePreviewWindow()
 {
-	if (ImGui::Begin("Showcase Preview"))
+	if (ImGui::Begin(U8("見せカメラ プレビュー")))
 	{
-		ImGui::Checkbox("Enable Preview", &m_camPreviewOn);
+		ImGui::Checkbox(U8("プレビュー有効"), &m_camPreviewOn);
 		ImGui::SameLine();
-		if (ImGui::Button("Play in main view"))   // メインビューで本番再生（テスト）
+		if (ImGui::Button(U8("メインビューで再生")))   // メインビューで本番再生（テスト）
 		{
 			m_showcaseState    = ShowcaseState::Playing;
 			m_showcaseTimer    = 0.0f;
@@ -4448,7 +4694,7 @@ void GameScene::DrawShowcasePreviewWindow()
 			if (m_spPlayer) { m_spPlayer->SetDamageEnabled(false); }
 		}
 		ImGui::SameLine();
-		if (ImGui::Button("Stop"))
+		if (ImGui::Button(U8("停止")))
 		{
 			m_showcaseState = ShowcaseState::Off; m_barCover = 0.0f;
 			if (m_spPlayer) { m_spPlayer->SetDamageEnabled(true); }
@@ -4456,7 +4702,7 @@ void GameScene::DrawShowcasePreviewWindow()
 
 		if (!m_showcaseEditor.HasPath())
 		{
-			ImGui::TextDisabled("(no camera path: add a phase with >=2 eye points)");
+			ImGui::TextDisabled(U8("(カメラ経路なし: 視点を2つ以上持つフェーズを追加)"));
 			ImGui::End();
 			return;
 		}
@@ -4478,9 +4724,9 @@ void GameScene::DrawShowcasePreviewWindow()
 		// 再生 / 一時停止 / 先頭
 		if (ImGui::Button(m_camPreviewPlaying ? "Pause" : "Play")) { m_camPreviewPlaying = !m_camPreviewPlaying; }
 		ImGui::SameLine();
-		if (ImGui::Button("|< Start")) { m_camPreviewTime = 0.0f; }
+		if (ImGui::Button(U8("|< 先頭"))) { m_camPreviewTime = 0.0f; }
 		ImGui::SameLine();
-		ImGui::Text("%.2f / %.2f s", m_camPreviewTime, total);
+		ImGui::Text(U8("%.2f / %.2f 秒"), m_camPreviewTime, total);
 
 		// シーク（つまむと一時停止してスクラブ）
 		ImGui::SetNextItemWidth(-1.0f);
@@ -4515,6 +4761,9 @@ void GameScene::StartIntroCutscene()
 	m_introCutscene = true;
 	m_introTimer    = 0.0f;
 	m_introSpin     = 0.0f;
+
+	// ステージへ飛んでくるSE
+	SoundManager::Instance().PlaySE(SeId::StageFlyIn, SoundConst::SeVolume);
 
 	// 開始位置へ配置。物理を止めて（重力0・速度0）、位置を時間で直接動かす（横に吹っ飛ばない・必ず着地）
 	m_spPlayer->SetPos(m_introStartPos);
@@ -4659,6 +4908,9 @@ void GameScene::Respawn()
 	if (!m_spPlayer) { return; }
 	// モデルを作り直さず状態だけ初期化（Init だと復活後に表示・入力が壊れることがある）
 	m_spPlayer->Revive();
+	// 復活演出：ディゾルブを逆再生（溶けた状態から再構成して現れる）
+	m_spPlayer->TriggerRespawnDissolve();
+	SoundManager::Instance().PlaySE(SeId::Respawn, SoundConst::SeVolume);
 	// チェックポイント未取得なら初期スポーン、取得済みならそのチェックポイントへ
 	const Math::Vector3 respawn = m_checkpointReached ? m_respawnPos : m_spawnPos;
 	// リスポーン位置へ移動し、死亡時の落下速度を必ず消す（残っていると復活直後に吹っ飛ぶ）
@@ -4679,8 +4931,11 @@ void GameScene::Respawn()
 	m_itemManager.ClearCoins();
 	m_itemManager.ClearRocks();
 	m_itemManager.ClearParasols();
+	m_itemManager.ClearRockGems();
+	m_itemManager.ClearThrownRocks();
 	m_itemManager.Load();
 	m_itemManager.LoadParasols();
+	m_itemManager.LoadRockGems();
 
 	// コインが復活するのに合わせて取得カウントも戻す
 	m_coinTotal    = 0;
@@ -5067,10 +5322,22 @@ void GameScene::Init()
 	RebuildSpikeBoxes();
 	m_spikeBoxEditor.ClearDirty();
 
-	// コイン・パラソルアイテム読み込み
+	// コイン・パラソル・カラフル岩アイテム読み込み
 	m_itemManager.Load();
 	m_itemManager.LoadParasols();
+	m_itemManager.LoadRockGems();
 
+	// ※BGMはここでは流さない。飛来イントロ／ショーケース中は無音で、
+	//   着地して通常プレイに入ったら Event 側で流し始める（全ステージ共通）。
+	//   ただし着地時にロードでカクつかないよう、ここで事前ロード（デコード）しておく。
+	{
+		auto& sound = SoundManager::Instance();
+		const int stageId0 = StageManager::Instance().GetStageIndex() - 1;
+		sound.Preload(SoundConst::BgmForStage(stageId0));
+		sound.Preload(SoundConst::BgmShowcase);   // ショーケースBGMも先読み
+		// 登録SE（差し替え後の割り当てを含む）を事前ロード（初回再生のカクつき防止）
+		sound.PreloadAllSE();
+	}
 	}
 
 void GameScene::SaveSpawn()

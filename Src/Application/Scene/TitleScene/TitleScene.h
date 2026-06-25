@@ -3,6 +3,7 @@
 #include"../BaseScene/BaseScene.h"
 #include"../../GameObject/Camera/EditorCamera.h"
 #include"../../GameObject/Character/AnimBlender.h"
+#include"../../UI/SettingsMenu.h"
 
 //==========================================================
 // TitleScene
@@ -63,6 +64,11 @@ private :
 	float m_logTimer = 0.0f;   // カメラ値ログ出力の間引き用
 
 	// Enter 演出
-	bool  m_starting   = false;
-	float m_startTimer = 0.0f;
+	bool  m_starting     = false;
+	float m_startTimer   = 0.0f;
+	bool  m_startKeyPrev = false;   // スタートEnterのエッジ判定（連打/貫通防止）
+
+	// 設定ウィンドウ（TABで開く）
+	SettingsMenu m_settingsMenu;
+	bool         m_settingsTabPrev = false;
 };

@@ -1,10 +1,13 @@
 ﻿#include "TitleScene.h"
 #include "../SceneManager.h"
 #include "../../Manager/StageManager.h"
+#include "../../Manager/SoundManager.h"
+#include "../../Const/SoundConst.h"
 #include "../../GameObject/BackGround/BackGround.h"
 #include "../../GameObject/BackGround/StarField.h"
 #include "../../GameObject/Light/PointLightObject.h"
 #include "../../GameObject/Effect/EffectBase.h"
+#include "../../Manager/CursorManager.h"
 #include "../../Const/PlayerConst.h"
 #include "../../Const/CubunConst.h"
 #include "../../Const/FontConst.h"
@@ -36,10 +39,19 @@ namespace
 	constexpr int          kFontNo         = 0;
 	constexpr int          kFontHeight     = 44;
 	constexpr const char*  kFontName       = FontConst::GameFontName;
-	constexpr const char*  kPromptText     = "ボタンを押してスタート";
+	constexpr const char*  kPromptText     = "ＥＮＴＥＲでスタート";
 	constexpr float        kPromptBobAmp   = 6.0f;   // 上下ふわふわの振れ幅(px)
 	constexpr float        kPromptBobSpeed = 2.2f;   // ふわふわの速さ
 	constexpr int          kPromptOutline  = 2;      // 黒フチの太さ(px)
+
+	// ── スタート/設定 ボタン（角丸・クリック可）──
+	constexpr const char*  kStartText    = "スタート";
+	constexpr const char*  kSettingsText = "せってい";
+	constexpr float        kBtnHalfW     = 180.0f;   // ボタン半幅(px)
+	constexpr float        kBtnHalfH     = 36.0f;    // ボタン半高(px)
+	constexpr float        kBtnGap       = 92.0f;    // 2ボタンの縦間隔(px)
+	constexpr float        kBtnRadius    = 18.0f;    // 角丸半径(px)
+	constexpr float        kBtnRiseY     = 90.0f;    // ボタンを上へ持ち上げる量(px)
 
 	// ── カメラ（-Z 側から +Z を見る＝+X が画面右で直感的）──
 	const     Math::Vector3 kCamEye        = { 0.0f, 8.0f, -25.0f };
@@ -48,6 +60,9 @@ namespace
 	constexpr float         kCamSwayY      = 0.8f;
 	constexpr float         kCamSwaySpeed  = 0.18f;
 	constexpr float         kCamFov        = 55.0f;
+	// マウスパララックス（視点ずらし量。大きいほど奥行きが強い）
+	constexpr float         kParallaxX     = 3.0f;
+	constexpr float         kParallaxY     = 1.6f;
 
 	// ── 漂うキャラ（流れ星のように右上→左下へフワ〜と流れ、くるくる回る）──
 	constexpr float kCubunScale   = 0.55f;
@@ -63,6 +78,7 @@ namespace
 	constexpr const char* kCometGlowTex = "Asset/Effect/Particle03.png";
 	constexpr int   kCometCount    = 5;
 	constexpr int   kTrailLen      = 16;     // 尾の履歴数
+	constexpr float kCometTrailStep= 0.5f;   // 履歴点の間隔(ワールド距離)。FPS非依存で尾を一定長に
 	constexpr float kCometSpeedMin = 22.0f;  // 速い
 	constexpr float kCometSpeedMax = 36.0f;
 	constexpr float kCometHeadMin  = 0.6f;
@@ -102,6 +118,9 @@ void TitleScene::RespawnComet(Comet& c)
 //----------------------------------------------------------
 void TitleScene::Init()
 {
+	// BGM（タイトル。ファイル未配置なら無音）
+	SoundManager::Instance().PlayBGM(SoundConst::BgmTitle, SoundConst::BgmVolume);
+
 	// カメラ
 	m_titleCam = std::make_shared<KdCamera>();
 	m_titleCam->SetProjectionMatrix(kCamFov);
@@ -181,9 +200,13 @@ void TitleScene::Event()
 	for (auto& c : m_comets)
 	{
 		c.pos += c.vel * dt;
-		// 履歴更新（先頭が最新）
-		c.history.insert(c.history.begin(), c.pos);
-		if (static_cast<int>(c.history.size()) > kTrailLen) { c.history.pop_back(); }
+		// 履歴更新：一定距離ごとに点を追加（FPSに依らず尾の長さを一定に）
+		if (c.history.empty() ||
+			(c.pos - c.history.front()).LengthSquared() >= kCometTrailStep * kCometTrailStep)
+		{
+			c.history.insert(c.history.begin(), c.pos);
+			if (static_cast<int>(c.history.size()) > kTrailLen) { c.history.pop_back(); }
+		}
 		// 左下へ抜けたら右上から再生成（一定方向のストリーム）
 		if (c.pos.x < -kCometXRange - 4.0f || c.pos.y < -kCometYRange - 4.0f) { RespawnComet(c); }
 	}
@@ -206,6 +229,9 @@ void TitleScene::Event()
 		Math::Vector3 eye = kCamEye;
 		eye.x += std::sinf(m_timer * kCamSwaySpeed) * kCamSwayX;
 		eye.y += std::cosf(m_timer * kCamSwaySpeed * 0.7f) * kCamSwayY;
+		// マウスパララックス：視点を左右/上下へずらして奥行きを出す（注視点は固定）
+		eye.x += CursorManager::Instance().NormX() * kParallaxX;
+		eye.y += CursorManager::Instance().NormY() * kParallaxY;
 
 		// 左手系(LH)のカメラ「ワールド行列」を直接構築（SetCameraMatrix はワールドを受け取る）。
 		// SimpleMath の CreateLookAt は右手系で視線が反転するため使わない。
@@ -236,17 +262,58 @@ void TitleScene::Event()
 		OutputDebugStringA(buf);
 	}
 
-	// 何かキー／マウスを押したら「むっちゃ光って小さくなる」演出を開始 → 終わったらゲームへ
-	// （シーン切替直後の押しっぱなし/連打は無視）
-	bool anyKey = false;
-	for (int vk = 0x01; vk <= 0xFE; ++vk)
+	// 設定ウィンドウ：開いている間はそちらに入力を渡す（スタート等を止める）
+	if (m_settingsMenu.IsOpen())
 	{
-		if (GetAsyncKeyState(vk) & 0x8000) { anyKey = true; break; }
+		m_settingsMenu.Update();
+		m_settingsTabPrev = (GetAsyncKeyState(VK_TAB) & 0x8000) != 0;   // 閉じた直後の再オープン防止
+		// 設定を閉じた瞬間に押しっぱなしEnterでゲーム開始しないよう、エッジを潰す（貫通防止）
+		m_startKeyPrev = (GetAsyncKeyState(VK_RETURN) & 0x8000) != 0;
+		return;
 	}
-	if (!m_starting && anyKey && !SceneManager::Instance().IsInputLocked())
+	// TAB で設定を開く（スタート演出中は不可）
+	{
+		const bool tab = (GetAsyncKeyState(VK_TAB) & 0x8000) != 0;
+		if (tab && !m_settingsTabPrev && !m_starting && !SceneManager::Instance().IsInputLocked())
+		{
+			m_settingsMenu.Open();
+		}
+		m_settingsTabPrev = tab;
+	}
+
+	// マウス：スタート/設定 ボタン（描画と同じ角丸ボックスの矩形で判定）
+	if (m_timer > kPromptIn)
+	{
+		auto& cur = CursorManager::Instance();
+		if (cur.IsActive() && cur.Clicked() && !m_starting && !SceneManager::Instance().IsInputLocked())
+		{
+			const auto& bb = KdDirect3D::Instance().GetBackBuffer();
+			const float sh = static_cast<float>(bb->GetInfo().Height);
+			const float bob = std::sinf(m_timer * kPromptBobSpeed) * kPromptBobAmp;
+			const float startCY = -sh * kPromptYRatio + kBtnRiseY + bob;
+			const float setCY   = startCY - kBtnGap;
+			if (cur.HitRect(0.0f, startCY, kBtnHalfW, kBtnHalfH))
+			{
+				m_starting = true; m_startTimer = 0.0f;
+				SoundManager::Instance().PlaySE(SeId::TitleStart, SoundConst::SeVolume);
+			}
+			else if (cur.HitRect(0.0f, setCY, kBtnHalfW, kBtnHalfH))
+			{
+				m_settingsMenu.Open();
+			}
+		}
+	}
+
+	// Enter を押したら「むっちゃ光って小さくなる」演出を開始 → 終わったらゲームへ
+	// （シーン切替直後の押しっぱなし/連打は無視）
+	const bool startKey = (GetAsyncKeyState(VK_RETURN) & 0x8000) != 0;
+	const bool startEdge = startKey && !m_startKeyPrev;   // 押した瞬間だけ（連打・押しっぱなし無効）
+	m_startKeyPrev = startKey;
+	if (!m_starting && startEdge && !SceneManager::Instance().IsInputLocked())
 	{
 		m_starting   = true;
 		m_startTimer = 0.0f;
+		SoundManager::Instance().PlaySE(SeId::TitleStart, SoundConst::SeVolume);
 	}
 	if (m_starting)
 	{
@@ -452,41 +519,49 @@ void TitleScene::DrawSpriteExtra()
 		sprite.DrawBox(0, 0, sw, sh, &flash, true);
 	}
 
-	// PRESS ENTER（演出後に点滅で登場）
+	// スタート/設定 ボタン（角丸・クリック可。演出が進むと一緒に消える）
 	if (m_timer > kPromptIn)
 	{
 		const float promptFade = std::min((m_timer - kPromptIn) / 0.4f, 1.0f);
 		const float blink = 0.3f + 0.7f * (0.5f + 0.5f * std::sinf(m_timer * kBlinkSpeed));
-		// スタート演出（白発光）が進むほどテキストを消す（白の上に文字が残る違和感を防ぐ）
-		const float a = blink * promptFade * (1.0f - startP);
-		const Math::Color col(1.0f, 1.0f, 1.0f, a);
+		const float a = promptFade * (1.0f - startP);   // ボタン全体の不透明度
+		const float bob = std::sinf(m_timer * kPromptBobSpeed) * kPromptBobAmp;
 
-		auto fs = KdFontManager::Instance().CreateFontTexture(kFontNo, kPromptText, false);
-		if (fs)
+		auto& cur = CursorManager::Instance();
+		const float startCY = -sh * kPromptYRatio + kBtnRiseY + bob;
+		const float setCY   = startCY - kBtnGap;
+		const bool hovStart = cur.IsActive() && cur.HitRect(0.0f, startCY, kBtnHalfW, kBtnHalfH);
+		const bool hovSet   = cur.IsActive() && cur.HitRect(0.0f, setCY,   kBtnHalfW, kBtnHalfH);
+
+		auto drawBtn = [&](const char* label, float cy, bool hovered)
 		{
-			float textW = 0.0f, textH = 0.0f;
+			// 吹き出し風：角丸ボックス（アウトライン無し）＋黒文字。
+			// ホバー中は白いカーソルが同化しないよう、白→金色に変える＋少し拡大。
+			const float ex = hovered ? 4.0f : 0.0f;
+			const float bodyA = (hovered ? 1.0f : (0.85f + 0.1f * blink)) * a;
+			const Math::Color body = hovered
+				? Math::Color(1.0f, 0.82f, 0.32f, bodyA)   // ホバー＝金色（カーソルが見える）
+				: Math::Color(1.0f, 1.0f, 1.0f, bodyA);    // 通常＝白
+			sprite.DrawRoundedBox(0, static_cast<int>(cy), static_cast<int>(kBtnHalfW + ex), static_cast<int>(kBtnHalfH), kBtnRadius, &body, 8);
+
+			auto fs = KdFontManager::Instance().CreateFontTexture(kFontNo, label, false);
+			if (!fs) { return; }
+			float tw = 0.0f, th = 0.0f;
 			for (const auto& d : fs->GetTexList())
 			{
 				if (!d || !d->FontTex) { continue; }
-				textW += static_cast<float>(d->FontTex->GetInfo().Width);
-				textH  = std::max(textH, static_cast<float>(d->FontTex->GetInfo().Height));
+				tw += static_cast<float>(d->FontTex->GetInfo().Width);
+				th  = std::max(th, static_cast<float>(d->FontTex->GetInfo().Height));
 			}
-			// 上下にふわっと浮遊
-			const float bob = std::sinf(m_timer * kPromptBobSpeed) * kPromptBobAmp;
-			const Math::Vector2 pos(-textW * 0.5f, -sh * kPromptYRatio - textH * 0.5f + bob);
+			const Math::Vector2 pos(-tw * 0.5f, cy - th * 0.5f);
+			const Math::Color tc(0.10f, 0.10f, 0.14f, a);   // 黒文字（アウトライン無し）
+			sprite.DrawFont(fs, pos, &tc, 0);
+		};
 
-			// 黒フチ(8方向)でくっきり → 本体
-			const Math::Color outline(0.0f, 0.0f, 0.0f, col.w * 0.9f);
-			const int o = kPromptOutline;
-			for (int dy = -1; dy <= 1; ++dy)
-			{
-				for (int dx = -1; dx <= 1; ++dx)
-				{
-					if (dx == 0 && dy == 0) { continue; }
-					sprite.DrawFont(fs, Math::Vector2(pos.x + dx * o, pos.y + dy * o), &outline, 0);
-				}
-			}
-			sprite.DrawFont(fs, pos, &col, 0);
-		}
+		drawBtn(kStartText,    startCY, hovStart);
+		drawBtn(kSettingsText, setCY,   hovSet);
 	}
+
+	// 設定ウィンドウ（開いていれば最前面）
+	m_settingsMenu.Draw();
 }

@@ -1,5 +1,8 @@
 ﻿#include "StageSelectScene.h"
 #include "../SceneManager.h"
+#include "../../Manager/SoundManager.h"
+#include "../../Manager/CursorManager.h"
+#include "../../Const/SoundConst.h"
 #include "../../GameObject/BackGround/BackGround.h"
 #include "../../GameObject/BackGround/StarField.h"
 #include "../../GameObject/Light/PointLightObject.h"
@@ -32,19 +35,24 @@ namespace
 //----------------------------------------------------------
 void StageSelectScene::Init()
 {
+	// BGM（ステージセレクト。ファイル未配置なら無音）
+	SoundManager::Instance().PlayBGM(SoundConst::BgmStageSelect, SoundConst::BgmVolume);
+
 	// ── カメラ（固定の見下ろし気味アイソメ。Event で微ゆらぎ）──
 	auto cam = std::make_shared<KdCamera>();
 	cam->SetProjectionMatrix(CamFov);
 	m_camera = cam;
 
-	// ── ノード配置（2行×3列のグリッド＋道で接続）──
-	//   row0(画面下/手前 z=-6): 0,1,2 ／ row1(画面上/奥 z=+6): 3,4,5
-	const Math::Vector3 layout[6] = {
+	// ── ノード配置（全5ステージ。stageId 順に繋がるスネーク経路）──
+	//   手前(z=-6) に 3個(0,1,2)を等間隔、奥(z=+6) に 2個(3,4)を左右対称に置く。
+	//   奥の2個は手前の隙間の上(x=±6)に来て、台形状にきれいに収まる。
+	//   経路は 0→1→2(手前右) →3(奥右) →4(奥左) と折り返す。
+	const Math::Vector3 layout[5] = {
 		{ -12.0f, 0.0f, -6.0f }, { 0.0f, 0.0f, -6.0f }, { 12.0f, 0.0f, -6.0f },
-		{ -12.0f, 0.0f,  6.0f }, { 0.0f, 0.0f,  6.0f }, { 12.0f, 0.0f,  6.0f },
+		{   6.0f, 0.0f,  6.0f }, { -6.0f, 0.0f,  6.0f },
 	};
 	m_nodes.clear();
-	for (int i = 0; i < 6; ++i)
+	for (int i = 0; i < 5; ++i)
 	{
 		Node n;
 		n.pos     = layout[i];
@@ -52,10 +60,11 @@ void StageSelectScene::Init()
 		n.color   = kNodeColors[i % (sizeof(kNodeColors) / sizeof(kNodeColors[0]))];
 		m_nodes.push_back(n);
 	}
-	// 道（描画用：隣接の横＋縦）
+	// 道（描画＆移動の隣接。図の通り：手前3個は横で繋ぎ、奥2個へは斜めで繋ぐ）
+	//   0(手前左)―1(手前中)―2(手前右)、4(奥左)―3(奥右)、
+	//   斜め：1―4 / 1―3 / 2―3。これで奥への移動は斜め入力(W+A / W+D)になる。
 	m_links = {
-		{0,1},{1,2}, {3,4},{4,5},   // 横（各行）
-		{0,3},{1,4},{2,5},          // 縦（行間）
+		{0,1},{1,2},{3,4},{1,4},{1,3},{2,3},
 	};
 	// 直前にプレイ/選択していたステージにカーソルを合わせる（戻ってきたとき1に戻らないように）
 	m_current = 0;
@@ -134,6 +143,8 @@ void StageSelectScene::Init()
 	m_coinTex->Load(ResultConst::CoinIconPath);
 	m_rockTex = std::make_shared<KdTexture>();
 	m_rockTex->Load(ResultConst::RockIconPath);
+	m_lifeIcoTex = std::make_shared<KdTexture>();
+	if (!m_lifeIcoTex->Load("Asset/Texture/LifeIco.png")) { m_lifeIcoTex = nullptr; }
 
 	// ステージのサムネ画像を stageId 別に読み込む（無いステージは nullptr のまま）
 	m_stageThumbs.resize(StageSelectConst::StageNameCount);
@@ -190,6 +201,9 @@ void StageSelectScene::StartMove(int target)
 	m_moveFrom = m_current;
 	m_moveTo   = target;
 	m_moveT    = 0.0f;
+
+	// ノード間ホップのSE
+	SoundManager::Instance().PlaySE(SeId::MenuMove, SoundConst::SeVolume);
 
 	// 進む向きへマーカーを向ける
 	Math::Vector3 to = m_nodes[target].pos - m_nodes[m_current].pos;
@@ -322,10 +336,13 @@ void StageSelectScene::Event()
 	{
 		const bool tab = (GetAsyncKeyState(VK_TAB) & 0x8000) != 0;
 		const bool canToggle = !m_resultActive && !m_tallyActive && !m_selecting && !m_entering;
-		if (tab && !m_menuTabPrev && (m_menuOpen || canToggle))
+		// 設定ウィンドウが開いている間は TAB を設定側へ（メニューは閉じない）
+		if (tab && !m_menuTabPrev && !m_settingsMenu.IsOpen() && (m_menuOpen || canToggle))
 		{
 			m_menuOpen = !m_menuOpen;
 			m_menuIndex = 0;
+			SoundManager::Instance().PlaySE(m_menuOpen ? SeId::PauseOpen : SeId::PauseClose,
+				SoundConst::SeVolume);
 		}
 		m_menuTabPrev = tab;
 	}
@@ -389,8 +406,9 @@ void StageSelectScene::Event()
 		}
 	}
 
-	// ── 入力（WASDで上下左右に選択・Enter/Spaceで決定）──
-	// グリッド隣接で確実に移動：W=上の行 / S=下の行 / A=左 / D=右
+	// ── 入力（WASDでノード選択・Enter/Spaceで決定）──
+	// 道で繋がった隣ノードへ、入力方向に最も近い1個へホップ。
+	// 手前⇔奥は斜め配置なので W+A / W+D など斜め入力で行き先を選ぶ。
 	{
 		const bool kW = (GetAsyncKeyState('W') & 0x8000) != 0;
 		const bool kA = (GetAsyncKeyState('A') & 0x8000) != 0;
@@ -406,18 +424,104 @@ void StageSelectScene::Event()
 		// リザルト/タリー/選択詳細中はマップ移動を止める
 		if (!m_resultActive && !m_tallyActive && !m_selecting && !m_entering && !m_moving)
 		{
-			const int row = m_current / kCols;
-			const int col = m_current % kCols;
-			int target = -1;
-			if      (eW) { if (row < kRows - 1) { target = m_current + kCols; } }  // 上の行へ（画面奥）
-			else if (eS) { if (row > 0)         { target = m_current - kCols; } }  // 下の行へ（画面手前）
-			else if (eD) { if (col < kCols - 1) { target = m_current + 1; } }      // 右
-			else if (eA) { if (col > 0)         { target = m_current - 1; } }      // 左
-			// 未解放（前ステージ未クリア）のノードへは移動しない。代わりに赤点滅で拒否。
-			if (target >= 0)
+			// 入力方向ベクトル（画面：W=奥(+Z) / S=手前(-Z) / A=左(-X) / D=右(+X)。
+			// 同時押しで斜めも作れる。例：W+D で右奥へ）。
+			Math::Vector3 inDir = Math::Vector3::Zero;
+			if (kW) { inDir.z += 1.0f; }
+			if (kS) { inDir.z -= 1.0f; }
+			if (kD) { inDir.x += 1.0f; }
+			if (kA) { inDir.x -= 1.0f; }
+
+			const bool anyEdge = (eW || eA || eS || eD);
+			if (anyEdge && inDir.LengthSquared() > 0.0f)
 			{
-				if (IsUnlocked(m_nodes[target].stageId)) { StartMove(target); }
-				else { m_denyNode = target; m_denyTimer = StageSelectConst::DenyFlashTime; }
+				inDir.Normalize();
+
+				// リンクで繋がった隣ノードのうち、入力方向に最も近いものを選ぶ。
+				// 最良と次点が近すぎる（方向が曖昧）なら動かさない＝斜め入力で確定させる。
+				int   best = -1, second = -1;
+				float bestScore = -2.0f, secondScore = -2.0f;
+				for (const auto& link : m_links)
+				{
+					int j = -1;
+					if      (link.first  == m_current) { j = link.second; }
+					else if (link.second == m_current) { j = link.first; }
+					if (j < 0) { continue; }
+
+					Math::Vector3 v = m_nodes[j].pos - m_nodes[m_current].pos;
+					v.y = 0.0f;
+					if (v.LengthSquared() < 1e-4f) { continue; }
+					v.Normalize();
+
+					const float score = inDir.Dot(v);
+					if (score > bestScore) { second = best; secondScore = bestScore; best = j; bestScore = score; }
+					else if (score > secondScore) { second = j; secondScore = score; }
+				}
+
+				const bool clear = (best >= 0)
+					&& (bestScore >= StageSelectConst::DirDotThreshold)
+					&& (second < 0 || (bestScore - secondScore) >= StageSelectConst::DirAmbiguityMargin);
+
+				if (clear)
+				{
+					// 未解放（前ステージ未クリア）のノードへは移動しない。赤点滅で拒否。
+					if (IsUnlocked(m_nodes[best].stageId)) { StartMove(best); }
+					else
+					{
+						m_denyNode = best; m_denyTimer = StageSelectConst::DenyFlashTime;
+						SoundManager::Instance().PlaySE(SeId::StageDeny, SoundConst::SeVolume);
+					}
+				}
+			}
+		}
+
+		// ── マウス：boxノードをクリックで選択 ──
+		//   別の解放済みノード→そこへ移動／いまのノード→詳細を開く／未解放→拒否
+		if (!m_resultActive && !m_tallyActive && !m_selecting && !m_entering && !m_moving)
+		{
+			auto& cur = CursorManager::Instance();
+			if (cur.IsActive() && cur.Clicked())
+			{
+				const auto& bbm = KdDirect3D::Instance().GetBackBuffer();
+				const float sw = static_cast<float>(bbm->GetInfo().Width);
+				const float sh = static_cast<float>(bbm->GetInfo().Height);
+				const Math::Matrix vp = KdShaderManager::Instance().GetCameraCB().mView
+					* KdShaderManager::Instance().GetCameraCB().mProj;
+				constexpr float kHitR = 80.0f;   // クリック許容半径(px)
+				int hit = -1; float bestD = kHitR;
+				for (int i = 0; i < static_cast<int>(m_nodes.size()); ++i)
+				{
+					const Math::Vector4 clip = Math::Vector4::Transform(
+						Math::Vector4(m_nodes[i].pos.x, m_nodes[i].pos.y, m_nodes[i].pos.z, 1.0f), vp);
+					if (clip.w <= 0.001f) { continue; }
+					const float sx = (clip.x / clip.w) * sw * 0.5f;
+					const float sy = (clip.y / clip.w) * sh * 0.5f;
+					const float dx = cur.PosX() - sx, dy = cur.PosY() - sy;
+					const float d = std::sqrt(dx * dx + dy * dy);
+					if (d < bestD) { bestD = d; hit = i; }
+				}
+				if (hit >= 0)
+				{
+					if (IsUnlocked(m_nodes[hit].stageId))
+					{
+						if (hit == m_current)
+						{
+							// いまのノードをクリック → 詳細（GO/BACK）を開く
+							m_selecting = true; m_selChoice = 0;
+							m_advPrev = true; m_resultAdvPrev = true;
+							SoundManager::Instance().PlaySE(SeId::MenuDecide, SoundConst::SeVolume);
+						}
+						else
+						{
+							StartMove(hit);   // 別ノードへ移動
+						}
+					}
+					else
+					{
+						m_denyNode = hit; m_denyTimer = StageSelectConst::DenyFlashTime;
+						SoundManager::Instance().PlaySE(SeId::StageDeny, SoundConst::SeVolume);
+					}
+				}
 			}
 		}
 
@@ -426,9 +530,12 @@ void StageSelectScene::Event()
 		              || ((GetAsyncKeyState(VK_SPACE)  & 0x8000) != 0);
 		if (m_resultActive)
 		{
-			// キーで次のカードを出す。3枚出たら次のキーで閉じる（カメラは俯瞰へ）
-			if (adv && !m_resultAdvPrev && !SceneManager::Instance().IsInputLocked())
+			// キー（Enter/Space）またはマウス左クリックで次のカードへ（コアリア会話と同じ感覚）
+			const bool advEdge = (adv && !m_resultAdvPrev);
+			const bool clickEdge = CursorManager::Instance().IsActive() && CursorManager::Instance().Clicked();
+			if ((advEdge || clickEdge) && !SceneManager::Instance().IsInputLocked())
 			{
+				SoundManager::Instance().PlaySE(SeId::ResultAdvance, SoundConst::SeVolume);
 				if (m_resStep < ResultConst::Pages) { ++m_resStep; m_resCardAnim = 0.0f; }
 				else { m_resultActive = false; StartTally(); }   // 見終わり→入手分を UI へ飛ばす
 			}
@@ -436,30 +543,62 @@ void StageSelectScene::Event()
 		else if (m_selecting)
 		{
 			// 詳細表示中：A/D で GO/BACK を選択、Enterで決定。TABでも即戻れる
-			if (eA) { m_selChoice = 1; }        // 左 = BACK
-			else if (eD) { m_selChoice = 0; }   // 右 = GO
+			if (eA) { m_selChoice = 1; SoundManager::Instance().PlaySE(SeId::MenuMove, SoundConst::SeVolume); }        // 左 = BACK
+			else if (eD) { m_selChoice = 0; SoundManager::Instance().PlaySE(SeId::MenuMove, SoundConst::SeVolume); }   // 右 = GO
 			const bool back = (GetAsyncKeyState(VK_TAB) & 0x8000) != 0;
-			// 入場演出中は決定を受け付けない（GO連打でぴょんぴょん再生されるのを防ぐ）
-			if (adv && !m_advPrev && !m_entering && !SceneManager::Instance().IsInputLocked())
+
+			// マウス：GO/BACK ボタンのホバー＆クリック（描画と同じレイアウトで判定）
+			bool mouseGo = false, mouseBack = false;
 			{
-				if (m_selChoice == 0)
+				auto& cur = CursorManager::Instance();
+				if (cur.IsActive())
 				{
-					// 未解放ステージへは入れない（前ステージ未クリア）。GOは無視。
-					if (IsUnlocked(m_nodes[m_current].stageId))
+					const auto& bbm = KdDirect3D::Instance().GetBackBuffer();
+					const float sw = static_cast<float>(bbm->GetInfo().Width);
+					const float sh = static_cast<float>(bbm->GetInfo().Height);
+					const float boxHalfH = StageSelectConst::SelHintBoxH * 0.5f;
+					const float btnCY    = -sh * 0.5f + StageSelectConst::SelBarMargin + boxHalfH;
+					const float goHalfW   = m_btnGo.HalfWidth(StageSelectConst::SelHintBoxPadX);
+					const float backHalfW = m_btnBack.HalfWidth(StageSelectConst::SelHintBoxPadX);
+					const float backCX = -sw * 0.5f + StageSelectConst::SelBarMargin + backHalfW;
+					const float goCX   =  sw * 0.5f - StageSelectConst::SelBarMargin - goHalfW;
+					if (cur.HitRect(goCX, btnCY, goHalfW, boxHalfH))
 					{
-						m_entering  = true;
-						m_enterAnim = 0.0f;   // ぴょん入場アニメ開始
-						StageManager::Instance().SetStageIndex(m_nodes[m_current].stageId + 1);
+						if (m_selChoice != 0) { m_selChoice = 0; SoundManager::Instance().PlaySE(SeId::MenuMove, SoundConst::SeVolume); }
+						if (cur.Clicked()) { mouseGo = true; }
 					}
+					else if (cur.HitRect(backCX, btnCY, backHalfW, boxHalfH))
+					{
+						if (m_selChoice != 1) { m_selChoice = 1; SoundManager::Instance().PlaySE(SeId::MenuMove, SoundConst::SeVolume); }
+						if (cur.Clicked()) { mouseBack = true; }
+					}
+				}
+			}
+
+			// 入場演出中は決定を受け付けない（GO連打でぴょんぴょん再生されるのを防ぐ）
+			const bool keyDecide = adv && !m_advPrev && !m_entering && !SceneManager::Instance().IsInputLocked();
+			const bool goNow   = (keyDecide && m_selChoice == 0) || (mouseGo   && !m_entering);
+			const bool backNow = (keyDecide && m_selChoice == 1) || (mouseBack && !m_entering) || (back && !m_selBackPrev);
+
+			if (goNow)
+			{
+				// 未解放ステージへは入れない（前ステージ未クリア）。GOは無視。
+				if (IsUnlocked(m_nodes[m_current].stageId))
+				{
+					m_entering  = true;
+					m_enterAnim = 0.0f;   // ぴょん入場アニメ開始
+					StageManager::Instance().SetStageIndex(m_nodes[m_current].stageId + 1);
+					SoundManager::Instance().PlaySE(SeId::StageGo, SoundConst::SeVolume);
 				}
 				else
 				{
-					m_selecting = false;   // BACK → 一覧へ戻る
+					SoundManager::Instance().PlaySE(SeId::StageDeny, SoundConst::SeVolume);
 				}
 			}
-			else if (back && !m_selBackPrev)
+			else if (backNow)
 			{
-				m_selecting = false;   // TAB でも一覧へ戻る
+				m_selecting = false;   // BACK → 一覧へ戻る
+				SoundManager::Instance().PlaySE(SeId::MenuCancel, SoundConst::SeVolume);
 			}
 			m_selBackPrev = back;
 		}
@@ -469,6 +608,7 @@ void StageSelectScene::Event()
 			// 決定 → いきなり入場せず、まずカメラを寄せて詳細表示（ワンクッション）
 			m_selecting = true;
 			m_selChoice = 0;   // 既定は GO
+				SoundManager::Instance().PlaySE(SeId::MenuDecide, SoundConst::SeVolume);
 		}
 		m_advPrev      = adv;   // ロック中もエッジは更新（押しっぱなしは解除後まで無効）
 		m_resultAdvPrev = adv;
@@ -561,6 +701,12 @@ void StageSelectScene::Event()
 			const float ez = z * z * (3.0f - 2.0f * z);
 			eye    = Math::Vector3::Lerp(eye,    closeEye, ez);
 			target = Math::Vector3::Lerp(target, closeTgt, ez);
+		}
+
+		// マウスパララックス：視点を左右/上下へずらして奥行きを出す（寄り/リザルト中も有効）
+		{
+			eye.x += CursorManager::Instance().NormX() * StageSelectConst::ParallaxX;
+			eye.y += CursorManager::Instance().NormY() * StageSelectConst::ParallaxY;
 		}
 
 		Math::Vector3 f = target - eye; f.Normalize();
@@ -744,6 +890,10 @@ void StageSelectScene::DrawSpriteExtra()
 	const int sw = static_cast<int>(bb->GetInfo().Width);
 	const int sh = static_cast<int>(bb->GetInfo().Height);
 
+	// ── TABメニューを開いている間は、背景ぼかしを「先に」描く。
+	//    こうすると以降のUI（見出し/合計HUD等）はぼかしの上に残り、メニュー中もUIが見える。
+	if (m_menuOpen) { DrawMenuBackground(); }
+
 	auto drawCentered = [&](const char* text, float yRatioFromCenter, const Math::Color& col)
 	{
 		auto measure = KdFontManager::Instance().CreateFontTexture(FontNo, text, false);
@@ -761,9 +911,10 @@ void StageSelectScene::DrawSpriteExtra()
 		TextFx::DrawShadowed(sprite, pos, col, text);
 	};
 
-	// 通常UI（見出し/ステージ名/ヒント）はリザルト中はフェードアウト
+	// 通常UI（見出し/ステージ名の吹き出し/ヒント）はリザルト中はフェードアウト。
+	// TABメニュー中は出さない（ぼかしの上に鮮明な吹き出しが残らないように）。
 	const float normalUiAlpha = 1.0f - std::max(m_resultZoom, m_selZoom);
-	if (normalUiAlpha > 0.01f)
+	if (normalUiAlpha > 0.01f && !m_menuOpen)
 	{
 		// 見出し（上）
 		{
@@ -825,11 +976,11 @@ void StageSelectScene::DrawSpriteExtra()
 		}
 	}
 
-	// 合計コイン/rock HUD（常時）＋タリーの飛行アイコン
-	DrawTotalsHud();
+	// 合計コイン/rock HUD（タリーの飛行アイコン含む）。TABメニュー中は出さない（ぼかしの前に残らないように）
+	if (!m_menuOpen) { DrawTotalsHud(); }
 
-	// リザルトパネル（表示中のみ。タリー中は消えてアイコンが飛ぶ）
-	if (m_resultActive && m_resultZoom > 0.0f) { DrawResultPanel(); }
+	// リザルトパネル（表示中のみ。タリー中は消えてアイコンが飛ぶ）。メニュー中は出さない
+	if (!m_menuOpen && m_resultActive && m_resultZoom > 0.0f) { DrawResultPanel(); }
 
 	// ステージ選択の詳細パネル（カメラが寄ったら表示）
 	if (!m_resultActive && m_selZoom > 0.0f) { DrawSelectPanel(); }
@@ -847,7 +998,7 @@ void StageSelectScene::DrawSpriteExtra()
 		sprite.DrawBox(0, 0, sw, sh, &flash, true);
 	}
 
-	// ── TABメニュー（背景ぼかし＋パネル。最前面）──
+	// ── TABメニューのパネル（最前面）。背景ぼかしは上で先に描いてあるのでUIが残る ──
 	if (m_menuOpen) { DrawMenu(); }
 }
 
@@ -857,7 +1008,21 @@ void StageSelectScene::DrawSpriteExtra()
 void StageSelectScene::UpdateMenu()
 {
 	m_menuBlink += KdFPSController::GetDt();
-	constexpr int kCount = 2;   // 0=つづける / 1=タイトルへ
+	constexpr int kCount = 3;   // 0=つづける / 1=せってい / 2=タイトルへ
+
+	// 設定ウィンドウが開いている間はそちらに入力を渡す（メニュー操作は止める＝貫通防止）
+	if (m_settingsMenu.IsOpen())
+	{
+		m_settingsMenu.Update();
+		const bool navHeld =
+			((GetAsyncKeyState('W') & 0x8000) != 0) || ((GetAsyncKeyState(VK_UP)   & 0x8000) != 0) ||
+			((GetAsyncKeyState('S') & 0x8000) != 0) || ((GetAsyncKeyState(VK_DOWN) & 0x8000) != 0);
+		const bool decideHeld =
+			((GetAsyncKeyState(VK_RETURN) & 0x8000) != 0) || ((GetAsyncKeyState(VK_SPACE) & 0x8000) != 0);
+		m_menuNavPrev = navHeld;
+		m_menuConfPrev = decideHeld;
+		return;
+	}
 
 	const bool up   = ((GetAsyncKeyState('W') & 0x8000) != 0) || ((GetAsyncKeyState(VK_UP)   & 0x8000) != 0);
 	const bool down = ((GetAsyncKeyState('S') & 0x8000) != 0) || ((GetAsyncKeyState(VK_DOWN) & 0x8000) != 0);
@@ -866,12 +1031,37 @@ void StageSelectScene::UpdateMenu()
 	{
 		if (up) { m_menuIndex = (m_menuIndex + kCount - 1) % kCount; }
 		else    { m_menuIndex = (m_menuIndex + 1) % kCount; }
+		SoundManager::Instance().PlaySE(SeId::MenuMove, SoundConst::SeVolume);
 	}
 	m_menuNavPrev = nav;
 
-	const bool conf = ((GetAsyncKeyState(VK_RETURN) & 0x8000) != 0) || ((GetAsyncKeyState(VK_SPACE) & 0x8000) != 0);
-	if (conf && !m_menuConfPrev)
+	// マウス：ホバーで選択／クリックで決定
+	bool mouseConfirm = false;
 	{
+		using namespace PauseMenuConst;
+		auto& cur = CursorManager::Instance();
+		if (cur.IsActive())
+		{
+			const float panelH = BannerH + ContentPadTop + 3 * ItemRowH + ContentPadBottom;
+			const float hh = panelH * 0.5f;
+			const float bannerCY = hh - BannerH * 0.5f;
+			const float firstItemY = bannerCY - BannerH * 0.5f - ContentPadTop - ItemRowH * 0.5f;
+			const float barHalfW = (PanelFullW - SidePad * 2.0f) * 0.5f;
+			for (int i = 0; i < kCount; ++i)
+			{
+				const float y = firstItemY - i * ItemRowH;
+				if (!cur.HitRect(0.0f, y, barHalfW, ItemRowH * 0.5f)) { continue; }
+				if (m_menuIndex != i) { m_menuIndex = i; SoundManager::Instance().PlaySE(SeId::MenuMove, SoundConst::SeVolume); }
+				if (cur.Clicked()) { mouseConfirm = true; }
+				break;
+			}
+		}
+	}
+
+	const bool conf = ((GetAsyncKeyState(VK_RETURN) & 0x8000) != 0) || ((GetAsyncKeyState(VK_SPACE) & 0x8000) != 0);
+	if ((conf && !m_menuConfPrev) || mouseConfirm)
+	{
+		SoundManager::Instance().PlaySE(SeId::MenuDecide, SoundConst::SeVolume);
 		if (m_menuIndex == 0)
 		{
 			m_menuOpen = false;   // つづける
@@ -879,6 +1069,10 @@ void StageSelectScene::UpdateMenu()
 			// 押しっぱなしを「既に押下済み」とみなしてエッジを消費する。
 			m_advPrev       = true;
 			m_resultAdvPrev = true;
+		}
+		else if (m_menuIndex == 1)
+		{
+			m_settingsMenu.Open();   // せってい
 		}
 		else { SceneManager::Instance().SetNextScene(SceneManager::SceneType::Title); }
 	}
@@ -888,7 +1082,8 @@ void StageSelectScene::UpdateMenu()
 //----------------------------------------------------------
 // TABメニュー：描画（背景をぼかして角丸パネル＋項目）
 //----------------------------------------------------------
-void StageSelectScene::DrawMenu()
+// TABメニューの背景ぼかし＋暗幕（パネルより先に描く＝UIをこの上に残せる）
+void StageSelectScene::DrawMenuBackground()
 {
 	using namespace PauseMenuConst;
 	auto& sprite = KdShaderManager::Instance().m_spriteShader;
@@ -917,6 +1112,16 @@ void StageSelectScene::DrawMenu()
 		const Math::Color dim(0.0f, 0.0f, 0.0f, DimAlpha);
 		sprite.DrawBox(0, 0, sw, sh, &dim, true);
 	}
+}
+
+void StageSelectScene::DrawMenu()
+{
+	using namespace PauseMenuConst;
+	auto& sprite = KdShaderManager::Instance().m_spriteShader;
+	const auto& bb = KdDirect3D::Instance().GetBackBuffer();
+	const int sw = static_cast<int>(bb->GetInfo().Width);
+	const int sh = static_cast<int>(bb->GetInfo().Height);
+	(void)sw; (void)sh;
 
 	// 中央寄せ＋影テキスト（指定スロット）
 	auto drawCentered = [&](int fontNo, const char* text, float cx, float y, const Math::Color& col)
@@ -939,7 +1144,7 @@ void StageSelectScene::DrawMenu()
 
 	// パネル（影→金縁→紺本体、角丸）
 	const float hw = PanelFullW * 0.5f;
-	const float panelH = BannerH + ContentPadTop + 2 * ItemRowH + ContentPadBottom;
+	const float panelH = BannerH + ContentPadTop + 3 * ItemRowH + ContentPadBottom;
 	const float hh = panelH * 0.5f;
 	const float top = hh;
 	{
@@ -964,9 +1169,9 @@ void StageSelectScene::DrawMenu()
 	// 項目
 	const float firstItemY = bannerCY - BannerH * 0.5f - ContentPadTop - ItemRowH * 0.5f;
 	const float barHalfW   = (PanelFullW - SidePad * 2.0f) * 0.5f;
-	const char* items[2] = { "つづける", "タイトルへ" };
+	const char* items[3] = { "つづける", "せってい", "タイトルへ" };
 	const float blink = 0.5f + 0.5f * std::sinf(m_menuBlink * BlinkSpeed);
-	for (int i = 0; i < 2; ++i)
+	for (int i = 0; i < 3; ++i)
 	{
 		const bool  sel = (i == m_menuIndex);
 		const float y   = firstItemY - i * ItemRowH;
@@ -978,6 +1183,9 @@ void StageSelectScene::DrawMenu()
 		const Math::Color col = sel ? Math::Color(1.0f, 0.97f, 0.7f, 1.0f) : Math::Color(0.75f, 0.78f, 0.85f, 0.85f);
 		drawCentered(ResultConst::FontMidNo, items[i], 0.0f, y, col);
 	}
+
+	// 設定ウィンドウ（開いていればメニューの上に重ねる）
+	m_settingsMenu.Draw();
 }
 
 //----------------------------------------------------------
@@ -1051,6 +1259,19 @@ void StageSelectScene::DrawResultPanel()
 		std::snprintf(buf, sizeof(buf), "ステージ%d　%s", m_resStageId + 1, ClearWord);
 		const Math::Color title(TitleR, TitleG, TitleB, a);
 		drawCenter(FontBigNo, buf, px, bannerCY, title);
+	}
+
+	// ── コアリアの顔アイコン（チャット窓風に左上の角へ）──
+	if (m_lifeIcoTex)
+	{
+		const float isz = BannerH * 1.4f;
+		const float icx = left + isz * 0.15f;
+		const float icy = top  + isz * 0.12f;
+		const Math::Color disc(1.0f, 1.0f, 1.0f, a);
+		sprite.DrawCircle(static_cast<int>(icx), static_cast<int>(icy), static_cast<int>(isz * 0.56f), &disc, true);
+		const Math::Color ic(1.0f, 1.0f, 1.0f, a);
+		sprite.DrawTex(m_lifeIcoTex.get(), static_cast<int>(icx), static_cast<int>(icy),
+			static_cast<int>(isz), static_cast<int>(isz), nullptr, &ic);
 	}
 
 	// タイム文字列
@@ -1258,6 +1479,9 @@ void StageSelectScene::StartTally()
 	spawn(true,  m_resRocks);   // rock後
 
 	m_tallyActive = !m_flyers.empty();
+
+	// 取得アイテムをUIへ送り出す音
+	if (m_tallyActive) { SoundManager::Instance().PlaySE(SeId::UiSend, SoundConst::SeVolume); }
 }
 
 //----------------------------------------------------------
@@ -1278,6 +1502,8 @@ void StageSelectScene::UpdateTally(float dt)
 		{
 			f.t = 1.0f;
 			f.done = true;
+			// UIが吸収する音（カウント加算の瞬間）
+			SoundManager::Instance().PlaySE(SeId::UiAbsorb, SoundConst::SeVolume);
 			if (f.isRock)
 			{
 				StageManager::Instance().AddTotalRocks(f.add);

@@ -4,6 +4,7 @@
 #include "../../GameObject/Character/AnimBlender.h"
 #include "../../Util/UiButton.h"
 #include "../../Util/CoinModelIcon.h"
+#include "../../UI/SettingsMenu.h"
 #include "../../../Framework/Shader/KdRenderTargetChange.h"
 
 //==========================================================
@@ -99,6 +100,7 @@ private:
 	std::shared_ptr<KdTexture> m_coinTex;
 	CoinModelIcon              m_coinIcon;   // 3DコインをRTへ描く共通ヘルパー（結果/HUD共用）
 	std::shared_ptr<KdTexture> m_rockTex;
+	std::shared_ptr<KdTexture> m_lifeIcoTex;   // リザルト窓のコアリア顔アイコン（lifeico.png）
 
 	// HUD合計の取得ポップ（加算時に一瞬拡大）
 	float m_coinHudPop = 0.0f;
@@ -135,11 +137,13 @@ private:
 	bool          IsUnlocked(int stageId) const;
 
 	// ── TABメニュー（背景ぼかし。つづける／タイトルへ）──
-	void          UpdateMenu();   // Event から呼ぶ
-	void          DrawMenu();     // DrawSpriteExtra から呼ぶ
+	void          UpdateMenu();         // Event から呼ぶ
+	void          DrawMenuBackground(); // 背景ぼかし＋暗幕（UIより先に描く）
+	void          DrawMenu();           // パネル本体（最前面）。DrawSpriteExtra から呼ぶ
 	bool          m_menuOpen     = false;
 	int           m_menuIndex    = 0;
 	bool          m_menuTabPrev  = false;
+	SettingsMenu  m_settingsMenu;   // TABメニューから開く設定ウィンドウ
 	bool          m_menuNavPrev  = false;
 	bool          m_menuConfPrev = false;
 	float         m_menuBlink    = 0.0f;

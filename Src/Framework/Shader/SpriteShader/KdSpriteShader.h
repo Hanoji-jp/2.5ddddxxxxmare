@@ -87,6 +87,13 @@ public:
 		DrawTex(tex.lock().get(), x, y, tex.lock().get()->GetInfo().Width, tex.lock().get()->GetInfo().Height, srcRect, color, pivot);
 	}
 
+	// 任意の頂点(UV付き)でテクスチャを描画する（ページめくりの頂点変形など）。
+	// ・vertices … {Pos(スクリーン座標), UV} の配列。topology に応じて三角形/線を形成。
+	// ・color    … 全体に掛ける色（頂点ごとの色は持たない）
+	void DrawTexVertices(const KdTexture* tex, const std::vector<Vertex>& vertices,
+		D3D_PRIMITIVE_TOPOLOGY topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
+		const Math::Color* color = &kWhiteColor);
+
 	// 点を描画
 	// ・x				… 点のX座標
 	// ・y				… 点のY座標

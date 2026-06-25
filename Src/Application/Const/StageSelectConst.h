@@ -22,6 +22,9 @@ namespace StageSelectConst
 	constexpr float CamFocusLerp   = 0.045f; // 選択ノードへの追従の滑らかさ（小さいほどゆったり）
 	constexpr float CamFocusAmount = 0.25f;  // 注視を寄せる割合（0=中心固定, 1=完全にノード中心）
 	constexpr float CamFocusMargin = 4.5f;   // デッドゾーン：この距離ぶんは追わない（遊び）
+	// マウスパララックス（視点ずらし量。大きいほど奥行きが強い）
+	constexpr float ParallaxX      = 0.9f;
+	constexpr float ParallaxY      = 0.5f;
 
 	//----------------------------------------------------------
 	// ステージノード（箱）
@@ -55,6 +58,10 @@ namespace StageSelectConst
 	// 方向選択（押した方向に最も合う隣ノードへ）
 	//----------------------------------------------------------
 	constexpr float DirDotThreshold = 0.35f;
+	// 候補が2つ近い角度で並んだ時のあいまい判定マージン。
+	// 最良スコアと次点の差がこれ未満なら「方向が曖昧」として移動しない
+	// （＝奥の2ノードへは縦だけでなく斜め入力で行き先を確定させる）。
+	constexpr float DirAmbiguityMargin = 0.15f;
 
 	//----------------------------------------------------------
 	// 連結ドット（ノード間の道）
@@ -126,10 +133,9 @@ namespace StageSelectConst
 	{
 		"ステージ１　まるとしかくのほし",
 		"ステージ２　かぜとパラソル",
-		"ステージ３（準備中）",
+		"ステージ３　うごくゆかととげ",
 		"ステージ４（準備中）",
 		"ステージ５（準備中）",
-		"ステージ６（準備中）",
 	};
 	constexpr int         StageNameCount    = static_cast<int>(sizeof(StageNames) / sizeof(StageNames[0]));
 	constexpr const char* StageNameFallback = "ステージ ？";
@@ -140,8 +146,7 @@ namespace StageSelectConst
 	{
 		"Reclaim the gravity core!",
 		"(coming soon)",
-		"(coming soon)",
-		"(coming soon)",
+		"Ride moving floors, dodge the spikes!",
 		"(coming soon)",
 		"(coming soon)",
 	};

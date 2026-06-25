@@ -24,8 +24,11 @@ bool KdWindow::Create(int clientWidth, int clientHeight, std::string_view titleN
 	wc.cbClsExtra = 0;										// エキストラクラス情報 
 	wc.cbWndExtra = 0;										// エキストラウィンドウ情報
 	wc.hInstance = hInst;									// インスタンスハンドル
-	wc.hIcon = LoadIcon(nullptr, IDI_APPLICATION);			// ラージアイコン
-	wc.hIconSm = LoadIcon(nullptr, IDI_APPLICATION);		// スモールアイコン 
+	// アプリアイコン：ファイルから読み込む（失敗時は既定アイコン）
+	HICON hAppIcon = (HICON)LoadImageA(nullptr, "Asset/Texture/LifeIco.ico", IMAGE_ICON,
+		0, 0, LR_LOADFROMFILE | LR_DEFAULTSIZE | LR_SHARED);
+	wc.hIcon   = hAppIcon ? hAppIcon : LoadIcon(nullptr, IDI_APPLICATION);	// ラージアイコン
+	wc.hIconSm = hAppIcon ? hAppIcon : LoadIcon(nullptr, IDI_APPLICATION);	// スモールアイコン
 	wc.hCursor = LoadCursor(nullptr, IDC_ARROW);			// マウスカーソル
 	wc.hbrBackground = (HBRUSH)GetStockObject(WHITE_BRUSH);	// 背景色 
 	wc.lpszMenuName = nullptr;								// メインメニュー名

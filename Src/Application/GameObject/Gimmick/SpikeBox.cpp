@@ -8,6 +8,7 @@ void SpikeBox::Init(const SpikeBoxData& data)
 	m_center  = data.center;
 	m_size    = data.size;
 	m_enabled = data.enabled;
+	m_dir     = data.dir;
 
 	// モデル読込
 	m_boxModel = std::make_shared<KdModelWork>();
@@ -17,8 +18,10 @@ void SpikeBox::Init(const SpikeBoxData& data)
 	// 影生成パス(GenerateDepthMapFromLight)で DrawLit を描かせる
 	m_drawType = eDrawTypeLit;
 
-	// ワールド行列：スケール → 平行移動（コライダー・描画で共用）
+	// ワールド行列：スケール → 向き回転(箱ごと) → 平行移動（コライダー・描画で共用）
+	const Math::Matrix rot = Math::Matrix::CreateRotationZ(SpikeBoxConst::DirToAngleZ(m_dir));
 	m_worldMat = Math::Matrix::CreateScale(m_size)
+			   * rot
 			   * Math::Matrix::CreateTranslation(m_center);
 	SetPos(m_center);
 

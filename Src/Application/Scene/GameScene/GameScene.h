@@ -3,6 +3,7 @@
 #include <functional>
 #include"../../../Framework/Shader/KdRenderTargetChange.h"
 #include"../BaseScene/BaseScene.h"
+#include"../../UI/SettingsMenu.h"
 #include"../../GameObject/Character/Player/Player.h"
 #include"../../GameObject/Character/Enemy/Enemy.h"
 #include"../../GameObject/Character/Enemy/EnemyRanged.h"
@@ -317,6 +318,9 @@ private:
 	std::shared_ptr<GravityCore> m_spHeldCore;  // 取得して手に持っているコア（クリア演出中）
 	void StartStageClear(const Math::Vector3& corePos);
 
+	// 設定ウィンドウ（ポーズから開く）
+	SettingsMenu    m_settingsMenu;
+
 	// ポーズメニュー状態
 	bool            m_menuOpen        = false;
 	int             m_menuIndex       = 0;
@@ -343,6 +347,8 @@ private:
 	float           m_deathTimer   = 0.0f;
 	bool            m_deathRevived = false;
 	bool            m_checkpointReached = false; // チェックポイントを踏んだか（未踏なら初期スポーン）
+	bool            m_cpFxInit          = false; // チェックポイント取得演出を一度でも出したか
+	Math::Vector3   m_cpFxPos           = {};    // 直近で演出を出したチェックポイント位置（重複発火防止）
 	float           m_airTime           = 0.0f;  // 連続で接地していない時間（落下死判定）
 	int             m_deathCount        = 0;     // このステージで死んだ回数（Maxに達したらリトライ）
 	Math::Vector3   m_deathCamFocus = { 0.0f, 0.0f, 0.0f }; // 死亡カメラの注視点（死んだ場所）
@@ -466,6 +472,7 @@ private:
 	bool          m_debugZonesVisible = false;
 	bool          m_debugKeyPrev      = false;
 	bool          m_resetKeyPrev      = false;   // Rキー（セーブデータリセット）のエッジ検出
+	bool          m_debugClearPrev    = false;   // F10（デバッグ：ステージクリア）のエッジ検出
 
 	float         m_gravArrowScroll   = 0.0f;  // 重力矢印の流れ（スクロール）時間
 

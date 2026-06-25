@@ -34,12 +34,18 @@ void KdDebugGUI::GuiInit(int w, int h)
 
 #include "imgui/ja_glyph_ranges.h"
 	ImGuiIO& io = ImGui::GetIO();
+	// 見やすさ重視で大きめに読み込む（仮想解像度＋FramebufferScaleで小さく見えるため）
+	constexpr float kFontPx = 19.0f;
 	// ベースフォントを明示的なサイズで追加（MergeModeと競合しないように）
-	io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\msgothic.ttc", 13.0f, nullptr, io.Fonts->GetGlyphRangesDefault());
+	io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\msgothic.ttc", kFontPx, nullptr, io.Fonts->GetGlyphRangesDefault());
 	// 日本語グリフをMergeModeで追加
 	ImFontConfig config;
 	config.MergeMode = true;
-	io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\msgothic.ttc", 13.0f, &config, glyphRangesJapanese);
+	io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\msgothic.ttc", kFontPx, &config, glyphRangesJapanese);
+
+	// ウィジェット（余白・スクロールバー・角丸など）も合わせて拡大して全体を見やすく
+	ImGui::GetStyle().ScaleAllSizes(1.4f);
+
 	m_uqLog = std::make_unique<ImGuiAppLog>();
 }
 
@@ -53,6 +59,22 @@ void KdDebugGUI::GuiProcess()
 	//===========================================================
 	ImGui_ImplDX11_NewFrame();
 	ImGui_ImplWin32_NewFrame();
+
+	// 仮想解像度対応：内部描画(バックバッファ)がウィンドウのクライアントサイズと違う場合、
+	// ImGui のレンダー出力だけをバックバッファ基準へ縮尺する。
+	// FramebufferScale を使うので、座標系(DisplaySize)・マウスはウィンドウのまま＝
+	// マルチビューポート（ウィンドウ外ドラッグ）有効でもクリック位置がずれない。
+	{
+		ImGuiIO& io = ImGui::GetIO();
+		const auto& bb = KdDirect3D::Instance().GetBackBuffer();
+		if (bb && io.DisplaySize.x > 0.0f && io.DisplaySize.y > 0.0f)
+		{
+			const float bw = static_cast<float>(bb->GetInfo().Width);
+			const float bh = static_cast<float>(bb->GetInfo().Height);
+			io.DisplayFramebufferScale = ImVec2(bw / io.DisplaySize.x, bh / io.DisplaySize.y);
+		}
+	}
+
 	ImGui::NewFrame();
 
 	// 画面全体を覆う DockSpace を作成（エディタ画面ON時のみ。OFFは全ImGui非表示）
@@ -155,6 +177,9 @@ void KdDebugGUI::GuiProcess()
 	//=====================================================
 
 //	KdDebugGUI::Instance().AddLog("TestLog\n");
+
+	// 常時ImGui描画（エディタ画面ON/OFF・シーンに関係なく毎フレーム呼ぶ）
+	if (m_persistentGuiCallback) { m_persistentGuiCallback(); }
 
 	//===========================================================
 	// ここより上にImGuiの描画はする事

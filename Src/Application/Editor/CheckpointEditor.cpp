@@ -6,13 +6,13 @@
 
 void CheckpointEditor::DrawGui()
 {
-	if (!ImGui::Begin("Checkpoint Editor"))
+	if (!ImGui::Begin(U8("チェックポイント エディタ")))
 	{
 		ImGui::End();
 		return;
 	}
 
-	if (ImGui::Button("Add Checkpoint"))
+	if (ImGui::Button(U8("チェックポイント追加")))
 	{
 		m_positions.push_back({ 0.0f, 0.0f, 0.0f });
 		m_selectedIndex = static_cast<int>(m_positions.size()) - 1;
@@ -20,7 +20,7 @@ void CheckpointEditor::DrawGui()
 	}
 
 	ImGui::Separator();
-	ImGui::Text("Checkpoint List");
+	ImGui::Text(U8("チェックポイント一覧"));
 
 	for (int i = 0; i < static_cast<int>(m_positions.size()); ++i)
 	{
@@ -40,16 +40,16 @@ void CheckpointEditor::DrawGui()
 	if (m_selectedIndex >= 0 && m_selectedIndex < static_cast<int>(m_positions.size()))
 	{
 		auto& p = m_positions[m_selectedIndex];
-		ImGui::Text("Inspector");
+		ImGui::Text(U8("インスペクタ"));
 
 		float pos[3] = { p.x, p.y, p.z };
-		if (ImGui::DragFloat3("Position", pos, 0.1f))
+		if (ImGui::DragFloat3(U8("位置"), pos, 0.1f))
 		{
 			p = { pos[0], pos[1], pos[2] };
 			m_dirty = true;
 		}
 
-		if (ImGui::Button("Delete"))
+		if (ImGui::Button(U8("削除")))
 		{
 			m_positions.erase(m_positions.begin() + m_selectedIndex);
 			m_selectedIndex = -1;
@@ -58,9 +58,9 @@ void CheckpointEditor::DrawGui()
 	}
 
 	ImGui::Separator();
-	if (ImGui::Button("Save")) { Save(); }
+	if (ImGui::Button(U8("保存"))) { Save(); }
 	ImGui::SameLine();
-	if (ImGui::Button("Load")) { Load(); }
+	if (ImGui::Button(U8("読込"))) { Load(); }
 
 	ImGui::End();
 }

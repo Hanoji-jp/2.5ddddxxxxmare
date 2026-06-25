@@ -40,6 +40,14 @@ namespace DeathConst
 	constexpr float ShakeStr    = 0.45f;  // 死亡時のカメラシェイク強さ
 	constexpr float HitStop     = 0.10f;  // 死亡の瞬間の一瞬停止（秒）
 
+	// ── ディゾルブ（死亡時：本体が溶けて消える）──
+	// しきい値を 0→1 へ上げると、ノイズの暗いところから順にピクセルが消えていく。
+	constexpr float DissolveTime      = 0.9f;   // 溶けきるまでの時間（秒）
+	constexpr float DissolveEdgeRange = 0.06f;  // 溶け際の縁の太さ（0〜1）
+	constexpr float DissolveEdgeR = 1.0f;       // 縁の発光色（燃えるようなオレンジ）
+	constexpr float DissolveEdgeG = 0.45f;
+	constexpr float DissolveEdgeB = 0.12f;
+
 	// 暗転の色（赤みを帯びてから黒へ）
 	constexpr float TintR = 0.55f;
 	constexpr float TintG = 0.0f;

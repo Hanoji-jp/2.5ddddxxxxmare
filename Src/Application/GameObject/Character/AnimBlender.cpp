@@ -55,6 +55,11 @@ void AnimBlender::Update(KdModelWork& _modelWork, float speed)
 	auto& nodes = _modelWork.WorkNodes();
 	if (nodes.empty()) { return; }
 
+	// フレームレート非依存：60fps基準のフレーム換算でアニメを進める
+	// （高FPSでアニメが速くなる／低FPSで遅くなるのを防ぐ）
+	const float frameScale = KdFPSController::GetDt() * 60.0f;
+	speed *= frameScale;
+
 	if (m_isBlending)
 	{
 
@@ -76,7 +81,7 @@ void AnimBlender::Update(KdModelWork& _modelWork, float speed)
 		// ノードをブレンド
 		BlendNodes(nodes, fromNodes, toNodes, t);
 
-		m_blendTime += 1.0f;
+		m_blendTime += frameScale;
 
 		if (m_blendTime >= m_blendFrames)
 		{

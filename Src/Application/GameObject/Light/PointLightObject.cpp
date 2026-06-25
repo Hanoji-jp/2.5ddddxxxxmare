@@ -33,18 +33,18 @@ void PointLightObject::DrawGui()
 	if (ImGui::TreeNode(label.c_str()))
 	{
 		float pos[3] = { m_mWorld.Translation().x, m_mWorld.Translation().y, m_mWorld.Translation().z };
-		if (ImGui::DragFloat3("Position", pos, 0.1f))
+		if (ImGui::DragFloat3(U8("位置"), pos, 0.1f))
 		{
 			m_mWorld.Translation({ pos[0], pos[1], pos[2] });
 		}
 
 		float col[3] = { m_color.x, m_color.y, m_color.z };
-		if (ImGui::ColorEdit3("Color", col))
+		if (ImGui::ColorEdit3(U8("色"), col))
 		{
 			m_color = { col[0], col[1], col[2] };
 		}
 
-		ImGui::DragFloat("Radius", &m_radius, 0.5f, 0.0f, 500.0f);
+		ImGui::DragFloat(U8("半径"), &m_radius, 0.5f, 0.0f, 500.0f);
 
 		ImGui::TreePop();
 	}

@@ -465,6 +465,18 @@ void KdSoundInstance::SetPitch(float pitch)
 	m_instance->SetPitch(pitch);
 }
 
+void KdSoundInstance::SetLowPass(float freq01, float oneOverQ)
+{
+	// ※このDirectXTK版は per-voice フィルタ(SetFilterParameters)を持たないため未対応。
+	//   こもった音にはライブラリ更新（フィルタ対応）か生XAudio2が必要。今は何もしない。
+	(void)freq01; (void)oneOverQ;
+}
+
+void KdSoundInstance::ClearFilter()
+{
+	// 同上：未対応のため何もしない
+}
+
 bool KdSoundInstance::IsPlaying()
 {
 	if (!m_instance) { return false; }

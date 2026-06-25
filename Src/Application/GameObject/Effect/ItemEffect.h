@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "EffectBase.h"
 #include "../../Const/SparkleConst.h"
 
@@ -119,6 +119,15 @@ public:
         {
             KdEffekseerManager::GetInstance().StopEffectsByFileName(m_efkPath);
         }
+    }
+
+    // 破棄時：自分のループだけを停止する（ステージ遷移でアイテムが消えたとき、
+    // 未取得のループEffekseerがその場に残るのを防ぐ）。
+    // ※ StopEffectsByFileName だと同名の他インスタンスも巻き込むので、
+    //   この個体のハンドルだけを止める。
+    ~ItemEffect()
+    {
+        if (const auto sp = m_wpEfk.lock()) { sp->StopEffect(); }
     }
 
 

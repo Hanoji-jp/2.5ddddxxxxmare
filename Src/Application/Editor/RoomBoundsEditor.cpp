@@ -196,18 +196,18 @@ void RoomBoundsEditor::Load()
 //----------------------------------------------------------
 void RoomBoundsEditor::DrawGui()
 {
-    if (!ImGui::Begin("Room Bounds Editor"))
+    if (!ImGui::Begin(U8("ルーム範囲 エディタ")))
     {
         ImGui::End();
         return;
     }
 
     // --- Save / Load ボタン ---
-    if (ImGui::Button("Save CSV"))  { Save(); }
+    if (ImGui::Button(U8("CSV保存")))  { Save(); }
     ImGui::SameLine();
-    if (ImGui::Button("Load CSV"))  { Load(); }
+    if (ImGui::Button(U8("CSV読込")))  { Load(); }
     ImGui::SameLine();
-    if (ImGui::Button("Add Room"))
+    if (ImGui::Button(U8("ルーム追加")))
     {
         RoomBounds newRoom;
         // 直前のルームの maxX を基準にデフォルト値を設定
@@ -226,7 +226,7 @@ void RoomBoundsEditor::DrawGui()
     ImGui::Separator();
 
     // --- ルーム一覧 ---
-    ImGui::Text("Rooms (%d)", static_cast<int>(m_rooms.size()));
+    ImGui::Text(U8("ルーム (%d)"), static_cast<int>(m_rooms.size()));
 
     for (int i = 0; i < static_cast<int>(m_rooms.size()); ++i)
     {
@@ -246,44 +246,44 @@ void RoomBoundsEditor::DrawGui()
     if (m_selectedIdx >= 0 && m_selectedIdx < static_cast<int>(m_rooms.size()))
     {
         RoomBounds& r = m_rooms[m_selectedIdx];
-        ImGui::Text("== Room %d ==", m_selectedIdx);
+        ImGui::Text(U8("== ルーム %d =="), m_selectedIdx);
 
         bool changed = false;
 
         // X 範囲（ドアで見える範囲を制限）
-        ImGui::Text("Camera X Range (door clamp)");
-        changed |= ImGui::DragFloat("minX",     &r.minX,    0.1f);
-        changed |= ImGui::DragFloat("maxX",     &r.maxX,    0.1f);
+        ImGui::Text(U8("カメラX範囲（ドアクランプ）"));
+        changed |= ImGui::DragFloat(U8("最小X"),     &r.minX,    0.1f);
+        changed |= ImGui::DragFloat(U8("最大X"),     &r.maxX,    0.1f);
 
         // Y 範囲
-        ImGui::Text("Camera Y Range");
-        changed |= ImGui::DragFloat("minY",     &r.minY,    0.1f);
-        changed |= ImGui::DragFloat("maxY",     &r.maxY,    0.1f);
+        ImGui::Text(U8("カメラY範囲"));
+        changed |= ImGui::DragFloat(U8("最小Y"),     &r.minY,    0.1f);
+        changed |= ImGui::DragFloat(U8("最大Y"),     &r.maxY,    0.1f);
 
         // Z 基準位置
-        ImGui::Text("Camera Z Position");
-        changed |= ImGui::DragFloat("cameraZ",  &r.cameraZ, 0.1f);
+        ImGui::Text(U8("カメラZ位置"));
+        changed |= ImGui::DragFloat(U8("カメラZ"),  &r.cameraZ, 0.1f);
 
         ImGui::Separator();
 
         // ルーム遷移
-        ImGui::Text("Transition");
-        changed |= ImGui::DragFloat("triggerX", &r.triggerX, 0.1f);
-        changed |= ImGui::DragFloat("blendX",   &r.blendX,   0.1f, 0.0f, 50.0f);
+        ImGui::Text(U8("切替"));
+        changed |= ImGui::DragFloat(U8("トリガーX"), &r.triggerX, 0.1f);
+        changed |= ImGui::DragFloat(U8("ブレンドX"),   &r.blendX,   0.1f, 0.0f, 50.0f);
 
         if (changed) { m_dirty = true; }
 
         // カメラモード
         ImGui::Separator();
-        ImGui::Text("Camera Mode");
+        ImGui::Text(U8("カメラモード"));
         {
-            static constexpr const char* kModeNames[] = {
-                "SideScroll (2.5D)",
-                "Fixed2D (純2D固定)",
-                "TopDown (俯瞰)",
+            static const char* kModeNames[] = {
+                U8("横スクロール (2.5D)"),
+                U8("固定2D（純2D固定）"),
+                U8("俯瞰"),
             };
             int modeIdx = static_cast<int>(r.mode);
-            if (ImGui::Combo("Mode##camMode", &modeIdx, kModeNames, 3))
+            if (ImGui::Combo(U8("モード##camMode"), &modeIdx, kModeNames, 3))
             {
                 r.mode  = static_cast<CameraConst::CameraMode>(modeIdx);
                 changed = true;
@@ -292,21 +292,21 @@ void RoomBoundsEditor::DrawGui()
 
         // フォーカスオフセット
         ImGui::Separator();
-        ImGui::Text("Focus Offset (Gravity Local)");
-        ImGui::TextDisabled("X=Right  Y=Up(along gravity)  Z=Forward");
-        changed |= ImGui::DragFloat3("focusOffset", &r.focusOffset.x, 0.05f, -50.0f, 50.0f);
+        ImGui::Text(U8("フォーカスオフセット（重力ローカル）"));
+        ImGui::TextDisabled(U8("X=右  Y=上(重力方向)  Z=前"));
+        changed |= ImGui::DragFloat3(U8("フォーカスオフセット"), &r.focusOffset.x, 0.05f, -50.0f, 50.0f);
 
         // Basic Offset オーバーライド
         ImGui::Separator();
-        ImGui::Text("Basic Offset Override");
-        ImGui::TextDisabled("ON にするとこのルームだけ独自の XYZ オフセットを使用");
-        changed |= ImGui::Checkbox("useOffsetOverride", &r.useOffsetOverride);
+        ImGui::Text(U8("基本オフセット上書き"));
+        ImGui::TextDisabled(U8("ONにするとこのルームだけ独自のXYZオフセットを使用"));
+        changed |= ImGui::Checkbox(U8("オフセット上書きを使う"), &r.useOffsetOverride);
         if (r.useOffsetOverride)
         {
-            changed |= ImGui::DragFloat("overrideOffsetX", &r.overrideOffsetX, 0.05f, -50.0f, 50.0f);
-            changed |= ImGui::DragFloat("overrideOffsetY", &r.overrideOffsetY, 0.05f, -50.0f, 50.0f);
-            changed |= ImGui::DragFloat("overrideOffsetZ", &r.overrideOffsetZ, 0.1f, -100.0f, -1.0f);
-            if (ImGui::Button("Reset##offsetOverride"))
+            changed |= ImGui::DragFloat(U8("上書きオフセットX"), &r.overrideOffsetX, 0.05f, -50.0f, 50.0f);
+            changed |= ImGui::DragFloat(U8("上書きオフセットY"), &r.overrideOffsetY, 0.05f, -50.0f, 50.0f);
+            changed |= ImGui::DragFloat(U8("上書きオフセットZ"), &r.overrideOffsetZ, 0.1f, -100.0f, -1.0f);
+            if (ImGui::Button(U8("リセット##offsetOverride")))
             {
                 r.overrideOffsetX = 0.0f;
                 r.overrideOffsetY = 3.0f;
@@ -316,16 +316,16 @@ void RoomBoundsEditor::DrawGui()
         }
 
         // focusLerpSpeed: 0.0f のときデフォルト速度を使用
-        ImGui::TextDisabled("focusLerp: 0=use default (%.3f)", CameraConst::FocusOffsetLerp);
-        changed |= ImGui::DragFloat("focusLerpSpeed", &r.focusLerpSpeed, 0.005f, 0.0f, 1.0f);
+        ImGui::TextDisabled(U8("フォーカス補間: 0=既定 (%.3f)"), CameraConst::FocusOffsetLerp);
+        changed |= ImGui::DragFloat(U8("フォーカス補間速度"), &r.focusLerpSpeed, 0.005f, 0.0f, 1.0f);
         if (ImGui::IsItemHovered())
         {
-            ImGui::SetTooltip("0.0 = デフォルト速度を使用\n大きいほどカメラが素早く追従");
+            ImGui::SetTooltip(U8("0.0 = 既定速度を使用\n大きいほどカメラが素早く追従"));
         }
 
         // リセットボタン
         ImGui::SameLine();
-        if (ImGui::Button("Reset##focus"))
+        if (ImGui::Button(U8("リセット##focus")))
         {
             r.focusOffset    = { 0.0f, 0.0f, 0.0f };
             r.focusLerpSpeed = 0.0f;
@@ -334,7 +334,7 @@ void RoomBoundsEditor::DrawGui()
 
         // 削除ボタン
         ImGui::Spacing();
-        if (ImGui::Button("Delete Room"))
+        if (ImGui::Button(U8("ルーム削除")))
         {
             m_rooms.erase(m_rooms.begin() + m_selectedIdx);
             m_selectedIdx = std::min(m_selectedIdx, static_cast<int>(m_rooms.size()) - 1);
@@ -343,7 +343,7 @@ void RoomBoundsEditor::DrawGui()
     }
     else
     {
-        ImGui::TextDisabled("(ルームを選択してください)");
+        ImGui::TextDisabled(U8("(ルームを選択してください)"));
     }
 
     ImGui::End();

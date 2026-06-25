@@ -90,7 +90,7 @@ void PlanetData::UpdateWorld()
 
 void PlanetGravityManager::DrawGui()
 {
-	if (!ImGui::Begin("Planet Gravity"))
+	if (!ImGui::Begin(U8("惑星重力")))
 	{
 		ImGui::End();
 		return;
@@ -100,7 +100,7 @@ void PlanetGravityManager::DrawGui()
 	// （通常プレイ時はGUIを閉じているので負荷はかからない）
 	MarkWorldDirty();
 
-	if (ImGui::Button("Add Planet"))
+	if (ImGui::Button(U8("惑星追加")))
 	{
 		PlanetData newPlanet{};
 		newPlanet.InitModel();
@@ -109,7 +109,7 @@ void PlanetGravityManager::DrawGui()
 	}
 
 	ImGui::Separator();
-	ImGui::Text("Planet List");
+	ImGui::Text(U8("惑星一覧"));
 
 	for (int i = 0; i < static_cast<int>(m_planets.size()); ++i)
 	{
@@ -130,31 +130,31 @@ void PlanetGravityManager::DrawGui()
 	if (m_selectedIndex >= 0 && m_selectedIndex < static_cast<int>(m_planets.size()))
 	{
 		auto& p = m_planets[m_selectedIndex];
-		ImGui::Text("Inspector");
+		ImGui::Text(U8("インスペクタ"));
 
 		float pos[3] = { p.Position.x, p.Position.y, p.Position.z };
-		if (ImGui::DragFloat3("Position", pos, 0.1f))
+		if (ImGui::DragFloat3(U8("位置"), pos, 0.1f))
 		{
 			p.Position = { pos[0], pos[1], pos[2] };
 		}
 
-		ImGui::DragFloat("Surface Radius",  &p.SurfaceRadius, 0.1f, 0.5f,  1000.0f);
-		ImGui::DragFloat("Ground Radius",   &p.GroundRadius,  0.1f, 0.5f,  1000.0f);
-		ImGui::DragFloat("Gravity Radius",  &p.GravityRadius, 0.1f, 1.0f,  2000.0f);
-		ImGui::DragFloat("Gravity Strength", &p.GravityStrength, 0.01f, 0.1f, 10.0f);
+		ImGui::DragFloat(U8("表面半径"),  &p.SurfaceRadius, 0.1f, 0.5f,  1000.0f);
+		ImGui::DragFloat(U8("接地半径"),   &p.GroundRadius,  0.1f, 0.5f,  1000.0f);
+		ImGui::DragFloat(U8("重力半径"),  &p.GravityRadius, 0.1f, 1.0f,  2000.0f);
+		ImGui::DragFloat(U8("重力の強さ"), &p.GravityStrength, 0.01f, 0.1f, 10.0f);
 		ImGui::DragInt  ("Priority",        &p.Priority,      1,    0,     100);
 		ImGui::Checkbox ("Normal Gravity (Down)", &p.bNormalGravity);
 		if (p.bNormalGravity)
 		{
 			ImGui::SameLine();
-			ImGui::TextColored({ 1.0f, 0.6f, 0.1f, 1.0f }, "<- 通常地面ゾーン");
+			ImGui::TextColored({ 1.0f, 0.6f, 0.1f, 1.0f }, U8("<- 通常地面ゾーン"));
 		}
 
 		// Shape 選択
 		{
-			const char* shapeNames[] = { "Sphere", "Box" };
+			const char* shapeNames[] = { U8("球"), U8("箱") };
 			int shapeIdx = static_cast<int>(p.Shape);
-			if (ImGui::Combo("Shape", &shapeIdx, shapeNames, IM_ARRAYSIZE(shapeNames)))
+			if (ImGui::Combo(U8("形状"), &shapeIdx, shapeNames, IM_ARRAYSIZE(shapeNames)))
 			{
 				p.Shape = static_cast<PlanetShape>(shapeIdx);
 				p.InitModel();  // モデルを切り替え
@@ -163,44 +163,44 @@ void PlanetGravityManager::DrawGui()
 		if (p.Shape == PlanetShape::Box)
 		{
 			float half[3] = { p.BoxHalfExtents.x, p.BoxHalfExtents.y, p.BoxHalfExtents.z };
-			if (ImGui::DragFloat3("Box Half Extents", half, 0.1f, 0.1f, 1000.0f))
+			if (ImGui::DragFloat3(U8("箱ハーフサイズ"), half, 0.1f, 0.1f, 1000.0f))
 			{
 				p.BoxHalfExtents = { half[0], half[1], half[2] };
 			}
 
 			// Box各面の重力モード設定
 			ImGui::Separator();
-			ImGui::Text("Box Face Gravity Modes:");
-			const char* modeNames[] = { "Inward", "Outward", "Inherit", "Down", "Up", "Left", "Right" };
+			ImGui::Text(U8("箱フェイス重力モード:"));
+			const char* modeNames[] = { U8("内向き"), U8("外向き"), U8("継承"), U8("下"), U8("上"), U8("左"), U8("右") };
 
 			int topMode = static_cast<int>(p.BoxFaceGravityTop);
-			if (ImGui::Combo("Top Face", &topMode, modeNames, IM_ARRAYSIZE(modeNames)))
+			if (ImGui::Combo(U8("上面"), &topMode, modeNames, IM_ARRAYSIZE(modeNames)))
 			{
 				p.BoxFaceGravityTop = static_cast<BoxFaceGravityMode>(topMode);
 			}
 
 			int bottomMode = static_cast<int>(p.BoxFaceGravityBottom);
-			if (ImGui::Combo("Bottom Face", &bottomMode, modeNames, IM_ARRAYSIZE(modeNames)))
+			if (ImGui::Combo(U8("下面"), &bottomMode, modeNames, IM_ARRAYSIZE(modeNames)))
 			{
 				p.BoxFaceGravityBottom = static_cast<BoxFaceGravityMode>(bottomMode);
 			}
 
 			int leftMode = static_cast<int>(p.BoxFaceGravityLeft);
-			if (ImGui::Combo("Left Face", &leftMode, modeNames, IM_ARRAYSIZE(modeNames)))
+			if (ImGui::Combo(U8("左面"), &leftMode, modeNames, IM_ARRAYSIZE(modeNames)))
 			{
 				p.BoxFaceGravityLeft = static_cast<BoxFaceGravityMode>(leftMode);
 			}
 
 			int rightMode = static_cast<int>(p.BoxFaceGravityRight);
-			if (ImGui::Combo("Right Face", &rightMode, modeNames, IM_ARRAYSIZE(modeNames)))
+			if (ImGui::Combo(U8("右面"), &rightMode, modeNames, IM_ARRAYSIZE(modeNames)))
 			{
 				p.BoxFaceGravityRight = static_cast<BoxFaceGravityMode>(rightMode);
 			}
 		}
 
-		ImGui::TextDisabled("Surface <= Ground <= Gravity  |  Priority: high = win");
+		ImGui::TextDisabled(U8("表面 <= 接地 <= 重力  |  優先度: 高=勝ち"));
 
-		if (ImGui::Button("Delete"))
+		if (ImGui::Button(U8("削除")))
 		{
 			m_planets.erase(m_planets.begin() + m_selectedIndex);
 			m_selectedIndex = -1;
@@ -208,9 +208,9 @@ void PlanetGravityManager::DrawGui()
 	}
 
 	ImGui::Separator();
-	if (ImGui::Button("Save")) { Save(); }
+	if (ImGui::Button(U8("保存"))) { Save(); }
 	ImGui::SameLine();
-	if (ImGui::Button("Load")) { Load(); }
+	if (ImGui::Button(U8("読込"))) { Load(); }
 
 	ImGui::End();
 }
@@ -318,11 +318,14 @@ GravityInfluenceResult PlanetGravityManager::ComputeGravityInfluence(const Math:
 			if (!p.pCollider) { continue; }
 
 			// Box表面からの概算距離（引力圏チェック用）
+			// ★ 2.5D: Z も距離に含める。これが無いと「Z方向にいくら離れても重力影響が残る」
+			//   ＝Z端からはみ出しても落ちない原因になる（Z面にFACEGRAVITYが無いため）。
 			const Math::Vector3 lp = _charPos - p.Position;
 			const Math::Vector3& half = p.BoxHalfExtents;
 			const float ox = std::max(0.0f, std::abs(lp.x) - half.x);
 			const float oy = std::max(0.0f, std::abs(lp.y) - half.y);
-			const float surfaceDist = std::sqrtf(ox * ox + oy * oy);
+			const float oz = std::max(0.0f, std::abs(lp.z) - half.z);
+			const float surfaceDist = std::sqrtf(ox * ox + oy * oy + oz * oz);
 
 			if (surfaceDist >= p.GravityRadius) { continue; }
 

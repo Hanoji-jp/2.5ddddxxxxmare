@@ -163,16 +163,16 @@ void ManualGravityZoneManager::DrawDebugShapes() const
 
 void ManualGravityZoneManager::DrawGui()
 {
-	if (!ImGui::Begin("Manual Gravity Zones", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+	if (!ImGui::Begin(U8("手動重力ゾーン"), nullptr, ImGuiWindowFlags_AlwaysAutoResize))
 	{
 		ImGui::End();
 		return;
 	}
 
-	ImGui::Text("Manual Gravity Zone Editor");
+	ImGui::Text(U8("手動重力ゾーン エディタ"));
 	ImGui::Separator();
 
-	if (ImGui::Button("Add Zone"))
+	if (ImGui::Button(U8("ゾーン追加")))
 	{
 		ManualGravityZone newZone;
 		newZone.Center = { 0.0f, 0.0f, 0.0f };
@@ -211,48 +211,48 @@ void ManualGravityZoneManager::DrawGui()
 	{
 		auto& zone = m_zones[m_selectedIndex];
 
-		ImGui::Text("Zone %d Settings:", m_selectedIndex);
+		ImGui::Text(U8("ゾーン %d 設定:"), m_selectedIndex);
 
 		// ZoneType選択
-		const char* zoneTypeNames[] = { "Manual Gravity", "Normal Gravity (-Y)" };
+		const char* zoneTypeNames[] = { U8("手動重力"), U8("通常重力 (-Y)") };
 		int typeIdx = static_cast<int>(zone.Type);
-		if (ImGui::Combo("Zone Type", &typeIdx, zoneTypeNames, IM_ARRAYSIZE(zoneTypeNames)))
+		if (ImGui::Combo(U8("ゾーン種類"), &typeIdx, zoneTypeNames, IM_ARRAYSIZE(zoneTypeNames)))
 		{
 			zone.Type = static_cast<ZoneType>(typeIdx);
 		}
 		if (zone.Type == ZoneType::NormalGravity)
 		{
 			ImGui::SameLine();
-			ImGui::TextColored({ 1.0f, 0.4f, 0.0f, 1.0f }, "<- 重力固定ゾーン");
+			ImGui::TextColored({ 1.0f, 0.4f, 0.0f, 1.0f }, U8("<- 重力固定ゾーン"));
 
-			const char* dirNames[] = { "Down (-Y)", "Up (+Y)", "Left (-X)", "Right (+X)" };
+			const char* dirNames[] = { U8("下 (-Y)"), U8("上 (+Y)"), U8("左 (-X)"), U8("右 (+X)") };
 			int dirIdx = static_cast<int>(zone.GravityDir);
-			if (ImGui::Combo("Gravity Dir", &dirIdx, dirNames, IM_ARRAYSIZE(dirNames)))
+			if (ImGui::Combo(U8("重力の向き"), &dirIdx, dirNames, IM_ARRAYSIZE(dirNames)))
 			{
 				zone.GravityDir = static_cast<ZoneGravityDir>(dirIdx);
 			}
 		}
 
 		float center[3] = { zone.Center.x, zone.Center.y, zone.Center.z };
-		if (ImGui::DragFloat3("Center", center, 0.5f, -1000.0f, 1000.0f))
+		if (ImGui::DragFloat3(U8("中心"), center, 0.5f, -1000.0f, 1000.0f))
 		{
 			zone.Center = { center[0], center[1], center[2] };
 			zone.UpdateWorld();
 		}
 
 		float halfExtents[3] = { zone.HalfExtents.x, zone.HalfExtents.y, zone.HalfExtents.z };
-		if (ImGui::DragFloat3("Half Extents", halfExtents, 0.5f, 0.1f, 1000.0f))
+		if (ImGui::DragFloat3(U8("ハーフサイズ"), halfExtents, 0.5f, 0.1f, 1000.0f))
 		{
 			zone.HalfExtents = { halfExtents[0], halfExtents[1], halfExtents[2] };
 			zone.UpdateWorld();
 		}
 
-		if (ImGui::Checkbox("Enabled", &zone.bEnabled))
+		if (ImGui::Checkbox(U8("有効"), &zone.bEnabled))
 		{
 			zone.UpdateWorld();
 		}
 
-		if (ImGui::Button("Delete"))
+		if (ImGui::Button(U8("削除")))
 		{
 			m_zones.erase(m_zones.begin() + m_selectedIndex);
 			m_selectedIndex = -1;
@@ -260,9 +260,9 @@ void ManualGravityZoneManager::DrawGui()
 	}
 
 	ImGui::Separator();
-	if (ImGui::Button("Save")) { Save(); }
+	if (ImGui::Button(U8("保存"))) { Save(); }
 	ImGui::SameLine();
-	if (ImGui::Button("Load")) { Load(); }
+	if (ImGui::Button(U8("読込"))) { Load(); }
 
 	ImGui::End();
 }

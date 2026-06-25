@@ -54,8 +54,7 @@ void GravityCore::Init(const Math::Vector3& pos, float radius, CoreType type)
 	// 本体色（タイプ別）：星・グローの色に流用
 	if (m_type == CoreType::Glow)
 	{
-		m_coreColor = { GravityCoreConst::GlowFaceR, GravityCoreConst::GlowFaceG,
-						GravityCoreConst::GlowFaceB, 1.0f };
+		m_coreColor = { m_glowTint.x, m_glowTint.y, m_glowTint.z, 1.0f };
 	}
 	else
 	{
@@ -498,9 +497,9 @@ void GravityCore::DrawGlowEffect()
 		const float bright = 1.0f - t * 0.5f;
 		const float phase  = kTwoPi * static_cast<float>(lon) / static_cast<float>(lons)
 						   + static_cast<float>(lat) * 0.8f;
-		const float rVal = GravityCoreConst::GlowFaceR * (0.5f + std::sinf(phase) * 0.5f);
-		const float gVal = GravityCoreConst::GlowFaceG * bright * (0.7f + std::cosf(phase * 0.7f) * 0.3f);
-		const float bVal = GravityCoreConst::GlowFaceB * bright;
+		const float rVal = m_glowTint.x * (0.5f + std::sinf(phase) * 0.5f);
+		const float gVal = m_glowTint.y * bright * (0.7f + std::cosf(phase * 0.7f) * 0.3f);
+		const float bVal = m_glowTint.z * bright;
 		return GcColorToUint({
 			std::min(rVal, 1.0f),
 			std::min(gVal, 1.0f),
@@ -513,9 +512,9 @@ void GravityCore::DrawGlowEffect()
 		const float t = static_cast<float>(lat) / static_cast<float>(lats);
 		const float b = (1.0f - t * 0.5f);
 		return GcColorToUint({
-			std::min(GravityCoreConst::GlowFaceR * b + 0.5f * b, 1.0f),
-			std::min(GravityCoreConst::GlowFaceG * b + 0.25f * b, 1.0f),
-			std::min(GravityCoreConst::GlowFaceB * b + 0.10f * b, 1.0f),
+			std::min(m_glowTint.x * b + 0.5f * b, 1.0f),
+			std::min(m_glowTint.y * b + 0.25f * b, 1.0f),
+			std::min(m_glowTint.z * b + 0.10f * b, 1.0f),
 			GravityCoreConst::GlowWireAlpha });
 	};
 
@@ -647,9 +646,9 @@ void GravityCore::DrawGlowBright()
 		const float t  = static_cast<float>(lat) / static_cast<float>(lats);
 		const float br = t * t;   // 外に向かうほど明るく
 		return GcColorToUint({
-			std::min(GravityCoreConst::GlowFaceR * br + 0.8f * br, 1.0f),
-			std::min(GravityCoreConst::GlowFaceG * br + 0.5f * br, 1.0f),
-			std::min(GravityCoreConst::GlowFaceB * br, 1.0f),
+			std::min(m_glowTint.x * br + 0.8f * br, 1.0f),
+			std::min(m_glowTint.y * br + 0.5f * br, 1.0f),
+			std::min(m_glowTint.z * br, 1.0f),
 			alpha * br });
 	};
 

@@ -14,6 +14,13 @@ namespace PlayerConst
     // 減速度（入力なし）
     constexpr float Deceleration     = 0.018f;
 
+    // ── Z平面への復帰（2.5D固定）──
+    // Z移動床などで押されてズレたZを、床に乗っていない間にホームZ平面へ戻す。
+    // ZReturnLerp: 戻る速さ（1.0fで即座／小さいほど緩やか・60fps基準）
+    // ZReturnSnap: この距離未満になったらホームZへスナップして揺れを止める
+    constexpr float ZReturnLerp = 0.12f;
+    constexpr float ZReturnSnap = 0.02f;
+
     // 向き補間速度（1.0fで即座、小さいほど緩やか）
     constexpr float RotationSpeed    = 0.15f;
 

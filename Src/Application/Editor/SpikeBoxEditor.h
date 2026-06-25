@@ -14,6 +14,7 @@ struct SpikeBoxData
 							 SpikeBoxConst::DefaultSizeY,
 							 SpikeBoxConst::DefaultSizeZ };
 	bool          enabled = true;
+	SpikeBoxConst::SpikeDir dir = SpikeBoxConst::SpikeDir::Up;   // 棘の向き
 };
 
 //==========================================================

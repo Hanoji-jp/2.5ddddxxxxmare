@@ -290,7 +290,9 @@ void KdEffekseerManager::UpdateEffekseerEffect()
 {
 	if (m_isPause) { return; }
 
-	m_efkManager->Update();
+	// フレームレート非依存：60fps基準の経過フレームで進める（高FPSで速くならない）
+	const float deltaFrame = KdFPSController::GetDt() * 60.0f;
+	m_efkManager->Update(deltaFrame);
 
 	m_efkManager->BeginUpdate();
 

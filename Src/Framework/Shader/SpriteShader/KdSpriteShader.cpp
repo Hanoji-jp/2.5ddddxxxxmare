@@ -199,6 +199,30 @@ void KdSpriteShader::DrawTex(const KdTexture* tex, int x, int y, int w, int h, c
 	if (!bBgn)End();
 }
 
+void KdSpriteShader::DrawTexVertices(const KdTexture* tex, const std::vector<Vertex>& vertices,
+	D3D_PRIMITIVE_TOPOLOGY topology, const Math::Color* color)
+{
+	if (tex == nullptr || vertices.size() < 3) { return; }
+
+	bool bBgn = m_isBegin;
+	if (!bBgn)Begin();
+
+	// テクスチャ(ShaderResourceView)セット
+	KdDirect3D::Instance().WorkDevContext()->PSSetShaderResources(0, 1, tex->WorkSRViewAddress());
+
+	if (color) { m_cb0.Work().Color = *color; }
+	m_cb0.Write();
+
+	KdDirect3D::Instance().DrawVertices(topology, static_cast<int>(vertices.size()),
+		vertices.data(), sizeof(Vertex));
+
+	// テクスチャ解除
+	ID3D11ShaderResourceView* srv = nullptr;
+	KdDirect3D::Instance().WorkDevContext()->PSSetShaderResources(0, 1, &srv);
+
+	if (!bBgn)End();
+}
+
 void KdSpriteShader::DrawPoint(int x, int y, const Math::Color* color)
 {
 	// もし開始していない場合は開始する(最後にEnd())

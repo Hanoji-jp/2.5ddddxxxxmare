@@ -22,9 +22,10 @@ void SceneManager::PreUpdate()
 		((GetAsyncKeyState(VK_TAB)    & 0x8000) != 0);
 	if (!confirmDown) { m_confirmReleased = true; }
 
-	// シーン切替
-	if (m_currentSceneType != m_nextSceneType)
+	// シーン切替（型が変わったとき、または同一シーンの強制再読込が要求されたとき）
+	if (m_currentSceneType != m_nextSceneType || m_forceReload)
 	{
+		m_forceReload = false;
 		ChangeScene(m_nextSceneType);
 	}
 
@@ -73,6 +74,12 @@ void SceneManager::AddObject(const std::shared_ptr<KdGameObject>& _obj)
 
 void SceneManager::ChangeScene(SceneType _sceneType)
 {
+	// ★ 先に現在のシーンを破棄してから新シーンを生成する。
+	//   make_shared で「新シーン生成（Initでシングルトンへ登録）→ 旧シーン破棄」の順になると、
+	//   旧 ~GameScene の ClearPlanets/ClearZones 等が新シーンの登録を消してしまう
+	//   （特に Game→Game のやりなおしで Init が壊れる）。先に解放して順序を保証する。
+	m_currentScene.reset();
+
 	// 次のシーンを作成し、現在のシーンにする
 	switch (_sceneType)
 	{

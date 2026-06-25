@@ -124,6 +124,10 @@ public:
 	void SetGuiCallback(const std::function<void()>& _callback) { m_guiCallback = _callback; }
 	void ClearGuiCallback() { m_guiCallback = nullptr; }
 
+	// 常時ImGui描画コールバック（エディタ画面ON/OFFやシーンに関係なく毎フレーム呼ぶ）
+	void SetPersistentGuiCallback(const std::function<void()>& _callback) { m_persistentGuiCallback = _callback; }
+	void ClearPersistentGuiCallback() { m_persistentGuiCallback = nullptr; }
+
 	// ゲーム画面を別ウィンドウ(ImGui)に表示するか（動画編集風レイアウト用。エディタ時に有効化）
 	void SetGameViewport(bool enable) { m_gameViewport = enable; }
 	bool IsGameViewport() const { return m_gameViewport; }
@@ -141,6 +145,7 @@ private:
 	std::unique_ptr<ImGuiAppLog> m_uqLog = nullptr;
 
 	std::function<void()> m_guiCallback = nullptr;
+	std::function<void()> m_persistentGuiCallback = nullptr;   // 常時呼ぶImGui描画
 
 	// ゲーム画面ビューポート（バックバッファをコピーして ImGui::Image で表示）
 	bool m_gameViewport = false;

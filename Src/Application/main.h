@@ -20,6 +20,7 @@ public:
 
 	int		GetNowFPS()			const	{ return m_fpsController.m_nowfps; }
 	int		GetMaxFPS()			const	{ return m_fpsController.m_maxFps; }
+	void	SetMaxFps(int f)			{ m_fpsController.m_maxFps = (f > 0 ? f : 60); }
 	float	GetDeltaTime()		const	{ return m_fpsController.GetDeltaTime(); }
 private:
 
@@ -35,6 +36,9 @@ private:
 	void PostDraw();
 	void DrawSprite();
 	void KdPostDraw();
+
+	// 起動時ロード画面（進捗0..1）を1フレーム描いて即Present
+	void DrawLoadingScreen(float progress);
 
 	// アプリケーション初期化
 	bool Init(int w, int h);

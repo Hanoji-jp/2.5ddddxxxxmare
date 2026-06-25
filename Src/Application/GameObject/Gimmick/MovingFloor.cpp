@@ -11,6 +11,10 @@ m_pos = m_center;
 m_t   = m_range * static_cast<float>(m_startPhase);
 m_dir = (m_startPhase >= 0) ? 1 : -1;
 InitModel();
+
+// 横（や奥行き）に長いBoxでも、フラスタムカリングで消えないようサイズに応じた
+// バウンディング半径を設定する（未設定だとデフォルトの小半径で画面外判定され消える）。
+m_cullingRadius = m_size.Length() * 2.0f;
 }
 
 void MovingFloor::Update()

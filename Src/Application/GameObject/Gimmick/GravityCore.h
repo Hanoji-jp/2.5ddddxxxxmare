@@ -30,6 +30,14 @@ public:
 	// Glow タイプか（ゴール用 WarpHole を開くトリガー）
 	bool IsGlow() const { return m_type == CoreType::Glow; }
 
+	// Glow の発光色を上書きする（Init 後に呼ぶ）。
+	// チェックポイント等、ゴールコアと色で差別化したい用途に使う。
+	void SetGlowColor(const Math::Vector3& c)
+	{
+		m_glowTint  = c;
+		m_coreColor = { c.x, c.y, c.z, 1.0f };
+	}
+
 	// 取得後にプレイヤーのボーンへ追従させる用（クリア演出）。
 	// 本体メッシュは m_mWorld で描くので平行移動も更新する（回転は前回値を保持）。
 	void SetPos(const Math::Vector3& p)
@@ -51,6 +59,11 @@ private:
 	CoreType      m_type      = CoreType::Rock;
 	float         m_rotAngle  = 0.0f;
 	float         m_animTime  = 0.0f;   // Glow 波アニメ用
+
+	// Glow の発光色（既定はゴールのシアン青）。SetGlowColor で上書き可能。
+	Math::Vector3 m_glowTint{ GravityCoreConst::GlowFaceR,
+							  GravityCoreConst::GlowFaceG,
+							  GravityCoreConst::GlowFaceB };
 
 	// ── Rock ─────────────────────────────────────────────
 	// ジッター済み球体頂点

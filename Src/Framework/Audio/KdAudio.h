@@ -114,6 +114,13 @@ public:
 	// ・pitch	… 振動設定(低音-1.0～1.0高音)
 	void SetPitch(float pitch);
 
+	// ローパスフィルタ（こもった音）。
+	// freq01 : カットオフ 0〜1（1=ほぼ無効/原音、小さいほど高音が削れてこもる）
+	// oneOverQ: 共鳴の鋭さの逆数（既定1.0でOK）
+	void SetLowPass(float freq01, float oneOverQ = 1.0f);
+	// フィルタ解除（原音に戻す）
+	void ClearFilter();
+
 	// 再生状態の取得
 	bool IsPlaying();
 	bool IsPause();

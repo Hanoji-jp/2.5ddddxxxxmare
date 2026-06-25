@@ -7,14 +7,14 @@
 
 void EnemyPlacementEditor::DrawGui()
 {
-	if (!ImGui::Begin("Enemy Placement Editor"))
+	if (!ImGui::Begin(U8("敵配置 エディタ")))
 	{
 		ImGui::End();
 		return;
 	}
 
 	// ── 追加ボタン ──────────────────────────────────────────
-	if (ImGui::Button("Add Cubun"))
+	if (ImGui::Button(U8("クブン追加")))
 	{
 		EnemyPlacementData d;
 		d.type = EnemyType::Cubun;
@@ -23,7 +23,7 @@ void EnemyPlacementEditor::DrawGui()
 		m_dirty = true;
 	}
 	ImGui::SameLine();
-	if (ImGui::Button("Add Ranged"))
+	if (ImGui::Button(U8("遠距離敵追加")))
 	{
 		EnemyPlacementData d;
 		d.type = EnemyType::Ranged;
@@ -35,7 +35,7 @@ void EnemyPlacementEditor::DrawGui()
 	ImGui::Separator();
 
 	// ── リスト ──────────────────────────────────────────────
-	ImGui::Text("Enemy List");
+	ImGui::Text(U8("敵一覧"));
 	for (int i = 0; i < static_cast<int>(m_placements.size()); ++i)
 	{
 		const auto& p        = m_placements[i];
@@ -58,19 +58,19 @@ void EnemyPlacementEditor::DrawGui()
 	{
 		auto& p = m_placements[m_selectedIndex];
 
-		ImGui::Text("Inspector");
+		ImGui::Text(U8("インスペクタ"));
 
 		// 種類切替
 		int typeIdx = (p.type == EnemyType::Cubun) ? 0 : 1;
-		const char* typeNames[] = { "Cubun", "Ranged" };
-		if (ImGui::Combo("Type", &typeIdx, typeNames, 2))
+		const char* typeNames[] = { U8("クブン"), U8("遠距離") };
+		if (ImGui::Combo(U8("種類"), &typeIdx, typeNames, 2))
 		{
 			p.type  = (typeIdx == 0) ? EnemyType::Cubun : EnemyType::Ranged;
 			m_dirty = true;
 		}
 
 		float pos[3] = { p.position.x, p.position.y, p.position.z };
-		if (ImGui::DragFloat3("Position", pos, 0.1f))
+		if (ImGui::DragFloat3(U8("位置"), pos, 0.1f))
 		{
 			p.position = { pos[0], pos[1], pos[2] };
 			m_dirty    = true;
@@ -85,8 +85,8 @@ void EnemyPlacementEditor::DrawGui()
 			int gravIdx = 0;
 			if      (p.initGravDir == Character::ManualGravityDir::Down) { gravIdx = 1; }
 			else if (p.initGravDir == Character::ManualGravityDir::Up)   { gravIdx = 2; }
-			const char* gravNames[] = { "None (惑星に従う)", "Down (床歩き)", "Up (天井歩き)" };
-			if (ImGui::Combo("Init Gravity", &gravIdx, gravNames, 3))
+			const char* gravNames[] = { U8("なし（惑星に従う）"), U8("下（床歩き）"), U8("上（天井歩き）") };
+			if (ImGui::Combo(U8("初期重力"), &gravIdx, gravNames, 3))
 			{
 				switch (gravIdx)
 				{
@@ -99,7 +99,7 @@ void EnemyPlacementEditor::DrawGui()
 		}
 
 		ImGui::Separator();
-		if (ImGui::Button("Delete"))
+		if (ImGui::Button(U8("削除")))
 		{
 			m_placements.erase(m_placements.begin() + m_selectedIndex);
 			m_selectedIndex = -1;
@@ -109,9 +109,9 @@ void EnemyPlacementEditor::DrawGui()
 
 	ImGui::Separator();
 
-	if (ImGui::Button("Save")) { Save(); }
+	if (ImGui::Button(U8("保存"))) { Save(); }
 	ImGui::SameLine();
-	if (ImGui::Button("Load")) { Load(); }
+	if (ImGui::Button(U8("読込"))) { Load(); }
 
 	ImGui::End();
 }

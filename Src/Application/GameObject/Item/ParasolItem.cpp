@@ -86,5 +86,6 @@ void ParasolItem::MarkPickedUp()
 	// 取得バーストは ItemManager 側で再生。ここではループを停止するだけ。
 	m_effect.Stop();
 
-	Expire();
+	// ※Expire() は呼ばない：取得しても配置データは残す（保存しても消えない）。
+	//   m_pickedUp で描画/更新/取得判定は止まる。
 }

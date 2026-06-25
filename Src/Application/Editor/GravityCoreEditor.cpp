@@ -11,28 +11,28 @@ void GravityCoreEditor::DrawGui()
 {
 	ImGui::SetNextWindowPos(ImVec2(20, 300), ImGuiCond_FirstUseEver);
 	ImGui::SetNextWindowSize(ImVec2(340, 280), ImGuiCond_FirstUseEver);
-	if (!ImGui::Begin("Gravity Core Editor"))
+	if (!ImGui::Begin(U8("重力コア エディタ")))
 	{
 		ImGui::End();
 		return;
 	}
 
 	// ── ボタン ─────────────────────────────────────────────
-	if (ImGui::Button("Add Core"))
+	if (ImGui::Button(U8("コア追加")))
 	{
 		m_cores.push_back(GravityCoreData{});
 		m_selectedIndex = static_cast<int>(m_cores.size()) - 1;
 		m_dirty = true;
 	}
 	ImGui::SameLine();
-	if (ImGui::Button("Save"))   { Save(); }
+	if (ImGui::Button(U8("保存")))   { Save(); }
 	ImGui::SameLine();
-	if (ImGui::Button("Reload")) { Load(); }
+	if (ImGui::Button(U8("再読込"))) { Load(); }
 
 	ImGui::Separator();
 
 	// ── リスト ─────────────────────────────────────────────
-	ImGui::Text("Core List  (%d total)", static_cast<int>(m_cores.size()));
+	ImGui::Text(U8("コア一覧  (合計%d)"), static_cast<int>(m_cores.size()));
 	for (int i = 0; i < static_cast<int>(m_cores.size()); ++i)
 	{
 		const auto& c = m_cores[i];
@@ -52,18 +52,18 @@ void GravityCoreEditor::DrawGui()
 	if (m_selectedIndex >= 0 && m_selectedIndex < static_cast<int>(m_cores.size()))
 	{
 		auto& c = m_cores[m_selectedIndex];
-		ImGui::Text("Inspector [%d]", m_selectedIndex);
+		ImGui::Text(U8("インスペクタ [%d]"), m_selectedIndex);
 
-		if (ImGui::Checkbox("Enabled", &c.enabled)) { m_dirty = true; }
+		if (ImGui::Checkbox(U8("有効"), &c.enabled)) { m_dirty = true; }
 
 		float pos[3] = { c.pos.x, c.pos.y, c.pos.z };
-		if (ImGui::DragFloat3("Position", pos, 0.1f))
+		if (ImGui::DragFloat3(U8("位置"), pos, 0.1f))
 		{
 			c.pos   = { pos[0], pos[1], pos[2] };
 			m_dirty = true;
 		}
 
-		if (ImGui::DragFloat("Radius", &c.radius, 0.05f, 0.1f, 10.0f))
+		if (ImGui::DragFloat(U8("半径"), &c.radius, 0.05f, 0.1f, 10.0f))
 		{
 			m_dirty = true;
 		}
@@ -71,13 +71,13 @@ void GravityCoreEditor::DrawGui()
 		// タイプ選択
 		{
 			int typeInt = static_cast<int>(c.type);
-			if (ImGui::RadioButton("Rock", typeInt == 0)) { c.type = CoreType::Rock; m_dirty = true; }
+			if (ImGui::RadioButton(U8("岩"), typeInt == 0)) { c.type = CoreType::Rock; m_dirty = true; }
 			ImGui::SameLine();
-			if (ImGui::RadioButton("Glow", typeInt == 1)) { c.type = CoreType::Glow; m_dirty = true; }
+			if (ImGui::RadioButton(U8("発光"), typeInt == 1)) { c.type = CoreType::Glow; m_dirty = true; }
 		}
 
 		ImGui::Spacing();
-		if (ImGui::Button("Delete"))
+		if (ImGui::Button(U8("削除")))
 		{
 			m_cores.erase(m_cores.begin() + m_selectedIndex);
 			m_selectedIndex = -1;

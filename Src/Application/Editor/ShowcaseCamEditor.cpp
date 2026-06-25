@@ -1,4 +1,4 @@
-#include "../../Pch.h"
+﻿#include "../../Pch.h"
 #include "ShowcaseCamEditor.h"
 #include "../Manager/StageManager.h"
 #include "../../Framework/Utility/KdDebug/KdDebugWireFrame.h"
@@ -79,13 +79,13 @@ void ShowcaseCamEditor::SelectPoint(int _phase, int _idx, bool _isLook)
 //==========================================================
 void ShowcaseCamEditor::DrawGui()
 {
-    if (!ImGui::Begin("Showcase Camera"))
+    if (!ImGui::Begin(U8("見せカメラ")))
     {
         ImGui::End();
         return;
     }
 
-    if (ImGui::Button("Add Phase"))
+    if (ImGui::Button(U8("フェーズ追加")))
     {
         m_phases.push_back(Phase{});
         m_selPhase = static_cast<int>(m_phases.size()) - 1;
@@ -93,7 +93,7 @@ void ShowcaseCamEditor::DrawGui()
         m_dirty = true;
     }
     ImGui::SameLine();
-    ImGui::Text("(camerafaze order = top to bottom)");
+    ImGui::Text(U8("(カメラフェーズ順 = 上から下)"));
 
     for (int i = 0; i < static_cast<int>(m_phases.size()); ++i)
     {
@@ -112,12 +112,12 @@ void ShowcaseCamEditor::DrawGui()
         if (!deleted)
         {
             ImGui::SameLine();
-            if (ImGui::SmallButton("Up") && i > 0)
+            if (ImGui::SmallButton(U8("上")) && i > 0)
             {
                 std::swap(m_phases[i], m_phases[i - 1]); m_selPhase = i - 1; m_dirty = true;
             }
             ImGui::SameLine();
-            if (ImGui::SmallButton("Dn") && i < static_cast<int>(m_phases.size()) - 1)
+            if (ImGui::SmallButton(U8("下")) && i < static_cast<int>(m_phases.size()) - 1)
             {
                 std::swap(m_phases[i], m_phases[i + 1]); m_selPhase = i + 1; m_dirty = true;
             }
@@ -140,28 +140,28 @@ void ShowcaseCamEditor::DrawGui()
     if (m_selPhase >= 0 && m_selPhase < static_cast<int>(m_phases.size()))
     {
         Phase& ph = m_phases[m_selPhase];
-        ImGui::Text("Phase %d", m_selPhase + 1);
+        ImGui::Text(U8("フェーズ %d"), m_selPhase + 1);
 
-        if (ImGui::DragFloat("Duration(s)", &ph.duration, 0.05f, ShowcaseCamConst::MinDuration, 60.0f))
+        if (ImGui::DragFloat(U8("長さ(秒)"), &ph.duration, 0.05f, ShowcaseCamConst::MinDuration, 60.0f))
         {
             m_dirty = true;
         }
-        if (ImGui::DragFloat("Speed (x)", &ph.speed, 0.02f, 0.1f, 10.0f))
+        if (ImGui::DragFloat(U8("速さ(倍)"), &ph.speed, 0.02f, 0.1f, 10.0f))
         {
             m_dirty = true;
         }
-        if (ImGui::DragFloat("Hold end (s)", &ph.hold, 0.05f, 0.0f, 30.0f))
+        if (ImGui::DragFloat(U8("終端保持(秒)"), &ph.hold, 0.05f, 0.0f, 30.0f))
         {
             m_dirty = true;
         }
-        if (ImGui::Checkbox("Ease In", &ph.easeIn))   { m_dirty = true; }
+        if (ImGui::Checkbox(U8("イーズイン"), &ph.easeIn))   { m_dirty = true; }
         ImGui::SameLine();
-        if (ImGui::Checkbox("Ease Out", &ph.easeOut)) { m_dirty = true; }
+        if (ImGui::Checkbox(U8("イーズアウト"), &ph.easeOut)) { m_dirty = true; }
 
         // eye points
         ImGui::Separator();
-        ImGui::Text("Eye points (camera path)");
-        if (ImGui::Button("Add Eye"))
+        ImGui::Text(U8("視点（カメラ経路）"));
+        if (ImGui::Button(U8("視点追加")))
         {
             Math::Vector3 base = ph.eye.empty()
                 ? Math::Vector3(0.0f, ShowcaseCamConst::DefaultEyeY, 0.0f)
@@ -183,8 +183,8 @@ void ShowcaseCamEditor::DrawGui()
 
         // look points
         ImGui::Separator();
-        ImGui::Text("Look points (aim path)");
-        if (ImGui::Button("Add Look"))
+        ImGui::Text(U8("注視点（狙い経路）"));
+        if (ImGui::Button(U8("注視点追加")))
         {
             Math::Vector3 base = ph.look.empty()
                 ? Math::Vector3(0.0f, ShowcaseCamConst::DefaultLookY, 0.0f)
@@ -204,7 +204,7 @@ void ShowcaseCamEditor::DrawGui()
             ImGui::PopID();
         }
 
-        if (m_selPoint >= 0 && ImGui::Button("Delete Selected Point"))
+        if (m_selPoint >= 0 && ImGui::Button(U8("選択点を削除")))
         {
             auto& v = m_selIsLook ? ph.look : ph.eye;
             if (m_selPoint < static_cast<int>(v.size())) { v.erase(v.begin() + m_selPoint); }
@@ -213,9 +213,9 @@ void ShowcaseCamEditor::DrawGui()
     }
 
     ImGui::Separator();
-    if (ImGui::Button("Save")) { Save(); }
+    if (ImGui::Button(U8("保存"))) { Save(); }
     ImGui::SameLine();
-    if (ImGui::Button("Load")) { Load(); }
+    if (ImGui::Button(U8("読込"))) { Load(); }
 
     ImGui::End();
 }

@@ -1,4 +1,4 @@
-#include "../../Pch.h"
+﻿#include "../../Pch.h"
 #include "DeadZoneManager.h"
 #include "StageManager.h"
 #include "ModelManager.h"
@@ -93,7 +93,7 @@ void DeadZoneManager::DrawDebugShapes() const
 
 void DeadZoneManager::DrawGui()
 {
-    if (!ImGui::Begin("Dead Zones", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+    if (!ImGui::Begin(U8("デッドゾーン"), nullptr, ImGuiWindowFlags_AlwaysAutoResize))
     {
         ImGui::End();
         return;
@@ -102,7 +102,7 @@ void DeadZoneManager::DrawGui()
     ImGui::TextColored({ 1.0f, 0.3f, 0.3f, 1.0f }, "Dead Zone Editor (instant kill, red)");
     ImGui::Separator();
 
-    if (ImGui::Button("Add Zone"))
+    if (ImGui::Button(U8("ゾーン追加")))
     {
         DeadZone newZone;
         newZone.Center = { 0.0f, 0.0f, 0.0f };
@@ -132,25 +132,25 @@ void DeadZoneManager::DrawGui()
     {
         auto& zone = m_zones[m_selectedIndex];
 
-        ImGui::Text("DeadZone %d Settings:", m_selectedIndex);
+        ImGui::Text(U8("デッドゾーン %d 設定:"), m_selectedIndex);
 
         float center[3] = { zone.Center.x, zone.Center.y, zone.Center.z };
-        if (ImGui::DragFloat3("Center", center, 0.5f, -1000.0f, 1000.0f))
+        if (ImGui::DragFloat3(U8("中心"), center, 0.5f, -1000.0f, 1000.0f))
         {
             zone.Center = { center[0], center[1], center[2] };
             zone.UpdateWorld();
         }
 
         float halfExtents[3] = { zone.HalfExtents.x, zone.HalfExtents.y, zone.HalfExtents.z };
-        if (ImGui::DragFloat3("Half Extents", halfExtents, 0.5f, 0.1f, 1000.0f))
+        if (ImGui::DragFloat3(U8("ハーフサイズ"), halfExtents, 0.5f, 0.1f, 1000.0f))
         {
             zone.HalfExtents = { halfExtents[0], halfExtents[1], halfExtents[2] };
             zone.UpdateWorld();
         }
 
-        if (ImGui::Checkbox("Enabled", &zone.bEnabled)) { zone.UpdateWorld(); }
+        if (ImGui::Checkbox(U8("有効"), &zone.bEnabled)) { zone.UpdateWorld(); }
 
-        if (ImGui::Button("Delete"))
+        if (ImGui::Button(U8("削除")))
         {
             m_zones.erase(m_zones.begin() + m_selectedIndex);
             m_selectedIndex = -1;
@@ -158,9 +158,9 @@ void DeadZoneManager::DrawGui()
     }
 
     ImGui::Separator();
-    if (ImGui::Button("Save")) { Save(); }
+    if (ImGui::Button(U8("保存"))) { Save(); }
     ImGui::SameLine();
-    if (ImGui::Button("Load")) { Load(); }
+    if (ImGui::Button(U8("読込"))) { Load(); }
 
     ImGui::End();
 }

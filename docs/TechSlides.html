@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>Corelia 技術発表スライド</title>
+<style>
+  @page { size: A4 landscape; margin: 0; }
+  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { margin: 0; font-family: "Yu Gothic UI", "Meiryo", sans-serif; color: #eef2f7; }
+  .slide {
+    width: 297mm; height: 209mm; padding: 16mm 18mm;
+    page-break-after: always; position: relative; overflow: hidden;
+    background: linear-gradient(135deg, #0b1020 0%, #131c34 60%, #1a2747 100%);
+  }
+  .slide:last-child { page-break-after: auto; }
+  h1 { font-size: 30pt; margin: 0 0 4mm 0; color: #e9d9a8; letter-spacing: 1px; }
+  h2 { font-size: 16pt; margin: 6mm 0 2mm 0; color: #6fd0ff; border-left: 5px solid #6fd0ff; padding-left: 8px; }
+  .sub { color: #9fb3cc; font-size: 12pt; margin: 0 0 6mm 0; }
+  ul { margin: 1mm 0 3mm 0; padding-left: 7mm; line-height: 1.7; font-size: 12.5pt; }
+  li { margin: 2mm 0; }
+  b, strong { color: #ffe9a8; }
+  table { width: 100%; border-collapse: collapse; margin: 3mm 0; font-size: 12pt; }
+  th, td { border: 1px solid #2f3f63; padding: 3mm 4mm; text-align: left; vertical-align: top; }
+  th { background: #1d2c4d; color: #6fd0ff; width: 26%; white-space: nowrap; }
+  td { background: rgba(255,255,255,0.03); }
+  .tag { display:inline-block; background:#6fd0ff; color:#0b1020; font-weight:bold;
+         border-radius: 4px; padding: 1px 8px; font-size: 10pt; margin-right:6px; }
+  .note { position:absolute; left:18mm; right:18mm; bottom:10mm; font-size:11pt;
+          color:#cfe0f5; background: rgba(111,208,255,0.10); border:1px solid #2f4straight;
+          border:1px solid #355; border-radius:8px; padding:4mm 6mm; line-height:1.5; }
+  .cover { display:flex; flex-direction:column; justify-content:center; height:100%; }
+  .cover h1 { font-size: 46pt; color:#e9d9a8; }
+  .cover p { font-size: 15pt; color:#9fb3cc; }
+  .pageno { position:absolute; right:12mm; bottom:7mm; color:#5b6e8c; font-size:10pt; }
+  pre { background:#0a1224; border:1px solid #2f3f63; border-radius:8px; padding:5mm;
+        color:#cfe0f5; font-size:11.5pt; line-height:1.5; white-space:pre; font-family:"Consolas","Yu Gothic UI",monospace; }
+  .accent { color:#6fd0ff; }
+  .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap: 6mm; }
+  .tech { background: rgba(255,180,90,0.07); border:1px solid #5a4a2a; border-radius:8px; padding:3mm 5mm; }
+  .tech h2 { color:#ffcf73; border-left-color:#ffcf73; margin-top:1mm; }
+  .tech ul { font-size:11pt; }
+  .tech code { color:#9fe0ff; font-family:"Consolas",monospace; font-size:10.5pt; }
+  .easy h2 { color:#7fe6a0; border-left-color:#7fe6a0; }
+  .script { margin-top:5mm; background: rgba(127,230,160,0.10); border:1px solid #2f5a3f;
+            border-radius:8px; padding:4mm 6mm; font-size:13pt; line-height:1.7; color:#dff5e6; }
+  .script b { color:#aef0c4; }
+  .script::before { content:"🎤 発表ではこう言う"; display:block; color:#7fe6a0;
+                    font-weight:bold; font-size:11pt; margin-bottom:2mm; }
+</style>
+</head>
+<body>
+
+<!-- 表紙 -->
+<div class="slide">
+  <div class="cover">
+    <h1>Corelia ― 技術的こだわり</h1>
+    <p>2.5D × マリオギャラクシー風の重力アクション</p>
+    <p class="accent">当たり判定 / 重力 / カメラ を中心に</p>
+  </div>
+  <div class="pageno">1</div>
+</div>
+
+<!-- スライド1 -->
+<div class="slide">
+  <h1>① 技術的こだわり（全体像）</h1>
+  <p class="sub">コンセプト：「Y固定をやめ、すべてをベクトルと形状で考える」</p>
+  <table>
+    <tr><th>当たり判定</th><td>球 vs 形状の<b>押し出し</b>。地形のローカル空間で解く → 回転(OBB)も同一コードで対応</td></tr>
+    <tr><th>重力</th><td>惑星ごとの重力＋手動重力。<b>upDir</b> が全処理（移動 / ジャンプ / カメラ）の基準</td></tr>
+    <tr><th>カメラ</th><td>追従Lerp＋重力対応回転＋ルーム遷移＋ジュース（揺れ / 傾き / ズーム）</td></tr>
+  </table>
+  <h2>見せ場</h2>
+  <ul>
+    <li>手作りプロシージャルメッシュを <b>DrawVertices</b> で描画（アウトライン＝裏面CullFront）</li>
+    <li>グレースケール × 乗算色で <b>レインボー着色</b></li>
+    <li>カーソルを逆投影してワールド化 → <b>岩を吸い寄せ＆発射 → 壁で割れる</b></li>
+  </ul>
+  <div class="pageno">2</div>
+</div>
+
+<!-- スライド2 -->
+<div class="slide">
+  <h1>② 縁の下の作り込み</h1>
+  <ul>
+    <li><b>仮想解像度</b>：バックバッファ固定でUI非依存／ImGuiは <span class="accent">FramebufferScale</span> で補正</li>
+    <li><b>FPS非依存</b>：アニメ・エフェクト・トレイルを <span class="accent">dt×60</span> ／実時間で統一</li>
+    <li><b>BGMこもり同期</b>：通常版＋こもり版を同時再生しクロスフェード（ポーズで頭出しに戻らない）</li>
+    <li><b>起動ロード画面</b>：ブロッキング読込の合間に手動Present＋進捗バー</li>
+    <li><b>データ駆動エディタ</b>：ImGuiで配置 → ステージ別CSV保存（取得=Collect / 削除=Expire を分離）</li>
+  </ul>
+  <div class="pageno">3</div>
+</div>
+
+<!-- スライド3 -->
+<div class="slide">
+  <h1>③ Sphere惑星の重力</h1>
+  <p class="sub">考え方：「惑星の中心へ引っぱられる」だけ</p>
+  <div class="grid2">
+    <div>
+      <h2>計算の流れ（XY平面・2.5D）</h2>
+      <ul>
+        <li>中心→プレイヤーのベクトル <span class="accent">v = player − center</span></li>
+        <li>正規化して上方向 <b>upDir = v / |v|</b>（表面の真上）</li>
+        <li>重力はその逆 <b>gravDir = −upDir</b>（中心向き）</li>
+        <li>強さは<b>距離の2乗に反比例</b>（万有引力風）</li>
+        <li>重力圏の端で <b>smoothstep で0へ</b>（ふわっと離脱）</li>
+        <li>複数惑星は<b>ベクトル合成</b>、最強の惑星のupDirを採用</li>
+      </ul>
+    </div>
+    <div>
+<pre>   ● プレイヤー
+   ↑  upDir（外向き）
+   │
+   ▼  gravDir（中心向き＝重力）
+  (●) 惑星の中心</pre>
+      <p style="font-size:11.5pt;color:#cfe0f5;line-height:1.5;">
+      Box惑星は「最も近い面の外向き法線」を upDir にするだけ。<br>
+      <b>どちらも『upDirを決めて gravDir = −upDir』</b>という同じ設計に乗る。</p>
+    </div>
+  </div>
+  <div class="pageno">4</div>
+</div>
+
+<!-- スライド4 -->
+<div class="slide">
+  <h1>④ Kdへの独自拡張（骨組みからの差分）</h1>
+  <p class="sub">追加7・変更47ファイル／とくに「アウトライン」と「重力対応の草・球法線」が独自の描画拡張</p>
+  <div class="grid2">
+    <div>
+      <h2>描画シェーダ（StandardShader）</h2>
+      <ul>
+        <li><b>アウトライン描画</b>：専用VS/PS新規＋BeginOutline/SetOutlineWidth（裏面押し出し）</li>
+        <li><b>草ブレンド</b>：GravityUpDir 基準で地面に草を生成（SetGrassBlend 等）</li>
+        <li><b>トライプラナーUV</b>／<b>SphereNormal</b>（球惑星の法線を中心基準で計算）</li>
+        <li><b>DrawVertices 拡張</b>：トポロジー／深度／カリング指定</li>
+      </ul>
+      <h2>スプライト（SpriteShader）</h2>
+      <ul>
+        <li><b>角丸UI</b>：DrawRoundedBox / RoundedTex / RoundedBubble</li>
+        <li>日本語フォント描画版 DrawFont</li>
+      </ul>
+    </div>
+    <div>
+      <h2>UI / デバッグ（KdDebugGUI）</h2>
+      <ul>
+        <li><b>常時ImGuiコールバック</b>／日本語化・<span class="accent">FramebufferScale</span>補正</li>
+        <li><b>Gameビューポート</b>（エディタ内にゲーム描画）</li>
+      </ul>
+      <h2>土台・ユーティリティ</h2>
+      <ul>
+        <li><b>KdFPSController</b>：static GetDt() でdtをグローバル化（FPS非依存の土台）</li>
+        <li><b>KdEasing</b>：Sine/Expo/Cubic/Bounce 追加</li>
+        <li><b>KdCollider</b>：SetNodeFilter（ノード単位の判定）</li>
+        <li><b>KdThreadPool</b> 新規／KdEffekseer・KdWindow(ホイール) 改変</li>
+      </ul>
+    </div>
+  </div>
+  <div class="pageno">5</div>
+</div>
+
+<!-- ④-A アウトライン -->
+<div class="slide">
+  <h1>④-A アウトライン描画（2パス法）</h1>
+  <p class="sub">本体の外側に黒いシルエットを1枚先に描き、その内側を本体で塗りつぶして“縁だけ”残す。</p>
+  <div class="grid2">
+    <div class="easy">
+      <h2>処理の流れ</h2>
+      <ul>
+        <li><b>パス1（縁）</b>：頂点を<b>法線方向に Width だけ押し出し</b>、<code>CullFront</code>で<b>裏面だけ</b>を単色（黒）で描画＋深度書き込み</li>
+        <li><b>パス2（本体）</b>：通常のLit描画が内側を上書き → 押し出したぶんの<b>輪郭が残る</b></li>
+      </ul>
+    </div>
+    <div class="tech">
+      <h2>🔧 技術詳細</h2>
+      <ul>
+        <li>専用シェーダ <code>VS_Outline</code>（頂点押し出し）／<code>PS_Outline</code>（単色）を新規追加</li>
+        <li>定数バッファ <code>cbOutline { Width, DepthBias }</code>、<code>SetOutlineWidth()</code>で幅指定（既定 <code>Width=0.04</code> ＝ワールド単位なので遠近で太さが一定）</li>
+        <li>切替は <code>BeginOutline()/EndOutline()</code>（ラスタライザを <code>CullFront</code> に）</li>
+        <li>岩は <code>DrawVertices()</code> を <code>Scale×OutlineScale + CullFront</code> で呼んでも同じ効果</li>
+      </ul>
+    </div>
+  </div>
+  <div class="pageno">6</div>
+</div>
+
+<!-- ④-B 草ブレンド -->
+<div class="slide">
+  <h1>④-B 草ブレンド（重力対応・PS内）</h1>
+  <p class="sub">面の法線と重力の上方向の内積で「上向き＝草／横向き＝岩」をピクセル単位で混ぜる。</p>
+  <div class="grid2">
+    <div class="easy">
+      <h2>計算式（ピクセルシェーダ）</h2>
+      <ul>
+        <li><code>d = dot(N, GravityUpDir)</code>（面が上をどれだけ向くか, -1〜1）</li>
+        <li><code>t = smoothstep/ pow(d, Sharpness)</code> で 0〜1 化</li>
+        <li><code>albedo = lerp(岩テクスチャ, 草テクスチャ, t)</code></li>
+        <li>境界帯 <code>GrassEdgeWidth</code> に専用エッジテクスチャを重ねる</li>
+      </ul>
+    </div>
+    <div class="tech">
+      <h2>🔧 技術詳細</h2>
+      <ul>
+        <li>草は<b>トライプラナー</b>でサンプリング（UVなしメッシュでも貼れる）</li>
+        <li><code>GravityUpDir</code> を毎フレーム定数バッファ <code>cb0_Obj</code> へ転送 → <b>惑星が回転しても“上”が追従</b></li>
+        <li>API：<code>SetGrassBlend(enable, upDir, sharpness, scale)</code> / <code>SetGrassTexture</code> / <code>SetGrassNormalTexture</code>（法線マップ）/ <code>SetGrassEdgeTexture</code></li>
+        <li>フラグ：<code>UseGrass / UseGrassNormal / UseGrassEdge</code></li>
+      </ul>
+    </div>
+  </div>
+  <div class="pageno">7</div>
+</div>
+
+<!-- ④-C トライプラナー & 球法線 -->
+<div class="slide">
+  <h1>④-C トライプラナーUV ／ 球の法線</h1>
+  <div class="grid2">
+    <div class="easy">
+      <h2>トライプラナー投影</h2>
+      <ul>
+        <li>ワールド座標を<b>XY・YZ・ZX の3平面へ投影</b>して3回サンプリング</li>
+        <li>重み <code>w = pow(abs(N), k)</code> を正規化してブレンド</li>
+        <li>→ UV展開不要・<b>継ぎ目（シーム）が出ない</b>。<code>TriplanarScale=0.1</code></li>
+      </ul>
+      <h2>球の法線（SphereNormal）</h2>
+      <ul>
+        <li>PSで法線を <code>N = normalize(worldPos − center)</code> に置換</li>
+        <li>→ ローポリ球でも<b>カクつかず滑らかな陰影</b></li>
+      </ul>
+    </div>
+    <div class="tech">
+      <h2>🔧 技術詳細</h2>
+      <ul>
+        <li>メッシュ法線を使わず<b>面位置から法線を再構成</b>するのがポイント（頂点数を増やさず丸く見せる）</li>
+        <li>API：<code>SetTriplanarUV(enable, scale)</code> / <code>SetSphereNormal(true)</code></li>
+        <li>重力の球惑星の地面描画で <code>SphereNormal + 草ブレンド</code> を併用</li>
+        <li>箱惑星は通常法線、球惑星のみ中心基準に切替</li>
+      </ul>
+    </div>
+  </div>
+  <div class="pageno">8</div>
+</div>
+
+<!-- ④-D DrawVertices拡張 -->
+<div class="slide">
+  <h1>④-D DrawVertices の拡張</h1>
+  <p class="sub">モデルを介さず、コードで作った頂点配列を直接GPUへ送って描く関数。引数で描画状態を選べるよう拡張。</p>
+  <div class="grid2">
+    <div class="easy">
+      <h2>シグネチャ</h2>
+      <pre>DrawVertices(
+  vertices,            // 頂点配列
+  mWorld,              // ワールド行列
+  colRate,             // 乗算色(着色)
+  depthState,          // 深度の扱い
+  topology,            // 線/三角形
+  raster);             // カリング</pre>
+    </div>
+    <div class="tech">
+      <h2>🔧 内部処理</h2>
+      <ul>
+        <li><code>cb1_Mesh.mW = mWorld</code> と <code>colRate</code> を定数バッファへ転送</li>
+        <li><code>ChangeRasterizerState / ChangeDepthStencilState</code> でステート切替（描画後 Undo）</li>
+        <li><b>動的頂点バッファに DISCARD 書き込み → <code>context->Draw()</code></b>（インデックス無し）</li>
+      </ul>
+      <h2>選べる値</h2>
+      <ul>
+        <li>topology：<code>TRIANGLELIST</code>(面) / <code>LINELIST</code>(線)</li>
+        <li>raster：<code>CullNone/Front/Back</code>　depth：<code>ZEnable/ZWriteDisable</code></li>
+        <li>岩は<b>3回呼ぶ</b>（アウトライン＋面＋ワイヤー）</li>
+      </ul>
+    </div>
+  </div>
+  <div class="pageno">9</div>
+</div>
+
+<!-- ④-E 角丸UI -->
+<div class="slide">
+  <h1>④-E 角丸UI ／ 日本語フォント</h1>
+  <div class="grid2">
+    <div class="easy">
+      <h2>角丸の作り方（頂点生成）</h2>
+      <ul>
+        <li>角丸矩形＝<b>中央＋上下左右の矩形＋四隅の扇形</b>で塗る</li>
+        <li>四隅は <code>cornerSegs</code> 分割した<b>三角形ファン</b>で円弧を近似</li>
+        <li><code>radius</code> は <code>min(extentX, extentY)</code> でクランプ</li>
+        <li><code>DrawRoundedBubble(To)</code>：角丸＋三角の尻尾を対象座標へ向ける</li>
+      </ul>
+    </div>
+    <div class="tech">
+      <h2>🔧 日本語フォント DrawFont</h2>
+      <ul>
+        <li>GDI で文字を<b>テクスチャ化（CP932）</b>し、グリフごとにスプライト描画</li>
+        <li>中央寄せは <code>各グリフ幅の合計</code> を測って <code>-w/2</code> ずらす</li>
+        <li>2系統：<b>KdFont=GDI/CP932</b>（DrawFont）と <b>ImGui=UTF-8</b> を使い分け</li>
+      </ul>
+      <p style="font-size:11pt;color:#cfe0f5">用途：設定ウィンドウ、コアリアのセリフ、吹き出しヒント。</p>
+    </div>
+  </div>
+  <div class="pageno">10</div>
+</div>
+
+<!-- ④-F デバッグGUI -->
+<div class="slide">
+  <h1>④-F 開発用メニュー（ImGui）まわり</h1>
+  <div class="grid2">
+    <div class="easy">
+      <h2>常時ImGuiコールバック</h2>
+      <ul>
+        <li><code>GuiProcess()</code> の <code>NewFrame()</code> 後に <code>if(callback) callback()</code> を<b>毎フレーム</b>呼ぶ</li>
+        <li>F3エディタの ON/OFF に関係なく描ける（SE EditorのF5トグル等）</li>
+      </ul>
+      <h2>Game ビューポート</h2>
+      <ul>
+        <li>ポストプロセスの<b>SceneRT を <code>ImGui::Image</code> で表示</b></li>
+        <li>ホバー判定・UV取得でウィンドウ内のクリック位置を逆算</li>
+      </ul>
+    </div>
+    <div class="tech">
+      <h2>🔧 FramebufferScale 補正</h2>
+      <ul>
+        <li>バックバッファを<b>設計解像度1280×720に固定</b>（＝仮想解像度）</li>
+        <li>実ウィンドウが別サイズだとImGuiだけ座標がズレる</li>
+        <li>→ <code>io.DisplayFramebufferScale = (backbufferW/DisplaySize.x, h/y)</code> で補正</li>
+        <li><b>マルチビューポート（ウィンドウ外ドラッグ）は維持</b>したまま解決</li>
+      </ul>
+    </div>
+  </div>
+  <div class="pageno">11</div>
+</div>
+
+<!-- ④-G 土台 -->
+<div class="slide">
+  <h1>④-G 土台のしくみ</h1>
+  <div class="grid2">
+    <div class="easy">
+      <h2>GetDt（FPS非依存の核）</h2>
+      <ul>
+        <li><code>KdFPSController</code> が毎フレーム <code>static s_deltaTime</code> を更新</li>
+        <li>全クラスから <code>KdFPSController::GetDt()</code> で参照</li>
+        <li>各処理は <code>速度 ×= dt×60</code> で<b>60fps基準に正規化</b> → FPSを変えても同速</li>
+      </ul>
+      <h2>Easing</h2>
+      <ul>
+        <li>0→1 を非線形変換。例 <code>InOutCubic = t&lt;.5 ? 4t³ : 1−(−2t+2)³/2</code></li>
+        <li>カメラ寄り・UIのポップに使用（等速のカクつきを消す）</li>
+      </ul>
+    </div>
+    <div class="tech">
+      <h2>🔧 NodeFilter ／ ThreadPool</h2>
+      <ul>
+        <li><b>NodeFilter</b>：<code>KdCollider</code> の判定対象を<b>特定メッシュノードだけ</b>に限定（<code>SetNodeFilter(indices)</code>）→ 体の一部位のみ当たり</li>
+        <li><b>ThreadPool</b>：ワーカースレッド群＋タスクキュー。<code>Init()</code> で起動し<b>重い処理を並列</b>化</li>
+      </ul>
+      <p style="font-size:11pt;color:#cfe0f5">dt×60 の徹底で、アニメ・Effekseer・トレイルすべてがFPS非依存に。</p>
+    </div>
+  </div>
+  <div class="pageno">12</div>
+</div>
+
+<!-- スライド5 -->
+<div class="slide">
+  <h1>⑤ カリング処理と負荷軽減</h1>
+  <h2>カリング処理</h2>
+  <ul>
+    <li>基本は<b>背面カリング（CullBack）</b>で見えない裏面を描かない</li>
+    <li>アウトラインは逆に <b>CullFront</b>：裏面だけ残して縁取りに（カリングを演出へ転用）</li>
+    <li><b>条件カリング</b>：取得済み／期限切れアイテム・メニュー中のHUDは描画スキップ</li>
+  </ul>
+  <h2>処理負荷軽減 ― 「作らない・描かない・使い回す」</h2>
+  <ul>
+    <li><b>共有メッシュを1回だけベイク</b>：岩・重力コアは全インスタンスで頂点を使い回し</li>
+    <li><b>ローポリ設計</b>／<b>動的頂点バッファのプール</b>でバッファ再確保を削減</li>
+    <li><b>音声プリロード</b>で実行時のカクつきを排除</li>
+    <li><b>死亡オブジェクトの自動掃除</b>（remove_if）でリスト肥大を防止</li>
+    <li><b>重力は重力圏外を早期スキップ</b>＋距離²フォールオフ　／　<b>投擲物は寿命で自動消滅</b></li>
+  </ul>
+  <div class="pageno">13</div>
+</div>
+
+<!-- スライド6 マルチスレッド -->
+<div class="slide">
+  <h1>⑥ マルチスレッド（オブジェクトの並列更新）</h1>
+  <p class="sub">たくさんのオブジェクトの更新を、CPUの複数コアで“同時に”走らせています。</p>
+  <div class="grid2">
+    <div class="easy">
+      <h2>しくみ</h2>
+      <ul>
+        <li>各オブジェクトの重い処理を <code>ParallelUpdate()</code> に分けて書く</li>
+        <li>それを <b>KdThreadPool（あらかじめ起動した作業スレッド群）</b> にタスクとして投げる</li>
+        <li><code>std::future</code> で<b>全タスクの完了を待ち合わせて</b>から次の処理へ進む</li>
+        <li>順序が大事／軽い処理は、通常の <code>Update()</code> で1個ずつ（逐次）</li>
+      </ul>
+    </div>
+    <div class="tech">
+      <h2>🔧 コード（BaseScene）</h2>
+<pre>for (auto& obj : m_objList)
+  jobs.push_back(
+    KdThreadPool::Enqueue(
+      []{ obj->ParallelUpdate(); }));
+for (auto& f : jobs) f.get(); // 完了待ち</pre>
+      <ul>
+        <li>スレッドを毎回作らず<b>使い回す</b>（生成コスト削減）</li>
+        <li>並列に置くのは<b>他と干渉しない処理だけ</b>（データ競合を避ける）</li>
+      </ul>
+    </div>
+  </div>
+  <div class="script">オブジェクトの更新は<b>1個ずつ順番にではなく、スレッドプールに配ってCPUの複数コアで同時に</b>処理しています。全部終わるのを待ってから次に進むので、<b>数が増えてもコアの数だけ手分け</b>できて軽いままです。</div>
+  <div class="pageno">14</div>
+</div>
+
+<!-- スライド7 なぜ軽い -->
+<div class="slide">
+  <h1>⑦ オブジェクトが大量でも軽い理由</h1>
+  <p class="sub">結論：<b>オブジェクトプールは使っていません</b>。「並列・共有・掃除」の合わせ技で軽くしています。</p>
+  <ul>
+    <li><b>① 並列更新</b>：重い更新をスレッドプールで複数コアに分散（前ページ）</li>
+    <li><b>② メッシュを1回だけベイクして全インスタンスで共有</b>：岩や重力コアが何個でも頂点データは1セット</li>
+    <li><b>③ ローポリ設計＋頂点バッファの再利用</b>：毎フレームのメモリ確保を避ける</li>
+    <li><b>④ 更新を丸ごと停止</b>：ポーズ・会話・ヒットストップ中はUpdate自体をスキップ</li>
+    <li><b>⑤ 死んだものは掃除＆描かない</b>：取得済み/期限切れは <code>remove_if</code> で除去・描画スキップ、投擲岩は寿命で消滅</li>
+    <li><b>⑥ パーティクルはEffekseer(GPU)任せ</b>：CPU側のバーストも寿命・数で上限</li>
+  </ul>
+  <div class="script">よく「プールで軽いの？」と聞かれますが、<b>使っていません</b>。軽い理由は、<b>更新をマルチスレッドで分担し、メッシュは1回だけ作って全部で使い回し、死んだ物は掃除して描かない</b>から。もし毎フレーム何百個も生成・消滅するようになれば、<b>次の一手としてオブジェクトプール</b>を入れます。</div>
+  <div class="pageno">15</div>
+</div>
+
+</body>
+</html>

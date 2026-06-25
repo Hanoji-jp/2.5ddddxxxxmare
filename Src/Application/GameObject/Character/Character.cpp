@@ -102,6 +102,9 @@ void Character::ApplyGravity()
     }
     const GravityInfluenceResult gravResult = m_gravCache;
     const float dt60 = KdFPSController::GetDt() * 60.0f;
+    // 重力回転（upDir）のSlerpをフレームレート非依存に：60fpsで UpDirSlerpSpeed に一致する
+    // 指数補間係数。高FPSで回転が速くなるのを防ぐ。
+    const float upSlerp = 1.0f - std::powf(1.0f - PlanetConst::UpDirSlerpSpeed, dt60);
     m_prevPlanetIndex = m_currentPlanetIndex;
     // 着地中は現在の惑星を固定。空中のときだけ支配惑星に乗り換える
     // （着地中に隣Boxへ乗り換えると、その下に地面が無く isGround を失うため）
@@ -109,6 +112,32 @@ void Character::ApplyGravity()
     {
         m_currentPlanetIndex = gravResult.dominantPlanetIdx;
         m_pCurrentPlanet     = PlanetGravityManager::Instance().GetPlanet(m_currentPlanetIndex);
+    }
+
+    // ── 2.5D: 現在(支配)BoxのZ範囲外へ出たら、惑星/ゾーンに関係なくワールド下向き(-Y)で落とす ──
+    //   Z端を越えると接地は外れる(isGround=false)が、Boxの重力影響(hasInfluence)が残ると
+    //   「下」がBox方向(Z成分入り)になり、さらに Move() が m_upDir 軸以外のY速度を毎フレーム
+    //   捨てるため velY が0のまま＝落ちない。ここで up を +Y に固定して -Y 重力を加え、必ず落とす。
+    if (!m_ignoreGravityZones && !m_isGround && m_manualGravityDir == ManualGravityDir::None
+        && m_pCurrentPlanet && m_pCurrentPlanet->Shape == PlanetShape::Box
+        && std::abs(GetPos().z - m_pCurrentPlanet->Position.z)
+           > m_pCurrentPlanet->BoxHalfExtents.z + CollisionConst::GroundSampleRadius)
+    {
+        constexpr Math::Vector3 kFallGravDir = { 0.0f, -1.0f, 0.0f };
+        constexpr Math::Vector3 kFallUp      = { 0.0f,  1.0f, 0.0f };
+
+        m_upDir = kFallUp;
+        const Math::Quaternion fromQ = Math::Quaternion::FromToRotation({ 0.0f, 1.0f, 0.0f }, m_upDirVisual);
+        const Math::Quaternion toQ   = Math::Quaternion::FromToRotation({ 0.0f, 1.0f, 0.0f }, kFallUp);
+        m_upDirVisual = Math::Vector3::Transform({ 0.0f, 1.0f, 0.0f },
+            Math::Matrix::CreateFromQuaternion(Math::Quaternion::Slerp(fromQ, toQ, upSlerp)));
+        m_upDirVisual.Normalize();
+
+        const float radialVel = m_velocity.Dot(kFallGravDir);
+        const float newRadial = std::min(radialVel + PlanetConst::GravityAccel * m_gravityScale * dt60,
+                                         PlanetConst::MaxFallSpeed * m_gravityScale);
+        if (newRadial > radialVel) { m_velocity += kFallGravDir * (newRadial - radialVel); }
+        return;
     }
 
     // 惑星重力の抑制は「実際にManualGravityゾーン内」のときだけ。
@@ -141,7 +170,7 @@ void Character::ApplyGravity()
         const Math::Quaternion fromQ  = Math::Quaternion::FromToRotation({ 0.0f, 1.0f, 0.0f }, m_upDirVisual);
         const Math::Quaternion toQ    = Math::Quaternion::FromToRotation({ 0.0f, 1.0f, 0.0f }, targetUp);
         m_upDirVisual = Math::Vector3::Transform({ 0.0f, 1.0f, 0.0f },
-            Math::Matrix::CreateFromQuaternion(Math::Quaternion::Slerp(fromQ, toQ, PlanetConst::UpDirSlerpSpeed)));
+            Math::Matrix::CreateFromQuaternion(Math::Quaternion::Slerp(fromQ, toQ, upSlerp)));
         m_upDirVisual.Normalize();
 
         if (m_isGround) { return; }  // velocity 加算のみスキップ、Slerp は上で完了済み
@@ -174,7 +203,7 @@ void Character::ApplyGravity()
             const Math::Quaternion fromQv = Math::Quaternion::FromToRotation({ 0.0f, 1.0f, 0.0f }, m_upDirVisual);
             const Math::Quaternion toQv   = Math::Quaternion::FromToRotation({ 0.0f, 1.0f, 0.0f }, m_upDir);
             m_upDirVisual = Math::Vector3::Transform({ 0.0f, 1.0f, 0.0f },
-                Math::Matrix::CreateFromQuaternion(Math::Quaternion::Slerp(fromQv, toQv, PlanetConst::UpDirSlerpSpeed)));
+                Math::Matrix::CreateFromQuaternion(Math::Quaternion::Slerp(fromQv, toQv, upSlerp)));
             m_upDirVisual.Normalize();
             return;
         }
@@ -194,7 +223,7 @@ void Character::ApplyGravity()
             const Math::Quaternion fromQ = Math::Quaternion::FromToRotation({ 0.0f, 1.0f, 0.0f }, m_upDirVisual);
             const Math::Quaternion toQ   = Math::Quaternion::FromToRotation({ 0.0f, 1.0f, 0.0f }, m_upDir);
             m_upDirVisual = Math::Vector3::Transform({ 0.0f, 1.0f, 0.0f },
-                Math::Matrix::CreateFromQuaternion(Math::Quaternion::Slerp(fromQ, toQ, PlanetConst::UpDirSlerpSpeed)));
+                Math::Matrix::CreateFromQuaternion(Math::Quaternion::Slerp(fromQ, toQ, upSlerp)));
             m_upDirVisual.Normalize();
         }
 
@@ -215,7 +244,7 @@ void Character::ApplyGravity()
             const Math::Quaternion fromQ = Math::Quaternion::FromToRotation({ 0.0f, 1.0f, 0.0f }, m_upDirVisual);
             const Math::Quaternion toQ   = Math::Quaternion::FromToRotation({ 0.0f, 1.0f, 0.0f }, targetUp);
             m_upDirVisual = Math::Vector3::Transform({ 0.0f, 1.0f, 0.0f },
-                Math::Matrix::CreateFromQuaternion(Math::Quaternion::Slerp(fromQ, toQ, PlanetConst::UpDirSlerpSpeed)));
+                Math::Matrix::CreateFromQuaternion(Math::Quaternion::Slerp(fromQ, toQ, upSlerp)));
             m_upDirVisual.Normalize();
         }
 
@@ -235,7 +264,7 @@ void Character::ApplyGravity()
         const Math::Quaternion fromQ = Math::Quaternion::FromToRotation({ 0.0f, 1.0f, 0.0f }, m_upDirVisual);
         const Math::Quaternion toQ   = Math::Quaternion::FromToRotation({ 0.0f, 1.0f, 0.0f }, kDefaultUp);
         m_upDirVisual = Math::Vector3::Transform({ 0.0f, 1.0f, 0.0f },
-            Math::Matrix::CreateFromQuaternion(Math::Quaternion::Slerp(fromQ, toQ, PlanetConst::UpDirSlerpSpeed)));
+            Math::Matrix::CreateFromQuaternion(Math::Quaternion::Slerp(fromQ, toQ, upSlerp)));
         m_upDirVisual.Normalize();
         if (m_isGround) { return; }  // velocity 加算のみスキップ、Slerp は上で完了済み
         const float radialVel = m_velocity.Dot(kDefaultGravDir);
@@ -244,7 +273,27 @@ void Character::ApplyGravity()
         return;
     }
 
-    // ── ケース⑦
+    // ── ケース⑦：重力源が一切ない場所（惑星圏外＋ゾーン外）。
+    //   従来は無重力で浮いてしまっていた（箱の端からはみ出すと落ちない原因）。
+    //   ワールド下向きの既定重力を加算して、ちゃんと落下させる。
+    {
+        constexpr Math::Vector3 kFallGravDir = { 0.0f, -1.0f, 0.0f };
+        constexpr Math::Vector3 kFallUp      = { 0.0f,  1.0f, 0.0f };
+
+        m_upDir = kFallUp;
+        const Math::Quaternion fromQ = Math::Quaternion::FromToRotation({ 0.0f, 1.0f, 0.0f }, m_upDirVisual);
+        const Math::Quaternion toQ   = Math::Quaternion::FromToRotation({ 0.0f, 1.0f, 0.0f }, kFallUp);
+        m_upDirVisual = Math::Vector3::Transform({ 0.0f, 1.0f, 0.0f },
+            Math::Matrix::CreateFromQuaternion(Math::Quaternion::Slerp(fromQ, toQ, upSlerp)));
+        m_upDirVisual.Normalize();
+
+        if (m_isGround) { return; }   // 念のため：接地中は加算しない
+
+        const float radialVel = m_velocity.Dot(kFallGravDir);
+        const float newRadial = std::min(radialVel + PlanetConst::GravityAccel * m_gravityScale * dt60,
+                                         PlanetConst::MaxFallSpeed * m_gravityScale);
+        if (newRadial > radialVel) { m_velocity += kFallGravDir * (newRadial - radialVel); }
+    }
 }
 
 void Character::ApplyVelocity()
@@ -403,13 +452,14 @@ void Character::CheckGround()
         const Math::Vector3 worldFwdMF = (std::abs(m_upDir.z) < 0.9f)
             ? Math::Vector3{ 0.0f, 0.0f, 1.0f } : Math::Vector3{ 1.0f, 0.0f, 0.0f };
         Math::Vector3 rightAxisMF; m_upDir.Cross(worldFwdMF, rightAxisMF); rightAxisMF.Normalize();
-        Math::Vector3 fwdAxisMF;   rightAxisMF.Cross(m_upDir, fwdAxisMF);  fwdAxisMF.Normalize();
 
+        // ★ 奥行き(Z/fwd)方向のサンプルは撒かない＝プレイヤーの実Zで接地判定する。
+        //   これにより移動床のZ端からはみ出すと接地が外れて落下する（運ばれている間は乗る）。
+        //   横(right)方向だけは端で沈まないよう体幅ぶんサンプルを残す。
         const float srMF = CollisionConst::GroundSampleRadius;
-        const Math::Vector3 sampleOffsetsMF[5] = {
+        const Math::Vector3 sampleOffsetsMF[3] = {
             { 0.0f, 0.0f, 0.0f },
             rightAxisMF * srMF, rightAxisMF * -srMF,
-            fwdAxisMF   * srMF, fwdAxisMF   * -srMF,
         };
 
         for (auto& wpMF : m_movingFloors)
@@ -419,6 +469,12 @@ void Character::CheckGround()
 
             const KdCollider* col = spMF->GetCollider();
             if (!col) { continue; }
+
+            // ★ 2.5Dの奥行き(Z)ゲート：床のZ範囲外なら接地しない＝落下（Box惑星と同じ）。
+            if (std::abs(pos.z - spMF->GetPos().z) > spMF->GetHalfExtents().z + srMF)
+            {
+                continue;
+            }
 
             for (const Math::Vector3& off : sampleOffsetsMF)
             {
@@ -540,6 +596,14 @@ void Character::CheckGround()
         for (const auto& p : planets)
         {
             if (p.Shape != PlanetShape::Box || !p.pCollider) { continue; }
+
+            // ★ 2.5Dの奥行き(Z)ゲート：プレイヤーがこのBoxのZ範囲外なら接地しない＝落下。
+            //   接地レイ(メッシュ)のZ範囲が見た目(BoxHalfExtents.z)と食い違っても、
+            //   ここを権威にしてZ端からのはみ出しで必ず落とす（横の端と同じ感覚）。
+            if (std::abs(pos.z - p.Position.z) > p.BoxHalfExtents.z + CollisionConst::GroundSampleRadius)
+            {
+                continue;
+            }
 
             for (const Math::Vector3& off : sampleOffsets)
             {
@@ -1045,6 +1109,14 @@ void Character::CheckWall()
             -lp.x - half.x,   // 左面
         };
 
+        // ★ 2.5D: BoxのZ範囲外（奥行きはみ出し）ではキャップ壁を当てない。
+        //   キャップ面の横範囲チェックが lp.x / lp.y のみで lp.z を見ないため、
+        //   Z外に出ても上面キャップが壁として発火し、落下速度を打ち消していた（Z落下不能の真因）。
+        if (std::abs(lp.z) > half.z + CollisionConst::GroundSampleRadius)
+        {
+            continue;   // このBoxのキャップ押し出しをスキップ（Z端から落とす）
+        }
+
         for (int ci = 0; ci < 4; ++ci)
         {
             const auto& cf = capFaces[ci];
@@ -1313,15 +1385,15 @@ void Character::DrawCollisionDebugGui()
     // FirstUseEver：imgui.ini に配置/ドッキング情報があればそちらを優先（Onceだと毎起動で上書きされ外れる）
     ImGui::SetNextWindowSize(ImVec2(520, 600), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_FirstUseEver);
-    if (!ImGui::Begin("Collision Debug"))
+    if (!ImGui::Begin(U8("当たり判定デバッグ")))
     {
         ImGui::End();
         return;
     }
 
     // ---- ログ ON/OFF ----
-    ImGui::Checkbox("Enable Log (120 frames)", &m_debugLogEnabled);
-    if (ImGui::Button("Clear Log"))
+    ImGui::Checkbox(U8("ログ記録 (120フレーム)"), &m_debugLogEnabled);
+    if (ImGui::Button(U8("ログ消去")))
     {
         m_collisionLog.clear();
         m_collisionLogIdx = 0;
@@ -1332,10 +1404,10 @@ void Character::DrawCollisionDebugGui()
     ImGui::TextColored(ImVec4(1,1,0,1), "=== Current Frame ===");
     {
         const auto& f = m_currentFrameLog;
-        ImGui::Text("Pos      : (%.3f, %.3f, %.3f)", f.pos.x, f.pos.y, f.pos.z);
-        ImGui::Text("Velocity : (%.3f, %.3f, %.3f)", f.velocity.x, f.velocity.y, f.velocity.z);
-        ImGui::Text("UpDir    : (%.3f, %.3f, %.3f)", f.upDir.x, f.upDir.y, f.upDir.z);
-        ImGui::Text("isGround : %s", f.isGround ? "TRUE" : "false");
+        ImGui::Text(U8("位置     : (%.3f, %.3f, %.3f)"), f.pos.x, f.pos.y, f.pos.z);
+        ImGui::Text(U8("速度     : (%.3f, %.3f, %.3f)"), f.velocity.x, f.velocity.y, f.velocity.z);
+        ImGui::Text(U8("上方向   : (%.3f, %.3f, %.3f)"), f.upDir.x, f.upDir.y, f.upDir.z);
+        ImGui::Text(U8("接地     : %s"), f.isGround ? "TRUE" : "false");
 
         if (!f.wallHits.empty())
         {
@@ -1352,7 +1424,7 @@ void Character::DrawCollisionDebugGui()
                     w.isNormal ? "[N]" : "   ",
                     w.filtered ? "[FILTERED]" : "");
             }
-            ImGui::Text("  TotalPush: (%.4f, %.4f, %.4f)",
+            ImGui::Text(U8("  押し戻し合計: (%.4f, %.4f, %.4f)"),
                 f.wallTotalPush.x, f.wallTotalPush.y, f.wallTotalPush.z);
         }
         else
@@ -1373,7 +1445,7 @@ void Character::DrawCollisionDebugGui()
                     g.hitDist,
                     g.filtered ? "[FILTERED]" : "");
             }
-            ImGui::Text("  Snapped: %s", f.groundSnapped ? "YES" : "no");
+            ImGui::Text(U8("  スナップ: %s"), f.groundSnapped ? "YES" : "no");
         }
         else
         {

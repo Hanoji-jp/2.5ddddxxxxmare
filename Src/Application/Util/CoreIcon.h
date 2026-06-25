@@ -17,6 +17,26 @@
 //==========================================================
 namespace CoreIcon
 {
+	// HSV(h:0..1, s,v:0..1) → RGB。レインボー岩アイコン用。
+	inline Math::Color RbHsv(float h, float s, float v)
+	{
+		h = h - std::floor(h);
+		const float i = std::floor(h * 6.0f);
+		const float f = h * 6.0f - i;
+		const float p = v * (1.0f - s);
+		const float q = v * (1.0f - f * s);
+		const float t = v * (1.0f - (1.0f - f) * s);
+		switch (static_cast<int>(i) % 6)
+		{
+		case 0:  return Math::Color(v, t, p, 1.0f);
+		case 1:  return Math::Color(q, v, p, 1.0f);
+		case 2:  return Math::Color(p, v, t, 1.0f);
+		case 3:  return Math::Color(p, q, v, 1.0f);
+		case 4:  return Math::Color(t, p, v, 1.0f);
+		default: return Math::Color(v, p, q, 1.0f);
+		}
+	}
+
 	inline void Draw(KdSpriteShader& sprite, int cx, int cy, int size, float spin,
 		const Math::Color& baseColor = Math::Color(GravityCoreConst::FaceColorR,
 			GravityCoreConst::FaceColorG, GravityCoreConst::FaceColorB, 1.0f),
@@ -110,12 +130,20 @@ namespace CoreIcon
 
 		if (!glow)
 		{
-			// ── Rock型：緑のエメラルド（敵ドロップの回復石 RockDrop を 2D 再現）──
-			//   面色・ワイヤー色は RockDrop の式をそのまま移植（緯度で暗く＋経度で色相ゆらぎ）。
+			// ── Rock型：レインボーのカラフル岩（収集アイテム RockGem に合わせた見た目）──
+			//   面ごとに色相を変えて虹色にし、spin で色相が回る。
 			(void)baseColor;
 			auto& smRock = KdShaderManager::Instance();
 
-			// 0) 外周ハロー（加算で柔らかい緑光＝エメラルドの発光）
+			// 色相：経度で1周ぶん回し、spin でゆっくり全体を循環させる。
+			auto hueOf = [&](int la, int lo) -> float
+			{
+				return static_cast<float>(lo) / static_cast<float>(lons)
+					+ static_cast<float>(la) * 0.05f
+					+ spin * 0.15f;
+			};
+
+			// 0) 外周ハロー（加算で柔らかい虹光。レイヤーごとに色相をずらす）
 			smRock.ChangeBlendState(KdBlendState::Add);
 			{
 				constexpr int LAYERS = 14;
@@ -124,7 +152,8 @@ namespace CoreIcon
 					const float u   = static_cast<float>(li) / (LAYERS - 1);
 					const float rad = R * (1.0f + u * 0.85f);
 					const float a   = 0.10f * std::exp(-3.2f * u * u);
-					const Math::Color hc(RockConst::ColorR, RockConst::ColorG, RockConst::ColorB, a);
+					Math::Color hc = RbHsv(spin * 0.15f + u * 0.5f, 0.8f, 1.0f);
+					hc.w = a;
 					sprite.DrawCircle(cx, cy, static_cast<int>(rad), &hc, true);
 				}
 			}
@@ -134,33 +163,29 @@ namespace CoreIcon
 			{
 				const float tt     = static_cast<float>(t.la) / static_cast<float>(std::max(lats - 1, 1));
 				const float bright = (1.0f - tt * RockConst::DarkFactor) * t.shade;
-				const float phase  = kTau * static_cast<float>(t.lo) / static_cast<float>(lons)
-								   + static_cast<float>(t.la) * 0.9f;
-				fillTri(t, Math::Color(
-					RockConst::ColorR * bright * (0.8f + 0.2f * std::sin(phase)),
-					RockConst::ColorG * bright * (0.8f + 0.2f * std::cos(phase * 0.7f)),
-					RockConst::ColorB * bright, 1.0f));
+				const Math::Color base = RbHsv(hueOf(t.la, t.lo), 0.85f, 1.0f);
+				fillTri(t, Math::Color(base.x * bright, base.y * bright, base.z * bright, 1.0f));
 			}
-			// 本体の発光：手前の面を加算で薄く重ねてエメラルドを光らせる
+			// 本体の発光：手前の面を加算で薄く重ねて虹色を光らせる
 			smRock.ChangeBlendState(KdBlendState::Add);
 			for (const Tri& t : tris)
 			{
 				if ((proj[t.a].z + proj[t.b].z + proj[t.c].z) < 0.0f) { continue; } // 手前のみ
 				const float e = 0.35f * t.shade;
-				fillTri(t, Math::Color(RockConst::ColorR * e, RockConst::ColorG * e, RockConst::ColorB * e, 1.0f));
+				const Math::Color base = RbHsv(hueOf(t.la, t.lo), 0.85f, 1.0f);
+				fillTri(t, Math::Color(base.x * e, base.y * e, base.z * e, 1.0f));
 			}
 			smRock.UndoBlendState();
 
-			// ワイヤー（手前側の緯線・経線）でエッジを立てる
-			auto redge = [&](int ia, int ib, int la)
+			// ワイヤー（手前側の緯線・経線）でエッジを立てる（白寄りの虹色）
+			auto redge = [&](int ia, int ib, int la, int lo)
 			{
 				if ((proj[ia].z + proj[ib].z) * 0.5f < 0.0f) { return; }
-				const float tt = static_cast<float>(la) / static_cast<float>(lats);
-				const float b  = (1.0f - tt * RockConst::DarkFactor) * RockConst::WireBoost;
+				const Math::Color base = RbHsv(hueOf(la, lo), 0.6f, 1.0f);
 				const Math::Color c(
-					std::min(RockConst::ColorR * b + 0.35f * b, 1.0f),
-					std::min(RockConst::ColorG * b + 0.20f * b, 1.0f),
-					std::min(RockConst::ColorB * b + 0.10f * b, 1.0f),
+					std::min(base.x + 0.25f, 1.0f),
+					std::min(base.y + 0.25f, 1.0f),
+					std::min(base.z + 0.25f, 1.0f),
 					RockConst::WireAlpha);
 				sprite.DrawLine(
 					cx + static_cast<int>(proj[ia].x), cy + static_cast<int>(proj[ia].y),
@@ -170,8 +195,8 @@ namespace CoreIcon
 			{
 				for (int lo = 0; lo < lons; ++lo)
 				{
-					redge(vidx(la, lo), vidx(la, lo + 1), la);
-					if (la < lats) { redge(vidx(la, lo), vidx(la + 1, lo), la); }
+					redge(vidx(la, lo), vidx(la, lo + 1), la, lo);
+					if (la < lats) { redge(vidx(la, lo), vidx(la + 1, lo), la, lo); }
 				}
 			}
 			return;

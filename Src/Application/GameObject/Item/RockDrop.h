@@ -32,6 +32,27 @@ public:
 	// 取得可能か（散らばり猶予を過ぎたら true）
 	bool IsPickable() const { return m_age >= RockConst::PickupDelay; }
 
+	// カーソル磁石：lerp 率で target へ吸い寄せる（その場に静止させる）
+	void PullTo(const Math::Vector3& target, float lerp)
+	{
+		m_pos += (target - m_pos) * lerp;
+		m_velocity = Math::Vector3::Zero;
+		m_landed = true;   // 吸い寄せ中はその場で静止（重力で落ちない）
+		m_mWorld = Math::Matrix::CreateTranslation(m_pos);
+		SetPos(m_pos);
+	}
+	// カーソル磁石：start 地点（カメラ付近）から dir 方向へ speed の初速で飛ばす（重力で落ちて再着地する）
+	void FlingFrom(const Math::Vector3& start, const Math::Vector3& dir, float speed)
+	{
+		m_pos       = start;
+		m_velocity  = dir * speed;
+		m_landed    = false;
+		m_hasGround = true;   // 飛んだ先で再着地できるように
+		m_spawnUp   = m_pos.Dot(m_upDir);   // 落下消滅判定の基準を更新
+		m_mWorld    = Math::Matrix::CreateTranslation(m_pos);
+		SetPos(m_pos);
+	}
+
 private:
 	// 全インスタンス共有のローポリ岩石メッシュ（半径1ユニット）
 	static const std::vector<KdPolygon::Vertex>& TriVerts();

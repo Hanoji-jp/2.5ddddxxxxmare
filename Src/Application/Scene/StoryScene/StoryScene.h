@@ -38,4 +38,10 @@ private:
 	float m_timer       = 0.0f;
 	bool  m_advancePrev = false;    // Enter/Space のエッジ検出
 	bool  m_skipPrev    = false;    // ESC のエッジ検出
+
+	// マウスドラッグでの角めくり（コーナーピール）
+	bool          m_dragging = false;       // ページをドラッグ中か
+	int           m_cornerU  = 1;           // 掴んだ角の左右（0=左 / 1=右）
+	int           m_cornerV  = 1;           // 掴んだ角の上下（0=上 / 1=下）
+	Math::Vector2 m_fold     = { 0.0f, 0.0f };  // 角からの変位（スクリーンpx）
 };

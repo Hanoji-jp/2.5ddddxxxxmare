@@ -321,17 +321,17 @@ void CoreliaManager::DrawDebugShapes() const
 
 void CoreliaManager::DrawGui()
 {
-    if (!ImGui::Begin("Corelia NPCs", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+    if (!ImGui::Begin(U8("コアリアNPC"), nullptr, ImGuiWindowFlags_AlwaysAutoResize))
     {
         ImGui::End();
         return;
     }
 
     ImGui::TextColored({ 0.4f, 1.0f, 0.8f, 1.0f }, "Corelia (hint NPC) Editor");
-    ImGui::Text("Hints loaded: %d", GetHintCount());
+    ImGui::Text(U8("読込ヒント数: %d"), GetHintCount());
     ImGui::Separator();
 
-    if (ImGui::Button("Add Corelia"))
+    if (ImGui::Button(U8("コアリア追加")))
     {
         CoreliaNpc npc;
         npc.Pos = { 0.0f, 0.0f, 0.0f };
@@ -357,21 +357,21 @@ void CoreliaManager::DrawGui()
         auto& npc = m_npcs[m_selectedIndex];
 
         float pos[3] = { npc.Pos.x, npc.Pos.y, npc.Pos.z };
-        if (ImGui::DragFloat3("Pos", pos, 0.5f, -1000.0f, 1000.0f))
+        if (ImGui::DragFloat3(U8("位置"), pos, 0.5f, -1000.0f, 1000.0f))
         {
             npc.Pos = { pos[0], pos[1], pos[2] };
         }
 
         const int maxHint = (GetHintCount() > 0) ? GetHintCount() - 1 : 0;
-        ImGui::DragInt("Hint Id", &npc.HintId, 0.1f, 0, maxHint);
+        ImGui::DragInt(U8("ヒントID"), &npc.HintId, 0.1f, 0, maxHint);
         if (npc.HintId < 0) { npc.HintId = 0; }
         if (npc.HintId > maxHint) { npc.HintId = maxHint; }
 
         // 話す吹き出しの向き（見た目が横向きのNPCは Left/Right を選ぶ）
-        const char* dirItems[] = { "Up", "Down", "Left", "Right" };
-        ImGui::Combo("Bubble Dir", &npc.BubbleDir, dirItems, 4);
+        const char* dirItems[] = { U8("上"), U8("下"), U8("左"), U8("右") };
+        ImGui::Combo(U8("吹き出し向き"), &npc.BubbleDir, dirItems, 4);
 
-        if (ImGui::Button("Delete"))
+        if (ImGui::Button(U8("削除")))
         {
             m_npcs.erase(m_npcs.begin() + m_selectedIndex);
             m_selectedIndex = -1;
@@ -379,11 +379,11 @@ void CoreliaManager::DrawGui()
     }
 
     ImGui::Separator();
-    if (ImGui::Button("Save")) { Save(); }
+    if (ImGui::Button(U8("保存"))) { Save(); }
     ImGui::SameLine();
-    if (ImGui::Button("Load")) { Load(); }
+    if (ImGui::Button(U8("読込"))) { Load(); }
     ImGui::SameLine();
-    if (ImGui::Button("Reload Hints")) { LoadHints(); }
+    if (ImGui::Button(U8("ヒント再読込"))) { LoadHints(); }
 
     ImGui::End();
 }
