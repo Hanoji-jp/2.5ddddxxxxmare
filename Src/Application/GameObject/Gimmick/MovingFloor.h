@@ -55,6 +55,9 @@ public:
 	// 現在の中心位置
 	Math::Vector3 GetPos() const override { return m_pos; }
 
+	// 基準（移動前）の中心位置。追従オブジェクトのオフセット計算に使う
+	const Math::Vector3& GetBaseCenter() const { return m_center; }
+
 	// 判定・描画用アクセサ
 	bool               IsNormalGravity() const { return m_bNormalGravity; }
 	BoxFaceGravityMode GetFaceTop()      const { return m_faceTop; }

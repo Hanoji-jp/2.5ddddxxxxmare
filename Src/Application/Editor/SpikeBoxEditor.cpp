@@ -77,6 +77,9 @@ void SpikeBoxEditor::DrawGui()
 			}
 		}
 
+		// 追従する移動床（-1=なし）。移動床のindexを入れるとその床に乗って動く
+		if (ImGui::InputInt(U8("追従する移動床(-1=なし)"), &b.attachFloor)) { m_dirty = true; }
+
 		ImGui::Spacing();
 
 		if (ImGui::Button(U8("削除")))
@@ -122,7 +125,8 @@ void SpikeBoxEditor::Save() const
 			<< b.size.y   << ","
 			<< b.size.z   << ","
 			<< (b.enabled ? 1 : 0) << ","
-			<< static_cast<int>(b.dir) << "\n";
+			<< static_cast<int>(b.dir) << ","
+			<< b.attachFloor << "\n";
 	}
 }
 
@@ -157,6 +161,7 @@ void SpikeBoxEditor::Load()
 			const int di = std::stoi(tokens[7]);
 			if (di >= 0 && di <= 3) { d.dir = static_cast<SpikeBoxConst::SpikeDir>(di); }
 		}
+		if (tokens.size() >= 9) { d.attachFloor = std::stoi(tokens[8]); }
 
 		m_boxes.push_back(d);
 	}

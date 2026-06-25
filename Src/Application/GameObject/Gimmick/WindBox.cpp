@@ -1,6 +1,7 @@
 ﻿#include "../../../Pch.h"
 #include "WindBox.h"
 #include "../../Const/OutlineConst.h"
+#include "MovingFloor.h"
 
 static float WBRand01() { return static_cast<float>(rand()) / static_cast<float>(RAND_MAX); }
 static float WBRandSym() { return (WBRand01() - 0.5f) * 2.0f; }
@@ -8,7 +9,8 @@ static float WBRandSym() { return (WBRand01() - 0.5f) * 2.0f; }
 //----------------------------------------------------------
 void WindBox::Init(const WindBoxData& data)
 {
-	m_center   = data.center;
+	m_center     = data.center;
+	m_baseCenter = data.center;   // 追従オフセットの基準
 	m_halfSize = data.size * 0.5f;
 	m_windDir  = data.windDir;
 	m_power    = data.power;
@@ -108,6 +110,12 @@ void WindBox::InitParticle(WindParticle& p, float initialTravel) const
 void WindBox::Update()
 {
 	if (!m_enabled) { return; }
+
+	// 移動床に追従（アタッチ時のみ）。中心を動かせば下のワールド行列・判定が追従する。
+	if (auto floor = m_attachFloor.lock())
+	{
+		m_center = m_baseCenter + (floor->GetPos() - floor->GetBaseCenter());
+	}
 
 	const float dt = KdFPSController::GetDt();
 

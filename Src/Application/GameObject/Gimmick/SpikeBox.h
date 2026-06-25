@@ -3,6 +3,9 @@
 #include "../../../Framework/Math/KdCollider.h"
 #include "../../Const/SpikeBoxConst.h"
 #include "../../Editor/SpikeBoxEditor.h"
+#include <memory>
+
+class MovingFloor;
 
 //==========================================================
 // SpikeBox
@@ -17,11 +20,15 @@ public:
 	~SpikeBox() override {}
 
 	void Init(const SpikeBoxData& data);
+	void Update()     override;    // 移動床に追従する（アタッチ時のみ動く）
 	void DrawLit()    override;
 	void DrawOutline() override;   // 原神式アウトライン
 	void DrawDebug()  override;
 
 	bool IsVisible() const override { return true; }
+
+	// 移動床へアタッチ（GameScene が Rebuild 時に設定）
+	void SetAttachFloor(const std::weak_ptr<MovingFloor>& floor) { m_attachFloor = floor; }
 
 	bool                IsEnabled()     const { return m_enabled; }
 	const KdCollider*   GetCollider()   const { return m_pCollider.get(); }
@@ -50,4 +57,11 @@ private:
 	bool          m_hasColAabb = false;
 	Math::Vector3 m_colCenter  = {};
 	Math::Vector3 m_colHalf    = {};
+
+	// 移動床への追従（アタッチ）
+	std::weak_ptr<MovingFloor> m_attachFloor;     // 追従先（空なら静止）
+	Math::Vector3              m_baseCenter = {};  // 配置時の中心（オフセット基準）
+
+	// 中心を指定位置へ移す（ワールド行列・COL AABB・SetPos をまとめて更新）
+	void ApplyCenter(const Math::Vector3& newCenter);
 };

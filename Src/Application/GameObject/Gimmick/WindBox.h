@@ -4,6 +4,9 @@
 #include "../../../Framework/Math/KdCollider.h"
 #include "../../Const/WindBoxConst.h"
 #include "../../Editor/WindBoxEditor.h"
+#include <memory>
+
+class MovingFloor;
 
 //==========================================================
 // WindBox
@@ -24,6 +27,9 @@ public:
 	void DrawDebug()  override;
 
 	bool IsVisible() const override { return true; }
+
+	// 移動床へアタッチ（GameScene が Rebuild 時に設定）
+	void SetAttachFloor(const std::weak_ptr<MovingFloor>& floor) { m_attachFloor = floor; }
 
 	// プレイヤー位置がこのボックスの範囲内かどうか
 	bool IsInRange(const Math::Vector3& pos) const;
@@ -54,6 +60,10 @@ private:
 
 	Math::Vector3 m_center   = {};
 	Math::Vector3 m_halfSize = {};   // size * 0.5f
+
+	// 移動床への追従（アタッチ）
+	std::weak_ptr<MovingFloor> m_attachFloor;     // 追従先（空なら静止）
+	Math::Vector3              m_baseCenter = {};  // 配置時の中心（オフセット基準）
 
 	Math::Vector3 m_windDir  = { 1.0f, 0.0f, 0.0f };
 	float         m_power    = WindBoxConst::DefaultPower;

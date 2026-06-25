@@ -465,7 +465,8 @@ void Player::PostUpdate()
         }
         else
         {
-            const bool onSphere = (m_pCurrentPlanet && m_pCurrentPlanet->Shape == PlanetShape::Sphere);
+            const PlanetData* curPlanet = CurrentPlanet();
+            const bool onSphere = (curPlanet && curPlanet->Shape == PlanetShape::Sphere);
             Math::Vector3 tangentBase;
             if (onSphere)
             {
@@ -986,7 +987,6 @@ void Player::Revive()
     // 重力・接地状態をリセット（次フレームで最寄り惑星を取り直せるように）
     m_isGround           = false;
     m_currentPlanetIndex = -1;
-    m_pCurrentPlanet     = nullptr;
     SetInitialGravityDir(ManualGravityDir::None);
     m_upDir              = { 0.0f, 1.0f, 0.0f };
     m_upDirVisual        = { 0.0f, 1.0f, 0.0f };

@@ -1,11 +1,13 @@
 ﻿#include "../../../Pch.h"
 #include "SpikeBox.h"
 #include "../../Const/OutlineConst.h"
+#include "MovingFloor.h"
 
 //----------------------------------------------------------
 void SpikeBox::Init(const SpikeBoxData& data)
 {
-	m_center  = data.center;
+	m_center     = data.center;
+	m_baseCenter = data.center;   // 追従オフセットの基準
 	m_size    = data.size;
 	m_enabled = data.enabled;
 	m_dir     = data.dir;
@@ -78,6 +80,33 @@ void SpikeBox::Init(const SpikeBoxData& data)
 			m_hasColAabb = true;
 		}
 	}
+}
+
+//----------------------------------------------------------
+// 移動床に追従（アタッチ時のみ）。床の現在位置と基準位置の差ぶん中心を動かす。
+//----------------------------------------------------------
+void SpikeBox::Update()
+{
+	auto floor = m_attachFloor.lock();
+	if (!floor) { return; }   // 未アタッチ＝静止
+
+	const Math::Vector3 newCenter = m_baseCenter + (floor->GetPos() - floor->GetBaseCenter());
+	if ((newCenter - m_center).LengthSquared() > 1e-8f) { ApplyCenter(newCenter); }
+}
+
+//----------------------------------------------------------
+// 中心を移動（平行移動のみ＝ワールド行列・COL AABB をまとめてずらす）
+//----------------------------------------------------------
+void SpikeBox::ApplyCenter(const Math::Vector3& newCenter)
+{
+	const Math::Vector3 delta = newCenter - m_center;
+	m_center = newCenter;
+
+	const Math::Matrix rot = Math::Matrix::CreateRotationZ(SpikeBoxConst::DirToAngleZ(m_dir));
+	m_worldMat = Math::Matrix::CreateScale(m_size) * rot * Math::Matrix::CreateTranslation(m_center);
+	SetPos(m_center);
+
+	if (m_hasColAabb) { m_colCenter += delta; }   // 押し出し用AABBも平行移動
 }
 
 //----------------------------------------------------------

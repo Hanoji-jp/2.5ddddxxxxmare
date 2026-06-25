@@ -217,8 +217,9 @@ protected:
     // 現在影響を受けている惑星のインデックス（-1 なら通常重力）
     int m_currentPlanetIndex = -1;
 
-    // 毎フレーム m_currentPlanetIndex から取得するヘルパー（フレーム内のみ有効）
-    const PlanetData* m_pCurrentPlanet = nullptr;
+    // 現在惑星をインデックスから毎回取り直すヘルパー（生ポインタをキャッシュしない＝
+    // エディタで惑星ベクタが再確保されてもダングリングしない）。範囲外なら nullptr。
+    const PlanetData* CurrentPlanet() const;
 
     // 前フレームの惑星インデックス（惑星乗り移り検出用）
     int m_prevPlanetIndex = -1;

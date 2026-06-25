@@ -92,6 +92,12 @@ void Character::DrawDebug()
     if (m_pDebugWire) { m_pDebugWire->Draw(); }
 }
 
+// 現在惑星をインデックスから取り直す（生ポインタをキャッシュしない＝再確保で壊れない）
+const PlanetData* Character::CurrentPlanet() const
+{
+    return PlanetGravityManager::Instance().GetPlanet(m_currentPlanetIndex);
+}
+
 void Character::ApplyGravity()
 {
     // ComputeGravityInfluence はフレームに1回だけ計算してキャッシュする
@@ -111,7 +117,6 @@ void Character::ApplyGravity()
     if (!m_isGround)
     {
         m_currentPlanetIndex = gravResult.dominantPlanetIdx;
-        m_pCurrentPlanet     = PlanetGravityManager::Instance().GetPlanet(m_currentPlanetIndex);
     }
 
     // ── 2.5D: 現在(支配)BoxのZ範囲外へ出たら、惑星/ゾーンに関係なくワールド下向き(-Y)で落とす ──
@@ -119,9 +124,9 @@ void Character::ApplyGravity()
     //   「下」がBox方向(Z成分入り)になり、さらに Move() が m_upDir 軸以外のY速度を毎フレーム
     //   捨てるため velY が0のまま＝落ちない。ここで up を +Y に固定して -Y 重力を加え、必ず落とす。
     if (!m_ignoreGravityZones && !m_isGround && m_manualGravityDir == ManualGravityDir::None
-        && m_pCurrentPlanet && m_pCurrentPlanet->Shape == PlanetShape::Box
-        && std::abs(GetPos().z - m_pCurrentPlanet->Position.z)
-           > m_pCurrentPlanet->BoxHalfExtents.z + CollisionConst::GroundSampleRadius)
+        && CurrentPlanet() && CurrentPlanet()->Shape == PlanetShape::Box
+        && std::abs(GetPos().z - CurrentPlanet()->Position.z)
+           > CurrentPlanet()->BoxHalfExtents.z + CollisionConst::GroundSampleRadius)
     {
         constexpr Math::Vector3 kFallGravDir = { 0.0f, -1.0f, 0.0f };
         constexpr Math::Vector3 kFallUp      = { 0.0f,  1.0f, 0.0f };
@@ -188,9 +193,9 @@ void Character::ApplyGravity()
 
     // NormalBox着地中は外部惑星重力を一切受け付けない（非NormalはComputeGravityInfluenceに任せる）
     const bool onNormalBoxGround = m_isGround
-        && m_pCurrentPlanet
-        && m_pCurrentPlanet->Shape == PlanetShape::Box
-        && m_pCurrentPlanet->bNormalGravity;
+        && CurrentPlanet()
+        && CurrentPlanet()->Shape == PlanetShape::Box
+        && CurrentPlanet()->bNormalGravity;
 
     if (gravResult.hasInfluence && !suppressPlanet)
     {
@@ -571,8 +576,8 @@ void Character::CheckGround()
     // 法線方向(-m_upDir)へ TypeGround レイを撃ち、ヒット面へスナップする。
     // これにより地面と壁(CheckWall)が同じ箱コライダーの縁を共有するため、
     // 端での「持ち上げ⇄押し出し」の食い違い（端めり込み）が起きない。
-    if (m_pCurrentPlanet
-        && m_pCurrentPlanet->Shape == PlanetShape::Box)
+    if (CurrentPlanet()
+        && CurrentPlanet()->Shape == PlanetShape::Box)
     {
         // ジャンプ直後（m_upDir方向に速度あり）はスキップ
         if (m_velocity.Dot(m_upDir) > 0.1f) { return; }
@@ -645,7 +650,6 @@ void Character::CheckGround()
 
                     // 実際に立っている Box を現在惑星にする（dominant が隣Boxでも上書き）
                     m_currentPlanetIndex = static_cast<int>(&p - &planets[0]);
-                    m_pCurrentPlanet     = &p;
 
                     m_isGround = true;
                     m_airGravitySwitchCount = 0;
@@ -662,11 +666,11 @@ void Character::CheckGround()
     // ---- ②-A 球惑星（放射状）─ 中心距離ベースの解析判定（すり抜け防止）----
     // レイ＆メッシュに頼らず、中心からの距離で必ず押し出すのでトンネリングしない。
     if (!skipDownwardSnap
-        && m_pCurrentPlanet
-        && m_pCurrentPlanet->Shape == PlanetShape::Sphere
-        && !m_pCurrentPlanet->bNormalGravity)
+        && CurrentPlanet()
+        && CurrentPlanet()->Shape == PlanetShape::Sphere
+        && !CurrentPlanet()->bNormalGravity)
     {
-        const PlanetData& p = *m_pCurrentPlanet;
+        const PlanetData& p = *CurrentPlanet();
         const float dx = pos.x - p.Position.x;
         const float dy = pos.y - p.Position.y;
         const float d  = std::sqrtf(dx * dx + dy * dy);
@@ -701,14 +705,14 @@ void Character::CheckGround()
 
     // ---- ② Sphere等の惑星 ─ レイキャスト方式 ----
     // 天井歩き（手動 Up）は下向きレイで床に張り付くためスキップ
-    if (!skipDownwardSnap && m_pCurrentPlanet && m_pCurrentPlanet->pCollider)
+    if (!skipDownwardSnap && CurrentPlanet() && CurrentPlanet()->pCollider)
     {
         // ジャンプ直後はスキップ
         if (m_velocity.Dot(m_upDir) > 0.001f) { return; }
 
-        const Math::Vector3 center = m_pCurrentPlanet->Position;
+        const Math::Vector3 center = CurrentPlanet()->Position;
         Math::Vector3 outDir;
-        if (m_pCurrentPlanet->bNormalGravity)
+        if (CurrentPlanet()->bNormalGravity)
         {
             outDir = { 0.0f, 1.0f, 0.0f };
         }
@@ -721,12 +725,12 @@ void Character::CheckGround()
             outDir = { dx / d, dy / d, 0.0f };
         }
 
-        const float         rayLen   = m_pCurrentPlanet->GravityRadius + PlanetConst::PlanetRayOffset;
+        const float         rayLen   = CurrentPlanet()->GravityRadius + PlanetConst::PlanetRayOffset;
         const Math::Vector3 rayStart = pos + outDir * PlanetConst::PlanetRayOffset;
         const KdCollider::RayInfo ray(KdCollider::TypeGround, rayStart, -outDir, rayLen);
 
         std::list<KdCollider::CollisionResult> results;
-        if (!m_pCurrentPlanet->pCollider->Intersects(ray, m_pCurrentPlanet->mWorld, &results)) { return; }
+        if (!CurrentPlanet()->pCollider->Intersects(ray, CurrentPlanet()->mWorld, &results)) { return; }
 
         const KdCollider::CollisionResult* pBest = nullptr;
         for (const auto& r : results)
@@ -759,7 +763,7 @@ void Character::CheckGround()
     }
 
     // ---- ★ 天井歩き専用（ManualUp + m_ignoreGravityZones）----
-    // m_pCurrentPlanet 以外のすべての Box 惑星底面 + マップ天井を検出
+    // CurrentPlanet() 以外のすべての Box 惑星底面 + マップ天井を検出
     if (skipDownwardSnap && !m_isGround)
     {
         // 天井から離れる方向（ジャンプ直後）はスキップ

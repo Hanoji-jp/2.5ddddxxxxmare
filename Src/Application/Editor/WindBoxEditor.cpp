@@ -108,6 +108,9 @@ void WindBoxEditor::DrawGui()
 			m_dirty = true;
 		}
 
+		// 追従する移動床（-1=なし）
+		if (ImGui::InputInt(U8("追従する移動床(-1=なし)"), &b.attachFloor)) { m_dirty = true; }
+
 		ImGui::Spacing();
 
 		// 削除ボタン
@@ -165,7 +168,8 @@ void WindBoxEditor::Save() const
 				<< b.windDir.z << ","
 				<< b.power     << ","
 				<< b.length    << ","
-				<< (b.enabled ? 1 : 0) << "\n";
+				<< (b.enabled ? 1 : 0) << ","
+				<< b.attachFloor << "\n";
 	}
 }
 
@@ -201,6 +205,7 @@ void WindBoxEditor::Load()
 		{
 			d.length  = std::stof(tokens[10]);
 			d.enabled = (std::stoi(tokens[11]) != 0);
+			if (tokens.size() >= 13) { d.attachFloor = std::stoi(tokens[12]); }
 		}
 		else if (tokens.size() >= 11)
 		{

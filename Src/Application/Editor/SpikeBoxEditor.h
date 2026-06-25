@@ -15,6 +15,7 @@ struct SpikeBoxData
 							 SpikeBoxConst::DefaultSizeZ };
 	bool          enabled = true;
 	SpikeBoxConst::SpikeDir dir = SpikeBoxConst::SpikeDir::Up;   // 棘の向き
+	int           attachFloor = -1;   // 追従する移動床のindex（-1=なし）
 };
 
 //==========================================================

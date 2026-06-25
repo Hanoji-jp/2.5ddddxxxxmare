@@ -3331,7 +3331,7 @@ void GameScene::DrawGravityArrows()
 			{
 			case Character::ManualGravityDir::Down: g = { 0.0f, -1.0f, 0.0f }; break;
 			case Character::ManualGravityDir::Up:   g = { 0.0f,  1.0f, 0.0f }; isUp = true; break;
-			default:                                g = -m_spPlayer->GetUpDir(); break;  // None=自動
+			default:                                g = { 0.0f, -1.0f, 0.0f }; break;  // None=自動：下向き固定（プレイヤーの重力角に追尾しない）
 			}
 		}
 		// 上向き重力＝赤、それ以外＝青
@@ -5069,6 +5069,11 @@ void GameScene::RebuildWindBoxes()
 	{
 		auto sp = std::make_shared<WindBox>();
 		sp->Init(data);
+		// 移動床へアタッチ（追従）：indexが有効なら対応する移動床を渡す
+		if (data.attachFloor >= 0 && data.attachFloor < static_cast<int>(m_movingFloors.size()))
+		{
+			sp->SetAttachFloor(m_movingFloors[data.attachFloor]);
+		}
 		m_windBoxes.push_back(sp);
 		AddObject(sp);
 	}
@@ -5092,6 +5097,11 @@ void GameScene::RebuildSpikeBoxes()
 	{
 		auto sp = std::make_shared<SpikeBox>();
 		sp->Init(data);
+		// 移動床へアタッチ（追従）：indexが有効なら対応する移動床を渡す
+		if (data.attachFloor >= 0 && data.attachFloor < static_cast<int>(m_movingFloors.size()))
+		{
+			sp->SetAttachFloor(m_movingFloors[data.attachFloor]);
+		}
 		m_spikeBoxes.push_back(sp);
 		AddObject(sp);
 	}

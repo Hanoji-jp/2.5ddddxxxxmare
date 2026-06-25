@@ -26,6 +26,9 @@ struct WindBoxData
 
 	// 有効フラグ
 	bool  enabled          = true;
+
+	// 追従する移動床のindex（-1=なし）
+	int   attachFloor      = -1;
 };
 
 //==========================================================
