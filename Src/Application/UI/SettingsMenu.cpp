@@ -5,7 +5,24 @@
 #include "../Manager/CursorManager.h"
 #include "../Const/SettingsConst.h"
 #include "../Const/SoundConst.h"
+#include "../Updater/Updater.h"
 #include <algorithm>
+
+namespace
+{
+	// アップデート行で決定したときの動作（現在の状態で分岐）
+	void TriggerUpdateAction()
+	{
+		auto& up = Updater::GetInstance();
+		switch (up.GetState())
+		{
+		case UpdaterState::UpdateAvailable: up.StartDownload();    break;   // 更新あり → DL開始
+		case UpdaterState::Downloading:     up.CancelDownload();   break;   // DL中    → 中断
+		case UpdaterState::Downloaded:      up.ApplyUpdate();      break;   // DL済み  → 適用＆再起動
+		default:                            up.StartCheckVersion();break;   // それ以外 → 確認
+		}
+	}
+}
 
 void SettingsMenu::EnsureFont()
 {
@@ -127,6 +144,7 @@ void SettingsMenu::Update()
 					case Resolution: set.m_resIndex = (set.m_resIndex + 1) % ResolutionCount;  snd.PlaySE(SeId::MenuMove, SoundConst::SeVolume); break;
 					case Fps:        set.m_fpsIndex = (set.m_fpsIndex + 1) % FpsCount; set.ApplyFps(); snd.PlaySE(SeId::MenuMove, SoundConst::SeVolume); break;
 					case FpsShow:    set.m_showFps = !set.m_showFps; snd.PlaySE(SeId::MenuMove, SoundConst::SeVolume); break;
+					case SettingsConst::Update: TriggerUpdateAction(); snd.PlaySE(SeId::MenuDecide, SoundConst::SeVolume); break;
 					case Back:       Close(); return;
 					default: break;   // 音量はドラッグで処理済み
 					}
@@ -134,6 +152,13 @@ void SettingsMenu::Update()
 				break;
 			}
 		}
+	}
+
+	// アップデート行：決定でアクション（状態に応じて 確認／DL／中断／適用）
+	if (eDecide && m_row == SettingsConst::Update)
+	{
+		TriggerUpdateAction();
+		snd.PlaySE(SeId::MenuDecide, SoundConst::SeVolume);
 	}
 
 	// 決定（もどる）／TABで閉じる
@@ -245,7 +270,7 @@ void SettingsMenu::Draw()
 
 	auto& set = SettingsManager::Instance();
 
-	const char* labels[Count] = { LabelMaster, LabelBgm, LabelSe, LabelScreen, LabelRes, LabelFps, LabelFpsShow, LabelBack };
+	const char* labels[Count] = { LabelMaster, LabelBgm, LabelSe, LabelScreen, LabelRes, LabelFps, LabelFpsShow, LabelUpdate, LabelBack };
 
 	for (int i = 0; i < Count; ++i)
 	{
@@ -314,6 +339,27 @@ void SettingsMenu::Draw()
 		case FpsShow:
 			drawText(set.m_showFps ? ValueOn : ValueOff, rightX, y, col, 1);
 			break;
+		case SettingsConst::Update:
+		{
+			// 現在の状態を右寄せで表示（DL中は％）
+			char dlbuf[16];
+			const char* st = UpdIdle;
+			switch (Updater::GetInstance().GetState())
+			{
+			case UpdaterState::Idle:            st = UpdIdle;       break;
+			case UpdaterState::Checking:        st = UpdChecking;   break;
+			case UpdaterState::UpToDate:        st = UpdLatest;     break;
+			case UpdaterState::UpdateAvailable: st = UpdAvailable;  break;
+			case UpdaterState::Downloading:
+				sprintf_s(dlbuf, "%d%%", static_cast<int>(Updater::GetInstance().GetProgress() * 100.0f + 0.5f));
+				st = dlbuf;
+				break;
+			case UpdaterState::Downloaded:      st = UpdDownloaded; break;
+			case UpdaterState::Error:           st = UpdError;      break;
+			}
+			drawText(st, rightX, y, col, 1);
+			break;
+		}
 		default: break;
 		}
 	}

@@ -1,4 +1,6 @@
 ﻿#include "KdFont.h"
+#include "../../Application/Util/AssetVault.h"   // 配布ビルド：埋め込みpakからフォント登録
+#include <vector>
 
 // 日本語判定
 static bool isSJIS(char a)
@@ -321,7 +323,17 @@ void KdFontManager::AddFontResource(const std::string& ttfFileName)
 		return;
 	}
 
-	AddFontResourceEx(ttfFileName.c_str(), FR_PRIVATE, NULL);
+	// 配布ビルド：埋め込みpak(VFS)にあればメモリから登録（ディスクに出さない）
+	std::vector<uint8_t> bytes;
+	if (AssetVault::Read(ttfFileName, bytes) && !bytes.empty())
+	{
+		DWORD numFonts = 0;
+		AddFontMemResourceEx(bytes.data(), static_cast<DWORD>(bytes.size()), nullptr, &numFonts);
+	}
+	else
+	{
+		AddFontResourceEx(ttfFileName.c_str(), FR_PRIVATE, NULL);
+	}
 
 	m_LoadedFontMap[ttfFileName] = 1;
 }

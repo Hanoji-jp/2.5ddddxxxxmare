@@ -3,3 +3,9 @@
 // 実行ファイル(Project.exe)のアイコン
 // 最小番号の ICON が Explorer のファイルアイコンに使われる
 IDI_APP_ICON ICON "..\\Asset\\Texture\\LifeIco.ico"
+
+// Distribute ビルドのみ：全アセットをまとめた assets.pak を埋め込む
+// （PreBuildEvent の pack_assets.ps1 が生成する）
+#ifdef DISTRIBUTE_BUILD
+IDR_ASSETS_PAK RCDATA "..\\assets.pak"
+#endif

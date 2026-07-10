@@ -184,7 +184,7 @@ void DeadZoneManager::Save() const
 
 void DeadZoneManager::Load()
 {
-    std::ifstream ifs(StageManager::Instance().ResolvePath(kSaveFileName));
+    KdAssetIStream ifs(StageManager::Instance().ResolvePath(kSaveFileName));
 
     // Clear first so a new stage with no file becomes empty (no carry-over).
     m_zones.clear();

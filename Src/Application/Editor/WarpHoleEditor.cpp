@@ -252,7 +252,7 @@ void WarpHoleEditor::Save() const
 void WarpHoleEditor::Load()
 {
 	m_holes.clear();
-	std::ifstream ifs(StageManager::Instance().ResolvePath("warp_holes.csv"));
+	KdAssetIStream ifs(StageManager::Instance().ResolvePath("warp_holes.csv"));
 	if (!ifs) { return; }
 
 	std::string line;

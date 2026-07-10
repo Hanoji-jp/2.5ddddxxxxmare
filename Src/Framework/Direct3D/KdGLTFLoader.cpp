@@ -8,11 +8,49 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #define STBI_MSC_SECURE_CRT
 #include "tiny_gltf.h"
+#include "../../Application/Util/AssetVault.h"   // 配布ビルド：埋め込みpakからメモリ読み込み
 
 // GLTFのデバッグ表示を有効
 //#define GLTF_DEBUG
 
 static void Dump(const tinygltf::Model &model);
+
+namespace
+{
+	// ── tinygltf 用 VFS コールバック（配布ビルドで .bin/画像をpakから供給）──
+	// pak に在ればメモリから、無ければ tinygltf 既定（ディスク）へフォールバック。
+	bool Vfs_FileExists(const std::string& abs_filename, void* user)
+	{
+		if (AssetVault::Exists(abs_filename)) { return true; }
+		return tinygltf::FileExists(abs_filename, user);
+	}
+	bool Vfs_ReadWholeFile(std::vector<unsigned char>* out, std::string* err,
+		const std::string& filepath, void* user)
+	{
+		std::vector<uint8_t> bytes;
+		if (AssetVault::Read(filepath, bytes))
+		{
+			out->assign(bytes.begin(), bytes.end());
+			return true;
+		}
+		return tinygltf::ReadWholeFile(out, err, filepath, user);
+	}
+	// tinygltf は .bin 読み込み前にサイズ確認する。保護で非展開の .bin は
+	// ディスクに無いので、pakのサイズを返す（無ければ既定＝ディスク）。
+	bool Vfs_GetFileSizeInBytes(size_t* sizeOut, std::string* err,
+		const std::string& filepath, void* user)
+	{
+		size_t s = 0;
+		if (AssetVault::Size(filepath, s)) { *sizeOut = s; return true; }
+		return tinygltf::GetFileSizeInBytes(sizeOut, err, filepath, user);
+	}
+	// 画像はKdTexture側で別途読むため、tinygltfではデコードしない（URIだけ拾えればよい）
+	bool Vfs_NoopImage(tinygltf::Image*, const int, std::string*, std::string*,
+		int, int, const unsigned char*, int, void*)
+	{
+		return true;
+	}
+}
 
 //===================================================
 // ファイル名から拡張子を取得
@@ -169,7 +207,35 @@ std::shared_ptr<KdGLTFModel> KdLoadGLTFModel(std::string_view path)
 
 		// GLTF読み込み
 		bool ret = false;
-		if (ext.compare("glb") == 0) {
+
+		// 配布ビルド：埋め込みpakに在ればメモリから読む（ディスクに平文を出さない）
+		std::vector<uint8_t> vaultBytes;
+		const bool useVault = AssetVault::Read(input_filename, vaultBytes);
+		if (useVault)
+		{
+			// .bin/画像をpakから供給するコールバック＋画像デコードskipを設定
+			tinygltf::FsCallbacks fs;
+			fs.FileExists        = &Vfs_FileExists;
+			fs.ExpandFilePath    = &tinygltf::ExpandFilePath;
+			fs.ReadWholeFile     = &Vfs_ReadWholeFile;
+			fs.WriteWholeFile    = &tinygltf::WriteWholeFile;
+			fs.GetFileSizeInBytes = &Vfs_GetFileSizeInBytes;
+			fs.user_data         = nullptr;
+			gltf_ctx.SetFsCallbacks(fs);
+			gltf_ctx.SetImageLoader(&Vfs_NoopImage, nullptr);
+
+			const std::string baseDir = tinygltf::GetBaseDir(input_filename);
+			if (ext.compare("glb") == 0) {
+				ret = gltf_ctx.LoadBinaryFromMemory(&model, &err, &warn,
+					vaultBytes.data(), static_cast<unsigned int>(vaultBytes.size()), baseDir);
+			}
+			else {
+				ret = gltf_ctx.LoadASCIIFromString(&model, &err, &warn,
+					reinterpret_cast<const char*>(vaultBytes.data()),
+					static_cast<unsigned int>(vaultBytes.size()), baseDir);
+			}
+		}
+		else if (ext.compare("glb") == 0) {
 			std::cout << "Reading binary glTF" << std::endl;
 			// assume binary glTF.
 			ret = gltf_ctx.LoadBinaryFromFile(&model, &err, &warn, input_filename.c_str());

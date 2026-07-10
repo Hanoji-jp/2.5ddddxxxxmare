@@ -131,7 +131,7 @@ void RoomBoundsEditor::Save() const
 //----------------------------------------------------------
 void RoomBoundsEditor::Load()
 {
-    std::ifstream ifs(StageManager::Instance().ResolvePath("rooms.csv"));
+    KdAssetIStream ifs(StageManager::Instance().ResolvePath("rooms.csv"));
 
     // 新ステージのファイルが無くても空にする（前ステージのルーム＝カメラY制限を残さない）
     m_rooms.clear();

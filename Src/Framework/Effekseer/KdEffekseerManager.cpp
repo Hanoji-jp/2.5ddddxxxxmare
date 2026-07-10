@@ -1,4 +1,74 @@
-﻿
+﻿#include "../../Application/Util/AssetVault.h"   // 配布ビルド：埋め込みpakからエフェクト/テクスチャ読み込み
+#include <Windows.h>
+#include <vector>
+#include <fstream>
+#include <string>
+#include <iterator>
+#include <cstdint>
+#include <cstring>
+
+namespace
+{
+	// char16_t(UTF-16) → CP932 narrow（pakキーと一致させる）
+	std::string Efk_U16ToCp932(const char16_t* p)
+	{
+		if (!p) { return {}; }
+		const wchar_t* w = reinterpret_cast<const wchar_t*>(p);
+		const int len = WideCharToMultiByte(932, 0, w, -1, nullptr, 0, nullptr, nullptr);
+		if (len <= 0) { return {}; }
+		std::string s(static_cast<size_t>(len), '\0');
+		WideCharToMultiByte(932, 0, w, -1, s.data(), len, nullptr, nullptr);
+		if (!s.empty() && s.back() == '\0') { s.pop_back(); }
+		return s;
+	}
+
+	// メモリ上のバイト列を読む Effekseer FileReader
+	class VfsEfkReader : public Effekseer::FileReader
+	{
+		std::vector<uint8_t> m_data;
+		int                  m_pos = 0;
+	public:
+		explicit VfsEfkReader(std::vector<uint8_t> d) : m_data(std::move(d)) {}
+		size_t Read(void* buffer, size_t size) override
+		{
+			const size_t remain = m_data.size() - static_cast<size_t>(m_pos);
+			const size_t n = (size < remain) ? size : remain;
+			if (n) { memcpy(buffer, m_data.data() + m_pos, n); }
+			m_pos += static_cast<int>(n);
+			return n;
+		}
+		void   Seek(int position) override { m_pos = position; }
+		int    GetPosition() const override { return m_pos; }
+		size_t GetLength()   const override { return m_data.size(); }
+	};
+
+	// .efk / テクスチャ / モデルを pak(VFS) から読む FileInterface（無ければディスク）
+	class VfsEfkFileInterface : public Effekseer::FileInterface
+	{
+	public:
+		Effekseer::FileReaderRef OpenRead(const char16_t* path) override
+		{
+			const std::string key = Efk_U16ToCp932(path);
+			std::vector<uint8_t> bytes;
+			if (AssetVault::Read(key, bytes))
+			{
+				return Effekseer::MakeRefPtr<VfsEfkReader>(std::move(bytes));
+			}
+			std::ifstream f(key, std::ios::binary);
+			if (f)
+			{
+				std::vector<uint8_t> d((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+				return Effekseer::MakeRefPtr<VfsEfkReader>(std::move(d));
+			}
+			return nullptr;
+		}
+		Effekseer::FileWriterRef OpenWrite(const char16_t*) override { return nullptr; }
+	};
+
+	// ローダーが参照し続けるので生かしておく
+	Effekseer::FileInterfaceRef g_efkVfsFI;
+}
+
 void KdEffekseerManager::Create(int w, int h)
 {
 	// エフェクトのレンダラーの作成
@@ -17,11 +87,16 @@ void KdEffekseerManager::Create(int w, int h)
 	m_efkManager->SetTrackRenderer(m_efkRenderer->CreateTrackRenderer());
 	m_efkManager->SetModelRenderer(m_efkRenderer->CreateModelRenderer());
 
-	// 描画用インスタンスからテクスチャの読み込み機能を設定
-	m_efkManager->SetTextureLoader(m_efkRenderer->CreateTextureLoader());
-	m_efkManager->SetModelLoader(m_efkRenderer->CreateModelLoader());
-	m_efkManager->SetMaterialLoader(m_efkRenderer->CreateMaterialLoader());
+	// 配布ビルド：埋め込みpak(VFS)から .efk / テクスチャ / モデルを読む
+	g_efkVfsFI = Effekseer::MakeRefPtr<VfsEfkFileInterface>();
+
+	// 描画用インスタンスからテクスチャの読み込み機能を設定（VFS経由）
+	m_efkManager->SetTextureLoader(m_efkRenderer->CreateTextureLoader(g_efkVfsFI));
+	m_efkManager->SetModelLoader(m_efkRenderer->CreateModelLoader(g_efkVfsFI));
+	m_efkManager->SetMaterialLoader(m_efkRenderer->CreateMaterialLoader(g_efkVfsFI));
 	m_efkManager->SetCurveLoader(Effekseer::MakeRefPtr<Effekseer::CurveLoader>());
+	// .efk 本体も VFS から読む
+	m_efkManager->SetEffectLoader(Effekseer::Effect::CreateEffectLoader(g_efkVfsFI));
 
 	// 投影行列を設定
 	m_efkRenderer->SetProjectionMatrix(

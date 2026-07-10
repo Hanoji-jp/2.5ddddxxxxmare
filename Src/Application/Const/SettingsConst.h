@@ -40,7 +40,7 @@ namespace SettingsConst
 	constexpr int FpsCount = static_cast<int>(sizeof(FpsOptions) / sizeof(FpsOptions[0]));
 
 	// ── 行（項目）──
-	enum Row { Master = 0, Bgm, Se, Screen, Resolution, Fps, FpsShow, Back, Count };
+	enum Row { Master = 0, Bgm, Se, Screen, Resolution, Fps, FpsShow, Update, Back, Count };
 
 	// FPSカウンター表示用フォント（拡張した空きスロット）
 	constexpr int   FpsCounterFontNo = 10;
@@ -64,7 +64,15 @@ namespace SettingsConst
 	constexpr const char*  LabelRes    = "かいぞうど";
 	constexpr const char*  LabelFps     = "ＦＰＳ";
 	constexpr const char*  LabelFpsShow = "ＦＰＳひょうじ";
+	constexpr const char*  LabelUpdate  = "アップデート";
 	constexpr const char*  LabelBack    = "もどる";
+	// アップデート行の状態テキスト（右寄せ表示）
+	constexpr const char*  UpdIdle      = "かくにん";
+	constexpr const char*  UpdChecking  = "かくにん中…";
+	constexpr const char*  UpdLatest    = "さいしんばん";
+	constexpr const char*  UpdAvailable = "こうしんあり！";
+	constexpr const char*  UpdDownloaded = "てきよう";
+	constexpr const char*  UpdError     = "しっぱい";
 	constexpr const char*  ValueOn      = "オン";
 	constexpr const char*  ValueOff     = "オフ";
 	constexpr const char*  ValueFull   = "ぜんがめん";

@@ -138,7 +138,7 @@ void SpikeBoxEditor::Load()
 	m_boxes.clear();
 	m_selectedIndex = -1;
 
-	std::ifstream ifs(StageManager::Instance().ResolvePath("spike_boxes.csv"));
+	KdAssetIStream ifs(StageManager::Instance().ResolvePath("spike_boxes.csv"));
 	if (!ifs) { return; }
 
 	std::string line;

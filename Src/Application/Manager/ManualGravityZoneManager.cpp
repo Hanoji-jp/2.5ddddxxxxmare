@@ -288,7 +288,7 @@ void ManualGravityZoneManager::Save() const
 
 void ManualGravityZoneManager::Load()
 {
-	std::ifstream ifs(StageManager::Instance().ResolvePath(SaveFileName));
+	KdAssetIStream ifs(StageManager::Instance().ResolvePath(SaveFileName));
 
 	// 新ステージのファイルが無くても空にする（前ステージのゾーンを残さない）
 	m_zones.clear();

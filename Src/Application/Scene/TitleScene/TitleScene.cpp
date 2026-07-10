@@ -8,6 +8,8 @@
 #include "../../GameObject/Light/PointLightObject.h"
 #include "../../GameObject/Effect/EffectBase.h"
 #include "../../Manager/CursorManager.h"
+#include "../../Updater/Updater.h"
+#include "../../Util/BuildConfig.h"
 #include "../../Const/PlayerConst.h"
 #include "../../Const/CubunConst.h"
 #include "../../Const/FontConst.h"
@@ -121,6 +123,9 @@ void TitleScene::Init()
 	// BGM（タイトル。ファイル未配置なら無音）
 	SoundManager::Instance().PlayBGM(SoundConst::BgmTitle, SoundConst::BgmVolume);
 
+	// 起動時にGitHubの最新版を非同期チェック（設定メニューの「アップデート」行に状態表示）
+	Updater::GetInstance().StartCheckVersion();
+
 	// カメラ
 	m_titleCam = std::make_shared<KdCamera>();
 	m_titleCam->SetProjectionMatrix(kCamFov);
@@ -212,7 +217,7 @@ void TitleScene::Event()
 	}
 
 	// F2 フリーカメラ切替
-	const bool f2 = (GetAsyncKeyState(VK_F2) & 0x8000) != 0;
+	const bool f2 = kDebugFeatures && (GetAsyncKeyState(VK_F2) & 0x8000) != 0;
 	if (f2 && !m_f2Prev)
 	{
 		m_freeCamOn = !m_freeCamOn;

@@ -17,6 +17,10 @@
       <Configuration>Release</Configuration>
       <Platform>x64</Platform>
     </ProjectConfiguration>
+    <ProjectConfiguration Include="Distribute|x64">
+      <Configuration>Distribute</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{0F06FE08-688B-490A-AB0E-7A85CF6B8649}</ProjectGuid>
@@ -31,6 +35,11 @@
     <PlatformToolset>v145</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v145</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Distribute|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <CharacterSet>MultiByte</CharacterSet>
     <PlatformToolset>v145</PlatformToolset>
@@ -64,6 +73,10 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
     <Import Project="$(VCTargetsPath)Microsoft.CPP.UpgradeFromVC71.props" />
   </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Distribute|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="$(VCTargetsPath)Microsoft.CPP.UpgradeFromVC71.props" />
+  </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup>
     <_ProjectFileVersion>10.0.30319.1</_ProjectFileVersion>
@@ -80,6 +93,11 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <OutDir>$(SolutionDir)x64\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)x64\$(Configuration)\int\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Distribute|x64'">
+    <OutDir>$(SolutionDir)x64\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)x64\$(Configuration)\int\</IntDir>
+    <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" />
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -260,6 +278,60 @@
       <VariableName>compiledBuffer</VariableName>
     </FxCompile>
   </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Distribute|x64'">
+    <PreBuildEvent>
+      <Command>powershell -NoProfile -ExecutionPolicy Bypass -File "$(ProjectDir)tools\pack_assets.ps1"</Command>
+      <Message>Packing Asset/ into assets.pak ...</Message>
+    </PreBuildEvent>
+    <PostBuildEvent>
+      <Command>copy /Y "$(ProjectDir)version.txt" "$(OutDir)version.txt"</Command>
+      <Message>Copying version.txt next to exe ...</Message>
+    </PostBuildEvent>
+    <ClCompile>
+      <Optimization>MaxSpeed</Optimization>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <OmitFramePointers>true</OmitFramePointers>
+      <AdditionalIncludeDirectories>.\;src;..\Library;..\Library\DirectXTK\Inc;..\Library\DirectXTex\DirectXTex;..\Library\tinygltf;..\Library\imgui;..\Library\Effekseer\Inc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;DISTRIBUTE_BUILD;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <StringPooling>true</StringPooling>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <RuntimeTypeInfo>true</RuntimeTypeInfo>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>Pch.h</PrecompiledHeaderFile>
+      <WarningLevel>Level4</WarningLevel>
+      <ForcedIncludeFiles>Pch.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <DisableSpecificWarnings>4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>DISTRIBUTE_BUILD;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ResourceCompile>
+    <Link>
+      <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+      <SubSystem>Windows</SubSystem>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <RandomizedBaseAddress>false</RandomizedBaseAddress>
+      <DataExecutionPrevention>
+      </DataExecutionPrevention>
+      <AdditionalLibraryDirectories>..\Library\DirectXTK\Lib\$(Platform)\Release\Audio;..\Library\DirectXTK\Lib\$(Platform)\Release;..\Library\DirectXTex\Lib\$(Platform)\Release;..\Library\Effekseer\Lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+    </Link>
+    <FxCompile>
+      <ShaderType>
+      </ShaderType>
+    </FxCompile>
+    <FxCompile>
+      <ShaderModel>5.0</ShaderModel>
+      <ObjectFileOutput>
+      </ObjectFileOutput>
+      <HeaderFileOutput>%(RelativeDir)\%(Filename).shaderInc</HeaderFileOutput>
+      <VariableName>compiledBuffer</VariableName>
+    </FxCompile>
+  </ItemDefinitionGroup>
   <ItemGroup>
     <ResourceCompile Include="Src\Project.rc" />
   </ItemGroup>
@@ -293,8 +365,14 @@
     <ClInclude Include="Src\Application\Const\GravityRingConst.h" />
     <ClInclude Include="Src\Application\Const\ItemConst.h" />
     <ClInclude Include="Src\Application\Const\SettingsConst.h" />
+    <ClInclude Include="Src\Application\Manager\SaveData.h" />
     <ClInclude Include="Src\Application\Manager\SettingsManager.h" />
     <ClInclude Include="Src\Application\Manager\CursorManager.h" />
+    <ClInclude Include="Src\Application\Updater\Updater.h" />
+    <ClInclude Include="Src\Application\Util\AssetCrypt.h" />
+    <ClInclude Include="Src\Application\Util\BuildConfig.h" />
+    <ClInclude Include="Src\Application\Util\AssetPack.h" />
+    <ClInclude Include="Src\Application\Util\AssetVault.h" />
     <ClInclude Include="Src\Application\Util\MouseInput.h" />
     <ClInclude Include="Src\Application\UI\SettingsMenu.h" />
     <ClInclude Include="Src\Application\Const\ItemMagnetConst.h" />
@@ -466,6 +544,9 @@
     <ClCompile Include="Src\Application\GameObject\Weapon\Bow.cpp" />
     <ClCompile Include="Src\Application\GameObject\Weapon\Sword.cpp" />
     <ClCompile Include="Src\Application\Input\Input.cpp" />
+    <ClCompile Include="Src\Application\Updater\Updater.cpp" />
+    <ClCompile Include="Src\Application\Util\AssetPack.cpp" />
+    <ClCompile Include="Src\Application\Util\AssetVault.cpp" />
     <ClCompile Include="Src\Application\main.cpp" />
     <ClCompile Include="Src\Application\Manager\ItemManager.cpp" />
     <ClCompile Include="Src\Application\Manager\ManualGravityZoneManager.cpp" />
@@ -474,6 +555,7 @@
     <ClCompile Include="Src\Application\Manager\ModelManager.cpp" />
     <ClCompile Include="Src\Application\Manager\PlanetGravityManager.cpp" />
     <ClCompile Include="Src\Application\Manager\SoundManager.cpp" />
+    <ClCompile Include="Src\Application\Manager\SaveData.cpp" />
     <ClCompile Include="Src\Application\Manager\SettingsManager.cpp" />
     <ClCompile Include="Src\Application\Manager\CursorManager.cpp" />
     <ClCompile Include="Src\Application\UI\SettingsMenu.cpp" />
@@ -519,6 +601,7 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Distribute|x64'">Create</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="Src\Framework\Math\KdAnimation.cpp" />
     <ClCompile Include="Src\Framework\Math\KdCollision.cpp" />
@@ -541,90 +624,105 @@
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribute|x64'">Pixel</ShaderType>
     </FxCompile>
     <FxCompile Include="Src\Framework\Shader\PostProcessShader\KdPostProcessShader_PS_Bright.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribute|x64'">Pixel</ShaderType>
     </FxCompile>
     <FxCompile Include="Src\Framework\Shader\PostProcessShader\KdPostProcessShader_PS_DoF.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribute|x64'">Pixel</ShaderType>
     </FxCompile>
     <FxCompile Include="Src\Framework\Shader\PostProcessShader\KdPostProcessShader_PS_Outline.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribute|x64'">Pixel</ShaderType>
     </FxCompile>
     <FxCompile Include="Src\Framework\Shader\PostProcessShader\KdPostProcessShader_VS.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribute|x64'">Vertex</ShaderType>
     </FxCompile>
     <FxCompile Include="Src\Framework\Shader\SpriteShader\KdSpriteShader_PS.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribute|x64'">Pixel</ShaderType>
     </FxCompile>
     <FxCompile Include="Src\Framework\Shader\SpriteShader\KdSpriteShader_VS.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribute|x64'">Vertex</ShaderType>
     </FxCompile>
     <FxCompile Include="Src\Framework\Shader\StandardShader\KdStandardShader_PS_GenDepthMapFromLight.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribute|x64'">Pixel</ShaderType>
     </FxCompile>
     <FxCompile Include="Src\Framework\Shader\StandardShader\KdStandardShader_PS_Lit.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribute|x64'">Pixel</ShaderType>
     </FxCompile>
     <FxCompile Include="Src\Framework\Shader\StandardShader\KdStandardShader_PS_UnLit.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribute|x64'">Pixel</ShaderType>
     </FxCompile>
     <FxCompile Include="Src\Framework\Shader\StandardShader\KdStandardShader_VS_GenDepthMapFromLight.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribute|x64'">Vertex</ShaderType>
     </FxCompile>
     <FxCompile Include="Src\Framework\Shader\StandardShader\KdStandardShader_VS_Lit.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribute|x64'">Vertex</ShaderType>
     </FxCompile>
     <FxCompile Include="Src\Framework\Shader\StandardShader\KdStandardShader_VS_UnLit.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribute|x64'">Vertex</ShaderType>
     </FxCompile>
     <FxCompile Include="Src\Framework\Shader\StandardShader\KdStandardShader_VS_Outline.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribute|x64'">Vertex</ShaderType>
     </FxCompile>
     <FxCompile Include="Src\Framework\Shader\StandardShader\KdStandardShader_PS_Outline.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Distribute|x64'">Pixel</ShaderType>
     </FxCompile>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

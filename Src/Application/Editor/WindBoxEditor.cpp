@@ -181,7 +181,7 @@ void WindBoxEditor::Load()
 	m_boxes.clear();
 	m_selectedIndex = -1;
 
-	std::ifstream ifs(StageManager::Instance().ResolvePath("wind_boxes.csv"));
+	KdAssetIStream ifs(StageManager::Instance().ResolvePath("wind_boxes.csv"));
 	if (!ifs) { return; }
 
 	std::string line;

@@ -10,6 +10,7 @@
 #include "../../../Const/CoreliaConst.h"
 #include "../../../Const/DeathConst.h"
 #include "../../../Const/SoundConst.h"
+#include "../../../Util/BuildConfig.h"
 #include "../../../Manager/SoundManager.h"
 #include "../../../main.h"   // マウスホイール値（重力切替）の取得
 
@@ -60,7 +61,7 @@ void Player::Update()
 
 	// ── デバッグ：フリーフライ（Fでトグル。WASD=上下左右、壁貫通）──
 	{
-		const bool fNow = (GetAsyncKeyState('F') & 0x8000) != 0;
+		const bool fNow = kDebugFeatures && (GetAsyncKeyState('F') & 0x8000) != 0;
 		if (fNow && !m_freeFlyKeyPrev) { m_freeFly = !m_freeFly; }
 		m_freeFlyKeyPrev = fNow;
 	}

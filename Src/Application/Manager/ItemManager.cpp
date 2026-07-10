@@ -482,7 +482,7 @@ void ItemManager::SaveRockGems() const
 
 void ItemManager::LoadRockGems()
 {
-	std::ifstream ifs(StageManager::Instance().ResolvePath(RockGemConst::SaveFile));
+	KdAssetIStream ifs(StageManager::Instance().ResolvePath(RockGemConst::SaveFile));
 	if (!ifs) { return; }
 
 	std::string line;
@@ -828,7 +828,7 @@ void ItemManager::Save() const
 
 void ItemManager::Load()
 {
-	std::ifstream ifs(StageManager::Instance().ResolvePath("coins.csv"));
+	KdAssetIStream ifs(StageManager::Instance().ResolvePath("coins.csv"));
 	if (!ifs) { return; }
 
 	std::string line;
@@ -891,7 +891,7 @@ void ItemManager::SaveParasols() const
 
 void ItemManager::LoadParasols()
 {
-	std::ifstream ifs(StageManager::Instance().ResolvePath("parasol_items.csv"));
+	KdAssetIStream ifs(StageManager::Instance().ResolvePath("parasol_items.csv"));
 	if (!ifs)
 	{
 		OutputDebugStringA("[ItemManager] LoadParasols: file not found\n");

@@ -142,7 +142,7 @@ void GravityCoreEditor::Load()
 	m_cores.clear();
 	m_selectedIndex = -1;
 
-	std::ifstream ifs(StageManager::Instance().ResolvePath("gravity_cores.csv"));
+	KdAssetIStream ifs(StageManager::Instance().ResolvePath("gravity_cores.csv"));
 	if (!ifs) { return; }
 
 	std::string line;

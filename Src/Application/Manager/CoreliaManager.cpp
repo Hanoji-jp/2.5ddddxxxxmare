@@ -412,7 +412,7 @@ void CoreliaManager::Load()
 {
     LoadHints();
 
-    std::ifstream ifs(StageManager::Instance().ResolvePath("Corelias.csv"));
+    KdAssetIStream ifs(StageManager::Instance().ResolvePath("Corelias.csv"));
 
     // 新ステージのファイルが無くても空にする（前ステージのNPCを残さない）
     m_npcs.clear();
@@ -445,7 +445,7 @@ void CoreliaManager::Load()
 void CoreliaManager::LoadHints()
 {
     m_hints.clear();
-    std::ifstream ifs(CoreliaConst::HintsPath);
+    KdAssetIStream ifs(CoreliaConst::HintsPath);
     if (!ifs) { return; }
 
     std::string line;

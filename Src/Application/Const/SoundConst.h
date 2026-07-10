@@ -69,9 +69,9 @@ namespace SoundConst
 	// SE割り当ての保存先（ImGuiで変更→保存するとここへ書き出し、起動時に読み込む）
 	constexpr const char* SeAssignFile = "Asset/Sound/SE/se_assign.txt";
 
-	// ── 既定音量 ──
-	constexpr float BgmVolume = 0.45f;
-	constexpr float SeVolume  = 0.9f;
+	// ── 既定音量（ユーザー設定の前にかかる基準音量。控えめに）──
+	constexpr float BgmVolume = 0.1f;
+	constexpr float SeVolume  = 0.1f;
 
 	// ── BGM フェード ──
 	constexpr float BgmFadeSpeed = 1.6f;   // 音量フェード速度（/秒。1.6≒0.6秒で切替）

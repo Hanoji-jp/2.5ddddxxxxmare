@@ -222,7 +222,7 @@ void MovingFloorEditor::Load()
 	m_floors.clear();
 	m_selectedIndex = -1;
 
-	std::ifstream ifs(StageManager::Instance().ResolvePath("moving_floors.csv"));
+	KdAssetIStream ifs(StageManager::Instance().ResolvePath("moving_floors.csv"));
 	if (!ifs) { return; }
 
 	std::string line;

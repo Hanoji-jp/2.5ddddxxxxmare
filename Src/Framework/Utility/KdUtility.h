@@ -1,5 +1,12 @@
 ﻿#pragma once
 
+#include "../../Application/Util/AssetVault.h"   // 配布ビルド：埋め込みpak(VFS)の存在確認
+#include <fstream>
+#include <sstream>
+#include <string>
+#include <vector>
+#include <iterator>
+
 class KdTexture;
 
 //===========================================
@@ -68,7 +75,10 @@ static const Math::Color	kNormalColor	= Math::Color(0.5f, 0.5f, 1.0f, 1.0f);	// 
 // ファイルの存在確認
 inline bool KdFileExistence(std::string_view path)
 {
-	std::ifstream ifs(path.data());
+	// 配布ビルド：埋め込みpak(VFS)にあればディスクに無くても存在扱い
+	if (AssetVault::Exists(std::string(path))) { return true; }
+
+	std::ifstream ifs(std::string(path).c_str());
 
 	bool isExistence = ifs.is_open();
 
@@ -76,6 +86,48 @@ inline bool KdFileExistence(std::string_view path)
 
 	return isExistence;
 }
+
+//===========================================
+// アセット読み込み用 入力ストリーム
+//   ディスク優先 → 無ければ埋め込みpak(VFS) から内容を読む istream。
+//   既存の `std::ifstream ifs(path);` を `KdAssetIStream ifs(path);` に
+//   置換するだけで、以降の if(!ifs) / getline(ifs,..) / ifs>>x はそのまま動く。
+//   ・セーブ等のディスク書込ファイル … ディスク優先なので従来通り
+//   ・配布ビルドのレベルデータ      … ディスクに無いので pak から読む
+//   第2引数(openmode)は std::ifstream 互換のため受けるだけ（無視）。
+//===========================================
+class KdAssetIStream : public std::istringstream
+{
+public:
+	explicit KdAssetIStream(const std::string& path, std::ios::openmode = std::ios::in)
+	{
+		std::string content;
+		bool found = false;
+
+		// ① ディスク優先
+		{
+			std::ifstream f(path, std::ios::binary);
+			if (f)
+			{
+				content.assign(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
+				found = true;
+			}
+		}
+		// ② 無ければ埋め込みpak(VFS)
+		if (!found)
+		{
+			std::vector<uint8_t> bytes;
+			if (AssetVault::Read(path, bytes))
+			{
+				content.assign(bytes.begin(), bytes.end());
+				found = true;
+			}
+		}
+
+		if (found) { str(content); }
+		else       { setstate(std::ios::failbit); }   // 見つからない → if(!ifs) が真
+	}
+};
 
 // ファイルパスから、親ディレクトリまでのパスを取得
 inline std::string KdGetDirFromPath(const std::string &path)

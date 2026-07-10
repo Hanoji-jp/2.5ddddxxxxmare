@@ -7,6 +7,9 @@
 #include "Const/SettingsConst.h"
 #include "Framework/Utility/ThreadPool/KdThreadPool.h"
 #include "Const/FontConst.h"
+#include "Util/AssetPack.h"
+#include "Util/AssetVault.h"
+#include "Updater/Updater.h"
 #include <chrono>
 #include <cmath>
 
@@ -29,6 +32,14 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_  HINSTANCE, _In_ LPSTR , _In_ int)
 
 	// mbstowcs_s関数で日本語対応にするために呼ぶ
 	setlocale(LC_ALL, "japanese");
+
+	// 配布(Distribute)ビルドなら、exe に埋め込んだ全アセットを exe フォルダへ
+	// 自己展開し、カレントディレクトリをそこへ固定する（通常ビルドでは何もしない）。
+	// アセット読み込みより前＝最初に必ず呼ぶこと。
+	AssetPack::Prepare();
+
+	// 埋め込みpakをメモリへ常駐（ローダーがVFS優先で読む。開発ビルドでは何もしない）
+	AssetVault::Init();
 
 	//===================================================================
 	// 実行]
@@ -415,9 +426,10 @@ void Application::DrawLoadingScreen(float progress)
 bool Application::Init(int w, int h)
 {
 	//===================================================================
-	// ウィンドウ作成
+	// ウィンドウ作成（タイトルに version.txt のバージョンを表示）
 	//===================================================================
-	if (m_window.Create(w, h, "Corelia", "Window") == false) {
+	const std::string winTitle = "Corelia  " + Updater::GetCurrentVersion();
+	if (m_window.Create(w, h, winTitle, "Window") == false) {
 		MessageBoxA(nullptr, "ウィンドウ作成に失敗", "エラー", MB_OK);
 		return false;
 	}

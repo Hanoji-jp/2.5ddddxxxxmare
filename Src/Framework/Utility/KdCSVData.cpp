@@ -1,4 +1,5 @@
 ﻿#include "KdCSVData.h"
+#include "KdUtility.h"   // KdAssetIStream（配布ビルドで埋め込みpakから読む）
 
 const std::vector<std::string> KdCSVData::c_nullDataList;
 
@@ -8,10 +9,11 @@ bool KdCSVData::Load(const std::string_view filename)
 
 	m_filePass = filename.data();
 
-	std::ifstream ifs(m_filePass);
+	// ディスク優先→無ければ埋め込みpak(VFS)から読む
+	KdAssetIStream ifs(m_filePass);
 
 	if (!ifs)
-	{ 
+	{
 		assert(0 && "CSVDataが見つかりません");
 
 		return false;

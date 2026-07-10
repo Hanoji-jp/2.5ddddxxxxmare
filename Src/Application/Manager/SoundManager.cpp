@@ -1,6 +1,8 @@
 ﻿#include "../main.h"
 #include "SoundManager.h"
 #include "../Const/SoundConst.h"
+#include "../Util/AssetVault.h"   // 配布ビルド：埋め込みpak(VFS)の存在確認
+#include "../Util/BuildConfig.h"
 #include <filesystem>
 #include <algorithm>
 #include <fstream>
@@ -35,6 +37,8 @@ namespace
 bool SoundManager::Exists(std::string_view path)
 {
 	if (path.empty()) { return false; }
+	// 配布ビルド：埋め込みpak(VFS)に在ればディスクに無くても存在扱い
+	if (AssetVault::Exists(std::string(path))) { return true; }
 	std::error_code ec;
 	return std::filesystem::exists(std::filesystem::path(std::string(path)), ec);
 }
@@ -202,8 +206,8 @@ void SoundManager::PreloadAllSE()
 
 void SoundManager::PreloadAllBgm()
 {
-	// 通常版＋こもり版の両方をデコード済みにしておく（再生・ポーズ時のカクつき/遅延防止）
-	auto pre = [&](const char* path) { Preload(path); Preload(MuffledOf(path)); };
+	// BGM の PCM を事前デコードしてキャッシュ（再生時のもたつき防止。こもりはローパス）
+	auto pre = [&](const char* path) { if (Exists(path)) { KdBgmVoice::Preload(path); } };
 	pre(SoundConst::BgmTitle);
 	pre(SoundConst::BgmStory);
 	pre(SoundConst::BgmStageSelect);
@@ -215,22 +219,21 @@ void SoundManager::PreloadAllWithProgress(const std::function<void(float)>& onPr
 {
 	InitSeTable();
 
-	// 読み込む全パスを集める（BGM通常＋こもり、SE）
-	std::vector<std::string> list;
-	auto addBgm = [&](const char* p) { list.push_back(p); list.push_back(MuffledOf(p)); };
-	addBgm(SoundConst::BgmTitle);
-	addBgm(SoundConst::BgmStory);
-	addBgm(SoundConst::BgmStageSelect);
-	addBgm(SoundConst::BgmShowcase);
-	for (int i = 0; i < SoundConst::BgmStageCount; ++i) { addBgm(SoundConst::BgmStage[i]); }
-	for (const auto& s : m_seSlots) { list.push_back(s.path); }
+	// 読み込む全項目（BGMのPCMデコード＋SE）。ゲーム開始ロードでまとめて行う。
+	std::vector<std::string> bgmList = {
+		SoundConst::BgmTitle, SoundConst::BgmStory,
+		SoundConst::BgmStageSelect, SoundConst::BgmShowcase
+	};
+	for (int i = 0; i < SoundConst::BgmStageCount; ++i) { bgmList.push_back(SoundConst::BgmStage[i]); }
 
-	const size_t n = list.size();
-	for (size_t i = 0; i < n; ++i)
-	{
-		Preload(list[i]);
-		if (onProgress) { onProgress(static_cast<float>(i + 1) / static_cast<float>(n)); }
-	}
+	const size_t total = bgmList.size() + m_seSlots.size();
+	size_t done = 0;
+	auto step = [&]() { ++done; if (onProgress) { onProgress(static_cast<float>(done) / static_cast<float>(total)); } };
+
+	for (const auto& p : bgmList) { if (Exists(p)) { KdBgmVoice::Preload(p); } step(); }
+	for (const auto& s : m_seSlots) { Preload(s.path); step(); }
+
+	if (onProgress) { onProgress(1.0f); }
 }
 
 void SoundManager::SaveSeAssign()
@@ -246,7 +249,7 @@ void SoundManager::SaveSeAssign()
 
 void SoundManager::LoadSeAssign()
 {
-	std::ifstream ifs(SoundConst::SeAssignFile, std::ios::binary);
+	KdAssetIStream ifs(SoundConst::SeAssignFile, std::ios::binary);
 	if (!ifs) { return; }
 	std::string line;
 	while (std::getline(ifs, line))
@@ -265,13 +268,13 @@ void SoundManager::PlayBGM(std::string_view path, float vol)
 	m_bgmVol = vol;
 
 	// 同じ論理曲が既に流れていれば何もしない（こもり状態・ダッキングは維持）
-	if (m_bgmBasePath == path && m_bgm && !m_bgm->IsStopped())
+	if (m_bgmBasePath == path && m_bgm && m_bgm->IsValid())
 	{
 		// 目標音量は Update 側で m_bgmVol * m_duck から毎フレーム算出する
 		return;
 	}
 
-	// 新しい論理曲：こもり解除して通常版を再生
+	// 新しい論理曲：こもり解除して再生
 	m_bgmBasePath = std::string(path);
 	m_muffled     = false;
 	StartTrack(path);
@@ -279,35 +282,27 @@ void SoundManager::PlayBGM(std::string_view path, float vol)
 
 void SoundManager::StartTrack(std::string_view path)
 {
-	// いま鳴っている通常版を「フェードアウト枠」へ退避（曲切替のクロスフェード）
+	// いま鳴っているBGMを「フェードアウト枠」へ退避（曲切替のクロスフェード）
 	if (m_bgm)
 	{
 		m_bgmOld = m_bgm;
 		m_oldVol = m_curVol;
 		m_bgm.reset();
 	}
-	// こもり版は曲ごと使い捨て（即停止）
-	if (m_bgmMuf) { m_bgmMuf->Stop(); m_bgmMuf.reset(); }
 
 	m_bgmPath.clear();
 	m_curVol = 0.0f;
-	m_mufVol = 0.0f;
 
 	if (!Exists(path)) { return; }   // 未配置なら無音（oldはフェードアウトで消える）
 
-	// 通常版とこもり版を「同時に」ループ再生開始＝以後ずっと同期する。
-	// ファイルが無ければ無音（アサート回避）。こもり版と同様にガードする。
-	if (Exists(path))
+	// 自前XAudio2ボイスでループ再生（こもりはローパスで掛ける）
+	auto voice = std::make_shared<KdBgmVoice>();
+	if (voice->Play(path, true))
 	{
-		m_bgm = KdAudioManager::Instance().Play(path, true);
-		if (m_bgm) { m_bgm->SetVolume(0.0f); m_bgmPath = std::string(path); }
-	}
-
-	const std::string muf = MuffledOf(path);
-	if (Exists(muf))
-	{
-		m_bgmMuf = KdAudioManager::Instance().Play(muf, true);
-		if (m_bgmMuf) { m_bgmMuf->SetVolume(0.0f); }
+		voice->SetVolume(0.0f);
+		voice->SetMuffle(m_muffled);
+		m_bgm = voice;
+		m_bgmPath = std::string(path);
 	}
 }
 
@@ -316,24 +311,21 @@ void SoundManager::StopBGM()
 	if (m_bgm)
 	{
 		m_bgmOld = m_bgm;
-		m_oldVol = std::max(m_curVol, m_mufVol);   // 鳴っていた方の音量からフェードアウト
+		m_oldVol = m_curVol;   // 鳴っていた音量からフェードアウト
 		m_bgm.reset();
 	}
-	if (m_bgmMuf) { m_bgmMuf->Stop(); m_bgmMuf.reset(); }
 	m_bgmPath.clear();
 	m_bgmBasePath.clear();
 	m_muffled = false;
 	m_curVol  = 0.0f;
-	m_mufVol  = 0.0f;
 }
 
 void SoundManager::SetBgmMuffle(bool on)
 {
 	if (on == m_muffled) { return; }       // 変化なし
-	// こもり版が無ければ切り替えない（通常版のまま）
-	if (on && !m_bgmMuf) { return; }
-	// 再生はやり直さず、音量クロスフェードのターゲットだけ変える（位置は同期したまま）
 	m_muffled = on;
+	// 再生はやり直さず、ローパスのON/OFFだけ切り替える（位置はそのまま）
+	if (m_bgm) { m_bgm->SetMuffle(on); }
 }
 
 void SoundManager::SetBgmVolumeScale(float scale)
@@ -347,18 +339,15 @@ void SoundManager::Update(float dt)
 	const float fade = SoundConst::BgmFadeSpeed * dt;
 
 	// 全体の目標音量＝基準×ダッキング×ユーザー設定(マスター×BGM)
+	// こもりは音量ではなくローパス（SetBgmMuffleで適用済み）で表現する。
 	const float full = m_bgmVol * m_duck * m_masterVol * m_bgmUserVol;
-	// こもり中はこもり版を、通常時は通常版を鳴らす（もう片方は0へ）。両者は同期再生中。
-	const float nTarget = m_muffled ? 0.0f : full;
-	const float mTarget = m_muffled ? full : 0.0f;
 
 	auto approach = [&](float cur, float target) {
 		if (cur < target) { return std::min(cur + fade, target); }
 		return std::max(cur - fade, target);
 	};
 
-	if (m_bgm)    { m_curVol = approach(m_curVol, nTarget); m_bgm->SetVolume(m_curVol); }
-	if (m_bgmMuf) { m_mufVol = approach(m_mufVol, mTarget); m_bgmMuf->SetVolume(m_mufVol); }
+	if (m_bgm) { m_curVol = approach(m_curVol, full); m_bgm->SetVolume(m_curVol); }
 
 	// 退避BGM：0へフェードアウト → 消す
 	if (m_bgmOld)
@@ -378,6 +367,7 @@ void SoundManager::Update(float dt)
 //==========================================================
 void SoundManager::DrawSeEditorGui()
 {
+	if (!kDebugFeatures) { return; }   // 配布ビルドではSEエディタを完全無効
 	InitSeTable();
 
 	// F5 で表示/非表示をトグル（デフォルト非表示）

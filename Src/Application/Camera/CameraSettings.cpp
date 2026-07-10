@@ -96,7 +96,7 @@ void CameraSettings::Save() const
 //----------------------------------------------------------
 void CameraSettings::Load()
 {
-    std::ifstream ifs(SavePath);
+    KdAssetIStream ifs(SavePath);
     if (!ifs) { return; }
 
     std::string line;

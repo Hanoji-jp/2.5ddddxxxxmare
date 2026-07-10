@@ -307,7 +307,7 @@ void ShowcaseCamEditor::Save() const
 
 void ShowcaseCamEditor::Load()
 {
-    std::ifstream ifs(StageManager::Instance().ResolvePath(ShowcaseCamConst::SaveName));
+    KdAssetIStream ifs(StageManager::Instance().ResolvePath(ShowcaseCamConst::SaveName));
     m_phases.clear();
     m_selPhase = -1; m_selPoint = -1;
     if (!ifs) { return; }

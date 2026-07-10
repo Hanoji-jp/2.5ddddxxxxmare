@@ -48,6 +48,9 @@ public:
 	// DirectXAudioEngine取得
 	const std::unique_ptr<DirectX::AudioEngine>& GetAudioEngine() { return m_audioEng; }
 
+	// XAudio2 本体取得（自前ソースボイス＝KdBgmVoice 用）
+	IXAudio2* GetXAudio2() const { return m_audioEng ? m_audioEng->GetInterface() : nullptr; }
+
 	const DirectX::AudioListener& GetListener() { return m_listener; }
 
 	// サウンドアセットの一括読込
@@ -87,6 +90,40 @@ public:
 private:
 	KdAudioManager() {}
 	~KdAudioManager() { Release(); }
+};
+
+
+// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// /////
+// BGM専用 自前XAudio2ソースボイス
+// ----- ----- ----- ----- ----- ----- ----- ----- ----- -----
+// DirectXTKのSoundEffectInstanceはper-voiceフィルタを公開しないため、
+// BGMだけ生XAudio2のソースボイス(USEFILTER付き)で鳴らし、ローパスで
+// 「こもり」をリアルタイムに掛けられるようにする（muffled別ファイル不要）。
+// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// /////
+class KdBgmVoice
+{
+public:
+	KdBgmVoice() = default;
+	~KdBgmVoice() { Stop(); }
+
+	// BGMのPCMを事前デコードしてキャッシュに載せる（ゲーム開始ロードで呼ぶ＝再生時カクつき防止）
+	static void Preload(std::string_view path);
+
+	// path をデコードしてループ再生開始（音量0で開始。以後 SetVolume で上げる）
+	bool Play(std::string_view path, bool loop);
+
+	void SetVolume(float vol);     // 0..1
+	void SetMuffle(bool on);       // ローパスON/OFF（こもり）
+	void Stop();                   // 停止＆破棄
+	bool IsValid() const { return m_voice != nullptr; }
+
+private:
+	IXAudio2SourceVoice* m_voice = nullptr;
+	std::vector<uint8_t> m_pcm;    // 再生中は生かしておく必要がある
+	WAVEFORMATEX         m_wfx{};
+
+	KdBgmVoice(const KdBgmVoice&) = delete;
+	void operator=(const KdBgmVoice&) = delete;
 };
 
 

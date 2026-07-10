@@ -97,7 +97,7 @@ void CheckpointEditor::Save() const
 
 void CheckpointEditor::Load()
 {
-	std::ifstream ifs(StageManager::Instance().ResolvePath("checkpoints.csv"));
+	KdAssetIStream ifs(StageManager::Instance().ResolvePath("checkpoints.csv"));
 	if (!ifs) { return; }
 
 	m_positions.clear();

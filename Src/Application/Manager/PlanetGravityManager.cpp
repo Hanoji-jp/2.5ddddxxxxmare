@@ -563,7 +563,7 @@ void PlanetGravityManager::Save() const
 
 void PlanetGravityManager::Load()
 {
-	std::ifstream ifs(StageManager::Instance().ResolvePath("planets.csv"));
+	KdAssetIStream ifs(StageManager::Instance().ResolvePath("planets.csv"));
 
 	// ステージ切替時、新ステージのファイルが無くても「空のステージ」にするため先にクリア
 	m_planets.clear();

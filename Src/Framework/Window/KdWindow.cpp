@@ -24,9 +24,15 @@ bool KdWindow::Create(int clientWidth, int clientHeight, std::string_view titleN
 	wc.cbClsExtra = 0;										// エキストラクラス情報 
 	wc.cbWndExtra = 0;										// エキストラウィンドウ情報
 	wc.hInstance = hInst;									// インスタンスハンドル
-	// アプリアイコン：ファイルから読み込む（失敗時は既定アイコン）
-	HICON hAppIcon = (HICON)LoadImageA(nullptr, "Asset/Texture/LifeIco.ico", IMAGE_ICON,
-		0, 0, LR_LOADFROMFILE | LR_DEFAULTSIZE | LR_SHARED);
+	// アプリアイコン：まず exe 埋め込みリソース(IDI_APP_ICON=101)から読む
+	// （配布ビルドはアセットをディスクに出さないため、ファイル読みは使えない）。
+	HICON hAppIcon = LoadIconW(hInst, MAKEINTRESOURCEW(101));
+	// 念のためのフォールバック：ディスクに ico があれば読む（開発時など）
+	if (!hAppIcon)
+	{
+		hAppIcon = (HICON)LoadImageA(nullptr, "Asset/Texture/LifeIco.ico", IMAGE_ICON,
+			0, 0, LR_LOADFROMFILE | LR_DEFAULTSIZE | LR_SHARED);
+	}
 	wc.hIcon   = hAppIcon ? hAppIcon : LoadIcon(nullptr, IDI_APPLICATION);	// ラージアイコン
 	wc.hIconSm = hAppIcon ? hAppIcon : LoadIcon(nullptr, IDI_APPLICATION);	// スモールアイコン
 	wc.hCursor = LoadCursor(nullptr, IDC_ARROW);			// マウスカーソル

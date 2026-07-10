@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>Corelia 取扱説明書</title>
+<style>
+  @page { size: A4 landscape; margin: 0; }
+  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { margin: 0; font-family: "Yu Gothic UI", "Meiryo", sans-serif; color: #eef2f7; }
+  .slide {
+    width: 297mm; height: 209mm; padding: 16mm 18mm;
+    page-break-after: always; position: relative; overflow: hidden;
+    background: linear-gradient(135deg, #0b1020 0%, #131c34 60%, #1a2747 100%);
+  }
+  .slide:last-child { page-break-after: auto; }
+  h1 { font-size: 30pt; margin: 0 0 4mm 0; color: #e9d9a8; letter-spacing: 1px; }
+  h2 { font-size: 16pt; margin: 6mm 0 2mm 0; color: #6fd0ff; border-left: 5px solid #6fd0ff; padding-left: 8px; }
+  .sub { color: #9fb3cc; font-size: 12pt; margin: 0 0 6mm 0; }
+  ul { margin: 1mm 0 3mm 0; padding-left: 7mm; line-height: 1.7; font-size: 12.5pt; }
+  li { margin: 2mm 0; }
+  b, strong { color: #ffe9a8; }
+  table { width: 100%; border-collapse: collapse; margin: 3mm 0; font-size: 12pt; }
+  th, td { border: 1px solid #2f3f63; padding: 3mm 4mm; text-align: left; vertical-align: top; }
+  th { background: #1d2c4d; color: #6fd0ff; width: 26%; white-space: nowrap; }
+  td { background: rgba(255,255,255,0.03); }
+  .key { display:inline-block; background:#0a1224; border:1px solid #3a5a8c; color:#9fe0ff;
+         border-radius:6px; padding:1px 10px; font-family:"Consolas",monospace; font-weight:bold;
+         font-size:11pt; margin:0 2px; box-shadow: 0 1px 0 #1a2747; }
+  .tag { display:inline-block; background:#6fd0ff; color:#0b1020; font-weight:bold;
+         border-radius: 4px; padding: 1px 8px; font-size: 10pt; margin-right:6px; }
+  .note { position:absolute; left:18mm; right:18mm; bottom:10mm; font-size:11pt;
+          color:#cfe0f5; background: rgba(111,208,255,0.10);
+          border:1px solid #355; border-radius:8px; padding:4mm 6mm; line-height:1.5; }
+  .cover { display:flex; flex-direction:column; justify-content:center; height:100%; }
+  .cover h1 { font-size: 46pt; color:#e9d9a8; }
+  .cover p { font-size: 15pt; color:#9fb3cc; }
+  .pageno { position:absolute; right:12mm; bottom:7mm; color:#5b6e8c; font-size:10pt; }
+  pre { background:#0a1224; border:1px solid #2f3f63; border-radius:8px; padding:5mm;
+        color:#cfe0f5; font-size:11.5pt; line-height:1.5; white-space:pre; font-family:"Consolas","Yu Gothic UI",monospace; }
+  .accent { color:#6fd0ff; }
+  .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap: 6mm; }
+  .grid3 { display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 5mm; }
+  .ovl.sm { padding:2mm 3mm; font-size:9.5pt; line-height:1.4; }
+  .ovl.sm .t { font-size:9.5pt; margin-bottom:0.5mm; }
+  .tech { background: rgba(255,180,90,0.07); border:1px solid #5a4a2a; border-radius:8px; padding:3mm 5mm; }
+  .tech h2 { color:#ffcf73; border-left-color:#ffcf73; margin-top:1mm; }
+  .tech ul { font-size:11pt; }
+  .tech code { color:#9fe0ff; font-family:"Consolas",monospace; font-size:10.5pt; }
+  .easy { background: rgba(127,230,160,0.06); border:1px solid #2f5a3f; border-radius:8px; padding:3mm 5mm; }
+  .easy h2 { color:#7fe6a0; border-left-color:#7fe6a0; margin-top:1mm; }
+  .card { background: rgba(255,255,255,0.03); border:1px solid #2f3f63; border-radius:10px; padding:4mm 6mm; }
+  .card h2 { margin-top:1mm; }
+  .script { margin-top:5mm; background: rgba(127,230,160,0.10); border:1px solid #2f5a3f;
+            border-radius:8px; padding:4mm 6mm; font-size:13pt; line-height:1.7; color:#dff5e6; }
+  .script b { color:#aef0c4; }
+  .script::before { content:"💡 ワンポイント"; display:block; color:#7fe6a0;
+                    font-weight:bold; font-size:11pt; margin-bottom:2mm; }
+  .lifebar { display:flex; align-items:center; gap:4mm; margin:3mm 0; }
+  .lifebar img { width:22mm; height:22mm; image-rendering:auto;
+                 filter: drop-shadow(0 2px 6px rgba(0,0,0,0.5)); }
+  code { color:#9fe0ff; font-family:"Consolas",monospace; }
+  /* ── 画面ガイド（スクショ）用 ── */
+  .shotwrap { position:relative; margin-top:2mm; line-height:0; }
+  .shot { width:100%; border-radius:12px; border:1px solid #2f3f63; display:block;
+          box-shadow:0 6px 18px rgba(0,0,0,0.55); }
+  .ovl { position:absolute; background:rgba(11,16,32,0.86); border:1px solid #6fd0ff;
+         border-radius:10px; padding:2.5mm 4mm; font-size:11pt; line-height:1.5; color:#eef2f7;
+         box-shadow:0 3px 10px rgba(0,0,0,0.55); }
+  .ovl b { color:#ffe9a8; }
+  .ovl .t { color:#6fd0ff; font-weight:bold; display:block; margin-bottom:1mm; font-size:11pt; }
+  .pin { position:absolute; background:#6fd0ff; color:#0b1020; font-weight:bold;
+         border-radius:6px; padding:2px 8px; font-size:9.5pt; line-height:1.6; white-space:nowrap;
+         box-shadow:0 1px 5px rgba(0,0,0,0.7); border:1px solid #0b1020; }
+  .pin.warn { background:#ff9a9a; }
+  .pin.good { background:#7fe6a0; }
+  .cap { margin-top:2mm; font-size:11pt; color:#cfe0f5; line-height:1.5; }
+  .cap b { color:#ffe9a8; }
+  .imgcell .t2 { color:#6fd0ff; font-weight:bold; font-size:12pt; margin:0 0 1mm 0; }
+</style>
+</head>
+<body>
+
+<!-- 表紙 -->
+<div class="slide">
+  <div class="cover">
+    <h1>Corelia ― 取扱説明書</h1>
+    <p class="accent">遊び方ガイド ／ 操作・重力・コアリアの助け方</p>
+  </div>
+  <div class="pageno">1</div>
+</div>
+
+<!-- ① ゲーム紹介 -->
+<div class="slide">
+  <h1>① このゲームについて</h1>
+  <p class="sub">コンセプト：「上下も左右も関係ない。惑星の“重力”を味方にして冒険する」</p>
+  <div class="grid2">
+    <div>
+      <h2>ストーリー</h2>
+      <ul>
+        <li>星々に散らばった小さな種族 <b>コアリア</b>。</li>
+        <li>プレイヤーは重力を乗りこなし、<b>惑星をめぐる冒険</b>へ出発する。</li>
+        <li>マップ各所にいるコアリアに話しかけると、<b>ヒント</b>をくれる。</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h2>ゲームの目的</h2>
+      <ul>
+        <li>各ステージの <b>ゴール</b> を目指して惑星を進む。</li>
+        <li>重力を乗りこなし、<b>丸い惑星／箱の惑星</b>の表面を歩いたり飛んだりする。</li>
+        <li>敵をかわし・倒し、<b>アイテム</b>を集めながらクリアを目指す。</li>
+      </ul>
+      <p style="font-size:11pt;color:#cfe0f5;">やさしい操作で、宇宙を“ころころ”冒険するアクションです。</p>
+    </div>
+  </div>
+  <div class="pageno">2</div>
+</div>
+
+<!-- ② 基本操作 -->
+<div class="slide">
+  <h1>② 基本操作</h1>
+  <p class="sub">キーボード＆マウスで遊びます。まずはこの表を覚えればOK。</p>
+  <table>
+    <tr><th>移動</th><td><span class="key">A</span> <span class="key">D</span> <span class="key">W</span> <span class="key">S</span> で惑星の表面を歩けます（<span class="key">W</span>／<span class="key">S</span>は会話・メニューの選択にも使用）</td></tr>
+    <tr><th>ダッシュ</th><td><span class="key">Shift</span> 長押しで加速。ダッシュしたまま跳ぶと<b>飛距離アップ</b></td></tr>
+    <tr><th>ジャンプ</th><td><span class="key">Space</span>（地上で）。惑星の“真上”へ跳びます</td></tr>
+    <tr><th>パラソル</th><td>ジャンプ中に <span class="key">E</span> で開く → 風に乗って<b>滑空</b></td></tr>
+    <tr><th>岩を集める</th><td>カーソルを<b>カラフル岩</b>に近づける（ホバー）だけで吸い寄せられます</td></tr>
+    <tr><th>重力を変える</th><td><span class="key">マウスホイール</span>で重力を切り替え（<b>手動重力ゾーン内でのみ使用可</b>）</td></tr>
+    <tr><th>話す</th><td>コアリアに近づいて <span class="key">W</span></td></tr>
+    <tr><th>ポーズ</th><td><span class="key">TAB</span> でメニューを開閉</td></tr>
+  </table>
+  <div class="pageno">3</div>
+</div>
+
+<!-- ③ 移動とアクション -->
+<div class="slide">
+  <h1>③ 移動とアクション</h1>
+  <p class="sub">「走る・跳ぶ・浮く・撃つ」を組み合わせて進もう。</p>
+  <div class="grid2">
+    <div class="easy">
+      <h2>走る・跳ぶ</h2>
+      <ul>
+        <li><b>ダッシュ</b>：<span class="key">Shift</span>で速く動く。段差を越えたい時に。</li>
+        <li><b>ダッシュジャンプ</b>：ダッシュのまま <span class="key">Space</span> → いつもより<b>遠くまで</b>跳べる。</li>
+        <li>ジャンプは常に<b>足元の惑星から見た“真上”</b>へ。だから逆さでもちゃんと跳べる。</li>
+      </ul>
+    </div>
+    <div class="easy">
+      <h2>浮く・集める</h2>
+      <ul>
+        <li><b>パラソル</b>：跳んだあと <span class="key">E</span> でふわっと滑空。<b>横からの風</b>にも乗れる。</li>
+        <li>タイミングを間違えると落下するので、風をよく見て開こう。</li>
+        <li><b>岩</b>：カーソルを近づける（ホバー）だけで吸い寄せられて集まる。</li>
+      </ul>
+    </div>
+  </div>
+  <div class="script">パラソルは<b>ジャンプの頂点あたりで開く</b>と一番遠くまで飛べます。横風の惑星では、風が吹く向きに合わせて開くのがコツ！</div>
+  <div class="pageno">4</div>
+</div>
+
+<!-- ④ 重力のしくみ -->
+<div class="slide">
+  <h1>④ 重力のしくみ</h1>
+  <p class="sub">このゲームの一番の特徴。地面は“下”じゃなく、<b>惑星の中心</b>にあります。</p>
+  <div class="grid2">
+    <div>
+      <h2>惑星に張り付く</h2>
+      <ul>
+        <li>丸い惑星には<b>ぐるっと一周</b>歩けます。天井も壁もありません。</li>
+        <li>箱の惑星は<b>面から面へ</b>。角をこえると“上”の向きが変わります。</li>
+        <li>惑星から離れすぎると引力が弱まり、ふわっと<b>宇宙へ離脱</b>。</li>
+      </ul>
+      <p style="font-size:11pt;color:#9fb3cc;">※ 重力の向きを切り替えられる<b>手動重力ゾーン</b>の詳しい使い方は <b>⑪ 画面ガイド</b>を参照。</p>
+    </div>
+    <div>
+<pre>      ● プレイヤー
+      ↑  「上」＝惑星の外向き
+      │
+      ▼  重力＝惑星の中心向き
+     (●) 惑星の中心</pre>
+      <p style="font-size:11.5pt;color:#cfe0f5;line-height:1.6;">
+      どんな惑星でも考え方は同じ。<b>足元の惑星のほうが「下」</b>で、
+      その反対が「上（ジャンプの向き）」になります。<br>
+      向きが変わっても操作は <span class="key">A</span> <span class="key">D</span> のまま。体が自然に回り込みます。</p>
+    </div>
+  </div>
+  <div class="grid2" style="margin-top:4mm; align-items:center;">
+    <div class="shotwrap">
+      <img class="shot" src="2026-07-02_09h22_28.png" alt="壁にくっつく">
+      <div class="ovl sm" style="left:3%; bottom:6%;">
+        <span class="t">STICK</span>
+        ボコっとした<b>壁や床</b>にも<br>足がつけられる
+      </div>
+    </div>
+    <p style="font-size:11.5pt;color:#cfe0f5;line-height:1.6;">
+      でこぼこした壁や床も、地面と同じように<b>重力に引かれて足がつきます</b>。<br>
+      これも重力のしくみのひとつ。ただし<b>よく見ずに進むと危険</b>な場所もあるので注意しましょう。
+    </p>
+  </div>
+  <div class="pageno">5</div>
+</div>
+
+<!-- ⑤ コアリアとライフ -->
+<div class="slide">
+  <h1>⑤ コアリアと残りライフ</h1>
+  <p class="sub">仲間コアリアはヒントの宝庫。そして“残機”もコアリアです。</p>
+  <div class="grid2">
+    <div class="easy">
+      <h2>コアリアに話しかける</h2>
+      <ul>
+        <li>マップに落ちているコアリアに近づくと <b>「Ｗ 話す」</b> の吹き出しが出ます。</li>
+        <li><span class="key">W</span> で会話開始。<b>カメラが寄って</b>じっくり聞けます。</li>
+        <li>会話中は <span class="key">W</span>／<span class="key">S</span> で送り、<span class="key">Enter</span> で進めます。</li>
+        <li>操作のヒントや、次に行く場所を教えてくれます。</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h2>残りライフ（コアリア）</h2>
+      <div class="lifebar">
+        <img src="../Asset/Texture/LifeIco.png" alt="ライフアイコン">
+        <div style="font-size:12.5pt;line-height:1.6;">
+          ステージ内でやられると <b>ライフが1つ減少</b>。<br>
+          <b>3回</b>やられると<b>ゲームオーバー</b>です。
+        </div>
+      </div>
+      <ul>
+        <li>ゲームオーバーでは <b>リトライ／ステージ選択／タイトル</b> を選べます。</li>
+        <li>やられても<b>直前のチェックポイント</b>から再開できます。</li>
+      </ul>
+    </div>
+  </div>
+  <div class="script">迷ったら<b>まずコアリアを探して話しかける</b>のが近道。ヒントを聞けば、次にやることがハッキリします。</div>
+  <div class="pageno">6</div>
+</div>
+
+<!-- ⑥ アイテムと敵 -->
+<div class="slide">
+  <h1>⑥ アイテムと敵</h1>
+  <div class="grid2">
+    <div class="easy">
+      <h2>集めるもの</h2>
+      <ul>
+        <li><b>緑のエメラルド</b>：敵を倒すと落とすことがある。<b>回復・スコア</b>に。</li>
+        <li><b>カラフルな岩</b>：マップに置かれた収集アイテム。<b>マウスカーソルを近づける</b>だけで吸い寄せられて集まる。</li>
+        <li><b>重力コア</b>：惑星に眠るエネルギーのかけら。集めて<b>コレクション</b>を増やそう。</li>
+      </ul>
+    </div>
+    <div class="tech" style="background:rgba(255,120,120,0.06);border-color:#5a2a2a;">
+      <h2 style="color:#ff9a9a;border-left-color:#ff9a9a;">気をつける敵</h2>
+      <ul>
+        <li><b>キューブン</b>：<b>踏みつぶし攻撃</b>が脅威。真下は危険！</li>
+        <li>動く床・横風など、<b>地形そのもの</b>もワナになる。焦らず観察を。</li>
+        <li>あわてず<b>動きを見てから</b>間合いを取るのが安全。</li>
+      </ul>
+    </div>
+  </div>
+  <div class="script">キューブンは正面からより、<b>ジャンプや岩を使って</b>崩すのが安全。踏まれる前に間合いを取ろう。</div>
+  <div class="pageno">7</div>
+</div>
+
+<!-- ⑦ ゲームの流れ・TIPS -->
+<div class="slide">
+  <h1>⑦ ゲームの流れ ＆ こまったとき</h1>
+  <div class="grid2">
+    <div>
+      <h2>ゲームの流れ</h2>
+      <ul>
+        <li><b>タイトル</b> → <b>ステージ選択</b>（ハブ）→ <b>ステージへ出発</b></li>
+        <li>惑星を進み、<b>ゴール</b>に到達すればクリア。</li>
+        <li>クリア成績（コイン／コア／タイム）が記録されます。</li>
+        <li>いつでも <span class="key">TAB</span> の<b>ポーズ</b>から設定・ステージ選択へ。</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h2>こまったとき</h2>
+      <ul>
+        <li><b>進めない</b> → 近くのコアリアに <span class="key">W</span> で話す。</li>
+        <li><b>高い所へ届かない</b> → ダッシュジャンプ＋パラソルを使う。</li>
+        <li><b>別の足場へ行きたい</b> → <b>手動重力ゾーン</b>で <span class="key">マウスホイール</span>を回して重力を切り替える。</li>
+        <li><b>音量・フレームレート・解像度</b> → <span class="key">TAB</span> → 設定メニューで調整（<b>操作キーは変更できません</b>）。</li>
+        <li><b>最新版にしたい</b> → 設定メニュー最下部の<b>「アップデート」</b>で決定 → 新しい版があれば自動でダウンロード・適用されます。</li>
+      </ul>
+    </div>
+  </div>
+  <div class="note"><b>さあ、出発！</b> 重力を味方に、コアリアたちと一緒に宇宙のすみずみまで冒険しましょう。</div>
+  <div class="pageno">8</div>
+</div>
+
+<!-- ⑧ 画面ガイド：タイトル & ステージセレクト -->
+<div class="slide">
+  <h1>⑧ 画面ガイド ― はじめかた</h1>
+  <p class="sub">起動するとタイトル画面。<b>「スタート」</b>で冒険へ、<b>「せってい」</b>で調整。</p>
+  <div class="grid2">
+    <div class="imgcell">
+      <p class="t2">タイトル画面</p>
+      <div class="shotwrap">
+        <img class="shot" src="2026-07-02_09h20_54.png" alt="タイトル画面">
+        <div class="ovl" style="left:4%; bottom:6%;">
+          <span class="t">MENU</span>
+          <b>スタート</b>：冒険を始める<br>
+          <b>せってい</b>：音量・フレームレート・解像度・アップデート
+        </div>
+      </div>
+      <p class="cap">左下のキャラが主人公<b>「あなた」</b>。星々を旅する小さなキューブです。</p>
+    </div>
+    <div class="imgcell">
+      <p class="t2">ステージセレクト（ハブ）</p>
+      <div class="shotwrap">
+        <img class="shot" src="2026-07-02_09h21_23.png" alt="ステージセレクト">
+        <div class="ovl" style="right:4%; top:8%;">
+          <span class="t">あそびかた</span>
+          浮かぶ星＝<b>ステージ</b><br>
+          <span class="key" style="font-size:9pt;">WASD</span> で選び <span class="key" style="font-size:9pt;">Enter</span> で出発
+        </div>
+      </div>
+      <p class="cap">コアリアが星の名前（例：<b>まるとしかくのほし</b>）を教えてくれます。左上は集めた<b>コイン／カラフル岩／重力コア</b>の合計。</p>
+    </div>
+  </div>
+  <div class="pageno">9</div>
+</div>
+
+<!-- ⑨ 画面ガイド：プレイ画面のみかた（HUD） -->
+<div class="slide">
+  <h1>⑨ 画面ガイド ― プレイ画面のみかた</h1>
+  <p class="sub">画面のまわりに、今の状態がまとまっています。</p>
+  <div class="shotwrap" style="width:82%; margin:2mm auto 0;">
+    <img class="shot" src="2026-07-02_09h24_16.png" alt="プレイ画面のHUD">
+    <div class="pin" style="left:1%; top:24%;">① 体力（エメラルド）</div>
+    <div class="pin" style="right:12%; top:8%;">② コインの数</div>
+    <div class="pin" style="right:12%; top:17%;">③ カラフル岩の数</div>
+    <div class="pin" style="left:1%; bottom:20%;">④ 重力の向き表示</div>
+  </div>
+  <div class="grid2" style="margin-top:3mm;">
+    <div>
+      <ul style="margin:0;">
+        <li><b>① 体力</b>：ダメージで減少。緑エメラルドを取ると<b>回復</b>。</li>
+        <li><b>② コイン</b>：集めた枚数。スコアになります。</li>
+      </ul>
+    </div>
+    <div>
+      <ul style="margin:0;">
+        <li><b>③ カラフル岩</b>：収集した数。カーソルを近づけて集める。</li>
+        <li><b>④ 重力の向き表示</b>：足元に光る印が、今の重力方向を示す。</li>
+      </ul>
+    </div>
+  </div>
+  <div class="pageno">10</div>
+</div>
+
+<!-- ⑩ 画面ガイド：跳ぶ・飛ぶ -->
+<div class="slide">
+  <h1>⑩ 画面ガイド ― 跳ぶ・飛ぶ</h1>
+  <p class="sub">ファンの<b>横風</b>に乗って進んだり、頂点で <span class="key">E</span> のパラソルに切り替えて遠くへ。</p>
+  <div class="grid2">
+    <div class="imgcell">
+      <p class="t2">横風に乗って進む</p>
+      <div class="shotwrap">
+        <img class="shot" src="2026-07-02_09h24_06.png" alt="横風に乗って進む">
+        <div class="ovl" style="left:4%; top:8%;">
+          <span class="t">WIND</span>
+          ファンの<b>横風</b>に押されて<br>体が横に流される
+        </div>
+      </div>
+      <p class="cap">ファンのあるエリアに入ると横風に押し流されます。風に乗ったまま並んだ<b>コイン</b>を回収しよう。</p>
+    </div>
+    <div class="imgcell">
+      <p class="t2">パラソルで滑空</p>
+      <div class="shotwrap">
+        <img class="shot" src="2026-07-02_09h24_16.png" alt="パラソルで滑空">
+        <div class="ovl" style="right:4%; bottom:8%;">
+          <span class="t">PARASOL</span>
+          ジャンプ中に <span class="key" style="font-size:9pt;">E</span><br><b>風に乗ってふわり</b>と滑空
+        </div>
+      </div>
+      <p class="cap">頂点あたりで開くと一番遠くへ。<b>横風</b>にも乗れるので、風向きを見て開こう。</p>
+    </div>
+  </div>
+  <div class="pageno">11</div>
+</div>
+
+<!-- ⑪ 画面ガイド：手動重力ゾーン -->
+<div class="slide">
+  <h1>⑪ 画面ガイド ― 手動重力ゾーン</h1>
+  <p class="sub">三角マークのゾーンに入ると、<span class="key">マウスホイール</span>で<b>重力の向きを切り替え</b>られます。色は今の重力方向。</p>
+  <div class="grid2">
+    <div class="imgcell">
+      <p class="t2">青 ＝ 通常重力（下向き）</p>
+      <div class="shotwrap">
+        <img class="shot" src="2026-07-02_09h26_46.png" alt="手動重力ゾーン（通常・下向き）">
+        <div class="ovl" style="left:4%; bottom:8%;">
+          <span class="t">GRAVITY ZONE</span>
+          いつも通り<b>下が重力の向き</b><br>ここで<span class="key" style="font-size:9pt;">ホイール</span>を回すと反転
+        </div>
+      </div>
+      <p class="cap">青い三角のときは<b>通常の重力（下向き）</b>。マウスホイールを回すと重力の向きが切り替わります。</p>
+    </div>
+    <div class="imgcell">
+      <p class="t2">赤 ＝ 反転重力（上向き）</p>
+      <div class="shotwrap">
+        <img class="shot" src="2026-07-02_09h26_56.png" alt="手動重力ゾーン（反転・上向き）">
+        <div class="ovl" style="right:4%; top:8%;">
+          <span class="t">REVERSED GRAVITY</span>
+          <b>重力が反転</b>＝上が「下」に<br>同じゾーンで<span class="key" style="font-size:9pt;">ホイール</span>を回すと元に戻る
+        </div>
+      </div>
+      <p class="cap">赤い三角のときは<b>重力が反転</b>し、天井側が新しい「下」になります。同じゾーン内で色が切り替わるだけで、場所そのものは同じです。</p>
+    </div>
+  </div>
+  <div class="pageno">12</div>
+</div>
+
+<!-- ⑫ 画面ガイド：敵・収集 -->
+<div class="slide">
+  <h1>⑫ 画面ガイド ― 敵・収集</h1>
+  <p class="sub">敵を見分け、カラフル岩を集めよう。</p>
+  <div class="grid2">
+    <div class="imgcell">
+      <p class="t2">キューブン（敵）</p>
+      <div class="shotwrap">
+        <img class="shot" src="2026-07-02_09h22_42.png" alt="キューブン">
+        <div class="ovl warn" style="right:4%; bottom:8%; background:rgba(40,10,10,0.86); border-color:#ff9a9a;">
+          <span class="t" style="color:#ff9a9a;">ENEMY</span>
+          <b style="color:#ffbcbc;">キューブン</b>：踏みつぶし攻撃<br>に注意。真下は危険！
+        </div>
+      </div>
+      <p class="cap">トゲトゲの殻を持つ敵が<b>キューブン</b>です。<b>動きを見てから</b>間合いを取り、ジャンプや岩で崩そう。</p>
+    </div>
+    <div class="imgcell">
+      <p class="t2">カラフル岩を集める</p>
+      <div class="shotwrap">
+        <img class="shot" src="2026-07-02_09h30_57.png" alt="カラフル岩を集める">
+        <div class="ovl" style="left:4%; top:8%;">
+          <span class="t">COLLECT</span>
+          カーソルを近づけると<br><b>吸い寄せられて</b>集まる
+        </div>
+      </div>
+      <p class="cap">きらめく<b>カラフル岩</b>にマウスカーソルを近づけるだけで集まります。集めた数はHUDに表示されます。</p>
+    </div>
+  </div>
+  <div class="pageno">13</div>
+</div>
+
+</body>
+</html>

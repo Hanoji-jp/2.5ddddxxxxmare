@@ -9,6 +9,7 @@
 #include "../../GameObject/Effect/EffectBase.h"
 #include "../../Manager/ModelManager.h"
 #include "../../Manager/StageManager.h"
+#include "../../Util/BuildConfig.h"
 #include "../../Const/StageSelectConst.h"
 #include "../../Const/ResultConst.h"
 #include "../../Const/PauseMenuConst.h"
@@ -336,7 +337,7 @@ void StageSelectScene::Event()
 
 	// ── デバッグ：F9 で全ステージ解放をトグル ──
 	{
-		const bool f9 = (GetAsyncKeyState(VK_F9) & 0x8000) != 0;
+		const bool f9 = kDebugFeatures && (GetAsyncKeyState(VK_F9) & 0x8000) != 0;
 		if (f9 && !m_dbgUnlockPrev)
 		{
 			auto& sm = StageManager::Instance();

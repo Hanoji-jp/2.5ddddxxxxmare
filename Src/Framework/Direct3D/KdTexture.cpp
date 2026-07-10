@@ -1,6 +1,7 @@
 ﻿#include "Framework/KdFramework.h"
 
 #include "KdTexture.h"
+#include "../../Application/Util/AssetVault.h"   // 配布ビルド：埋め込みpakからメモリ読み込み
 
 
 // 2D画像(resource)リソースから、最適なビューを作成する
@@ -228,9 +229,23 @@ bool KdTexture::Load(std::string_view filename, bool renderTarget, bool depthSte
 
 	bool bLoaded = false;
 
+	// 配布ビルド：埋め込みpakに在ればメモリから読む（ディスクに平文を出さない）
+	std::vector<uint8_t> vaultBytes;
+	const bool fromVault = AssetVault::Read(std::string(filename), vaultBytes);
+
+	if (fromVault)
+	{
+		const void*  mem = vaultBytes.data();
+		const size_t len = vaultBytes.size();
+		if (SUCCEEDED(DirectX::LoadFromWICMemory(mem, len, DirectX::WIC_FLAGS_ALL_FRAMES, &meta, image))) { bLoaded = true; }
+		if (!bLoaded && SUCCEEDED(DirectX::LoadFromDDSMemory(mem, len, DirectX::DDS_FLAGS_NONE, &meta, image))) { bLoaded = true; }
+		if (!bLoaded && SUCCEEDED(DirectX::LoadFromTGAMemory(mem, len, &meta, image))) { bLoaded = true; }
+		if (!bLoaded && SUCCEEDED(DirectX::LoadFromHDRMemory(mem, len, &meta, image))) { bLoaded = true; }
+	}
+
 	// WIC画像読み込み
 	//  WIC_FLAGS_ALL_FRAMES … gifアニメなどの複数フレームを読み込んでくれる
-	if (SUCCEEDED(DirectX::LoadFromWICFile(wFilename.c_str(), DirectX::WIC_FLAGS_ALL_FRAMES, &meta, image)))
+	if (!bLoaded && SUCCEEDED(DirectX::LoadFromWICFile(wFilename.c_str(), DirectX::WIC_FLAGS_ALL_FRAMES, &meta, image)))
 	{
 		bLoaded = true;
 	}

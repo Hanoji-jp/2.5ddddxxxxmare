@@ -1,6 +1,7 @@
 ﻿#include "GameScene.h"
 #include"../SceneManager.h"
 #include"../../Util/DebugFlags.h"
+#include"../../Util/BuildConfig.h"
 #include"../../Const/LightConst.h"
 #include"../../Const/JuiceConst.h"
 #include"../../Const/HealConst.h"
@@ -161,14 +162,14 @@ void GameScene::Event()
 
 	// ── デバッグ可視化トグル（1キー）：ManualZone以外の判定表示をON/OFF ──
 	{
-		const bool k1 = (GetAsyncKeyState('1') & 0x8000) != 0;
+		const bool k1 = kDebugFeatures && (GetAsyncKeyState('1') & 0x8000) != 0;
 		if (k1 && !m_debugKeyPrev) { m_debugZonesVisible = !m_debugZonesVisible; }
 		m_debugKeyPrev = k1;
 	}
 
 	// ── デバッグ：Rキーでセーブデータをリセット（初回起動フラグ・合計・ステージ記録）──
 	{
-		const bool kR = (GetAsyncKeyState('R') & 0x8000) != 0;
+		const bool kR = kDebugFeatures && (GetAsyncKeyState('R') & 0x8000) != 0;
 		if (kR && !m_resetKeyPrev)
 		{
 			StageManager::Instance().ResetSaveData();
@@ -179,7 +180,7 @@ void GameScene::Event()
 
 	// ── デバッグ：F10キーでステージクリアを即発火（クリア演出→リザルトへ）──
 	{
-		const bool kClear = (GetAsyncKeyState(VK_F10) & 0x8000) != 0;
+		const bool kClear = kDebugFeatures && (GetAsyncKeyState(VK_F10) & 0x8000) != 0;
 		if (kClear && !m_debugClearPrev && !m_clearActive && m_spPlayer)
 		{
 			StartStageClear(m_spPlayer->GetPos());
@@ -190,7 +191,7 @@ void GameScene::Event()
 
 	// ── エディタ画面トグル（F3）：ゲームをImGuiウィンドウ表示 ⇔ 通常フルスクリーン ──
 	{
-		const bool k3 = (GetAsyncKeyState(VK_F3) & 0x8000) != 0;
+		const bool k3 = kDebugFeatures && (GetAsyncKeyState(VK_F3) & 0x8000) != 0;
 		if (k3 && !m_editorKeyPrev) { m_editorScreen = !m_editorScreen; }
 		m_editorKeyPrev = k3;
 	}
@@ -468,7 +469,7 @@ void GameScene::Event()
 	}
 
 	// F2でエディターモードのトグル（チャタリング防止）
-	const bool f2Now = (GetAsyncKeyState(VK_F2) & 0x8000) != 0;
+	const bool f2Now = kDebugFeatures && (GetAsyncKeyState(VK_F2) & 0x8000) != 0;
 	if (f2Now && !m_f2Prev)
 	{
 		m_editorMode = !m_editorMode;
@@ -523,7 +524,7 @@ void GameScene::Event()
 	m_f2Prev = f2Now;
 
 	// F4で撮影モードのトグル（自由移動カメラ＋ワイヤー一切非表示）。エディタモード中は無効。
-	const bool f4Now = (GetAsyncKeyState(VK_F4) & 0x8000) != 0;
+	const bool f4Now = kDebugFeatures && (GetAsyncKeyState(VK_F4) & 0x8000) != 0;
 	if (f4Now && !m_f4Prev && !m_editorMode)
 	{
 		m_photoMode = !m_photoMode;
@@ -5409,7 +5410,7 @@ void GameScene::SaveSpawn()
 
 void GameScene::LoadSpawn()
 {
-	std::ifstream ifs(StageManager::Instance().ResolvePath("spawn_settings.csv"));
+	KdAssetIStream ifs(StageManager::Instance().ResolvePath("spawn_settings.csv"));
 	if (!ifs) { return; }
 
 	std::string line;
@@ -5463,7 +5464,7 @@ void GameScene::SaveSunLight()
 
 void GameScene::LoadSunLight()
 {
-	std::ifstream ifs(StageManager::Instance().ResolvePath("sun_light.csv"));
+	KdAssetIStream ifs(StageManager::Instance().ResolvePath("sun_light.csv"));
 	if (!ifs) { return; }
 
 	std::string line;

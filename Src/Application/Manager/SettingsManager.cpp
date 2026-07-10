@@ -1,6 +1,7 @@
 ﻿#include "../main.h"
 #include "SettingsManager.h"
 #include "SoundManager.h"
+#include "SaveData.h"
 #include "../Const/SettingsConst.h"
 #include <fstream>
 #include <sstream>
@@ -8,47 +9,15 @@
 
 void SettingsManager::Load()
 {
-	std::ifstream ifs(SettingsConst::FilePath);
-	if (!ifs) { m_hasFile = false; return; }
-	m_hasFile = true;
-
-	std::string line;
-	while (std::getline(ifs, line))
-	{
-		if (line.empty()) { continue; }
-		const size_t comma = line.find(',');
-		if (comma == std::string::npos) { continue; }
-		const std::string key = line.substr(0, comma);
-		const std::string val = line.substr(comma + 1);
-
-		if      (key == "master")     { m_master     = std::stof(val); }
-		else if (key == "bgm")        { m_bgm        = std::stof(val); }
-		else if (key == "se")         { m_se         = std::stof(val); }
-		else if (key == "fullscreen") { m_fullscreen = (std::stoi(val) != 0); }
-		else if (key == "resIndex")   { m_resIndex   = std::stoi(val); }
-		else if (key == "fpsIndex")   { m_fpsIndex   = std::stoi(val); }
-		else if (key == "showFps")    { m_showFps    = (std::stoi(val) != 0); }
-	}
-
-	// クランプ
-	m_master = std::clamp(m_master, 0.0f, 1.0f);
-	m_bgm    = std::clamp(m_bgm,    0.0f, 1.0f);
-	m_se     = std::clamp(m_se,     0.0f, 1.0f);
-	if (m_resIndex < 0 || m_resIndex >= SettingsConst::ResolutionCount) { m_resIndex = 0; }
-	if (m_fpsIndex < 0 || m_fpsIndex >= SettingsConst::FpsCount)        { m_fpsIndex = 1; }
+	// 統合バイナリ save.dat から読み込む（設定・合計・記録をまとめて）
+	SaveData::Load();
+	m_hasFile = SaveData::Exists();
 }
 
 void SettingsManager::Save() const
 {
-	std::ofstream ofs(SettingsConst::FilePath);
-	if (!ofs) { return; }
-	ofs << "master,"     << m_master << "\n";
-	ofs << "bgm,"        << m_bgm    << "\n";
-	ofs << "se,"         << m_se     << "\n";
-	ofs << "fullscreen," << (m_fullscreen ? 1 : 0) << "\n";
-	ofs << "resIndex,"   << m_resIndex << "\n";
-	ofs << "fpsIndex,"   << m_fpsIndex << "\n";
-	ofs << "showFps,"    << (m_showFps ? 1 : 0) << "\n";
+	// 統合バイナリ save.dat へ保存（設定・合計・記録をまとめて）
+	SaveData::Save();
 }
 
 void SettingsManager::ApplyAudio() const

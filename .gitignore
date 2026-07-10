@@ -21,3 +21,16 @@ x64/
 *.inc
 
 imgui.ini
+
+#配布ビルドの生成物（Distribute構成のPreBuildEventで自動生成）
+assets.pak
+assets.ver
+
+#オートアップデーターの一時生成物
+update_tmp.zip
+update.bat
+
+#release.bat の一時生成物
+tools/Corelia_*.zip
+tools/release_notes_tmp.md
+tools/_release_stage/

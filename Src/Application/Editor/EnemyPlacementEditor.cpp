@@ -151,7 +151,7 @@ void EnemyPlacementEditor::Save() const
 
 void EnemyPlacementEditor::Load()
 {
-	std::ifstream ifs(StageManager::Instance().ResolvePath("enemy_placements.csv"));
+	KdAssetIStream ifs(StageManager::Instance().ResolvePath("enemy_placements.csv"));
 	if (!ifs) { return; }
 
 	m_placements.clear();

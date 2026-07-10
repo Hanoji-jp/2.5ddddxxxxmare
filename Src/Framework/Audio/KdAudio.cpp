@@ -1,4 +1,5 @@
 ﻿#include "KdAudio.h"
+#include "../../Application/Util/AssetVault.h"   // 配布ビルド：埋め込みpakからメモリ読み込み
 
 // ── mp3 等を PCM へデコードするための Media Foundation ──
 #include <mfapi.h>
@@ -6,13 +7,20 @@
 #include <mfreadwrite.h>
 #include <mferror.h>
 #include <wrl/client.h>
+#include <shlwapi.h>      // SHCreateMemStream（メモリ→IStream）
 #include <vector>
 #include <algorithm>
 #include <cctype>
 #include <cstring>
+#include <cmath>
+#include <unordered_map>
 #pragma comment(lib, "mfplat.lib")
 #pragma comment(lib, "mfreadwrite.lib")
 #pragma comment(lib, "mfuuid.lib")
+#pragma comment(lib, "shlwapi.lib")
+
+// XAudio2エンジンが生存中か（終了時にエンジン破棄後のボイス操作で落ちるのを防ぐ）
+static bool g_audioAlive = false;
 
 namespace
 {
@@ -29,14 +37,11 @@ namespace
 		return true;
 	}
 
-	// Media Foundation で音声ファイル(mp3/m4a/wma等)を 16bit PCM へ全デコードする。
-	// 成功時：outPcm に生PCM、outWfx に PCM フォーマットを返す。
-	bool DecodeAudioToPcm(const wchar_t* path, std::vector<uint8_t>& outPcm, WAVEFORMATEX& outWfx)
+	// 既に生成した IMFSourceReader から 16bit PCM を全デコードする共通処理。
+	bool DecodeReaderToPcm(IMFSourceReader* reader, std::vector<uint8_t>& outPcm, WAVEFORMATEX& outWfx)
 	{
 		using Microsoft::WRL::ComPtr;
-
-		ComPtr<IMFSourceReader> reader;
-		if (FAILED(MFCreateSourceReaderFromURL(path, nullptr, reader.GetAddressOf()))) { return false; }
+		if (!reader) { return false; }
 
 		// 音声ストリームのみ選択
 		reader->SetStreamSelection(static_cast<DWORD>(MF_SOURCE_READER_ALL_STREAMS), FALSE);
@@ -99,6 +104,72 @@ namespace
 
 		return !outPcm.empty();
 	}
+
+	// ファイルパス(URL)から 16bit PCM へデコード。
+	bool DecodeAudioToPcm(const wchar_t* path, std::vector<uint8_t>& outPcm, WAVEFORMATEX& outWfx)
+	{
+		using Microsoft::WRL::ComPtr;
+		ComPtr<IMFSourceReader> reader;
+		if (FAILED(MFCreateSourceReaderFromURL(path, nullptr, reader.GetAddressOf()))) { return false; }
+		return DecodeReaderToPcm(reader.Get(), outPcm, outWfx);
+	}
+
+	// メモリ上の圧縮音源(mp3等)から 16bit PCM へデコード（配布ビルドのVFS用）。
+	// originName は拡張子付きファイル名（MFがデコーダを選ぶヒント）。
+	bool DecodeAudioToPcmMem(const uint8_t* data, size_t size, const wchar_t* originName,
+		std::vector<uint8_t>& outPcm, WAVEFORMATEX& outWfx)
+	{
+		using Microsoft::WRL::ComPtr;
+		if (!data || size == 0) { return false; }
+
+		// メモリ → IStream（SHCreateMemStream は内部にコピーを持つので data は後で解放可）
+		ComPtr<IStream> stream;
+		stream.Attach(SHCreateMemStream(data, static_cast<UINT>(size)));
+		if (!stream) { return false; }
+
+		ComPtr<IMFByteStream> byteStream;
+		if (FAILED(MFCreateMFByteStreamOnStream(stream.Get(), byteStream.GetAddressOf()))) { return false; }
+
+		// メモリbyte streamは拡張子/MIMEが無くMFがデコーダを選べないので、形式ヒントを付与
+		ComPtr<IMFAttributes> attr;
+		if (SUCCEEDED(byteStream.As(&attr)))
+		{
+			attr->SetString(MF_BYTESTREAM_CONTENT_TYPE, L"audio/mpeg");
+			if (originName && *originName) { attr->SetString(MF_BYTESTREAM_ORIGIN_NAME, originName); }
+		}
+
+		ComPtr<IMFSourceReader> reader;
+		if (FAILED(MFCreateSourceReaderFromByteStream(byteStream.Get(), nullptr, reader.GetAddressOf()))) { return false; }
+
+		return DecodeReaderToPcm(reader.Get(), outPcm, outWfx);
+	}
+
+	// メモリデコードが不調な環境向けフォールバック：%TEMP% に一時ファイルとして
+	// 書き出し、実証済みの URL デコーダで読み、直後に削除する（ディスク露出は一瞬）。
+	bool DecodeAudioViaTempFile(const uint8_t* data, size_t size, std::vector<uint8_t>& outPcm, WAVEFORMATEX& outWfx)
+	{
+		if (!data || size == 0) { return false; }
+
+		wchar_t tmpDir[MAX_PATH] = {};
+		if (GetTempPathW(MAX_PATH, tmpDir) == 0) { return false; }
+		wchar_t tmpName[MAX_PATH] = {};
+		if (GetTempFileNameW(tmpDir, L"kda", 0, tmpName) == 0) { return false; }
+
+		// GetTempFileName が作る .tmp は MF が形式判定しにくいので .mp3 にして書き出す
+		std::wstring placeholder = tmpName;
+		std::wstring mp3Path     = placeholder + L".mp3";
+
+		{
+			std::ofstream ofs(mp3Path, std::ios::binary | std::ios::trunc);
+			if (!ofs) { ::DeleteFileW(placeholder.c_str()); return false; }
+			ofs.write(reinterpret_cast<const char*>(data), static_cast<std::streamsize>(size));
+		}
+		::DeleteFileW(placeholder.c_str());
+
+		const bool ok = DecodeAudioToPcm(mp3Path.c_str(), outPcm, outWfx);
+		::DeleteFileW(mp3Path.c_str());
+		return ok;
+	}
 }
 
 // ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### ##### #####
@@ -119,6 +190,7 @@ void KdAudioManager::Init()
 
 	m_audioEng = std::make_unique<DirectX::AudioEngine>(eflags);
 	m_audioEng->SetReverb(DirectX::Reverb_Default);
+	g_audioAlive = true;   // KdBgmVoice がボイス操作してよい
 
 	m_listener.OrientFront = { 0, 0, 1 };
 
@@ -306,6 +378,8 @@ void KdAudioManager::LoadSoundAssets(std::initializer_list<std::string_view>& fi
 // ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// /////
 void KdAudioManager::Release()
 {
+	g_audioAlive = false;   // 以後 KdBgmVoice はボイス操作をしない（エンジン破棄でボイスも解放される）
+
 	StopAllSound();
 
 	m_playList.clear();
@@ -384,7 +458,26 @@ bool KdSoundEffect::Load(std::string_view fileName, const std::unique_ptr<Direct
 			{
 				std::vector<uint8_t> pcm;
 				WAVEFORMATEX wfx{};
-				if (!DecodeAudioToPcm(wFilename.c_str(), pcm, wfx))
+
+				// 配布ビルド：埋め込みpakに在ればメモリからデコード（ディスクに出さない）
+				std::vector<uint8_t> vaultBytes;
+				bool decoded = false;
+				if (AssetVault::Read(std::string(fileName), vaultBytes))
+				{
+					// ① メモリから直接デコード（ディスクに出さない）
+					decoded = DecodeAudioToPcmMem(vaultBytes.data(), vaultBytes.size(), wFilename.c_str(), pcm, wfx);
+					// ② 環境によりメモリデコード不可なら一時ファイル経由（即削除）
+					if (!decoded)
+					{
+						decoded = DecodeAudioViaTempFile(vaultBytes.data(), vaultBytes.size(), pcm, wfx);
+					}
+				}
+				// それでもダメなら従来どおりディスクのファイルからデコード（開発ビルド）
+				if (!decoded)
+				{
+					decoded = DecodeAudioToPcm(wFilename.c_str(), pcm, wfx);
+				}
+				if (!decoded)
 				{
 					assert(0 && "Sound File Decode Error (Media Foundation)");
 					return false;
@@ -544,4 +637,122 @@ void KdSoundInstance3D::SetCurveDistanceScaler(float val)
 	m_emitter.CurveDistanceScaler = val;
 
 	m_instance->Apply3D(m_ownerListener, m_emitter, false);
+}
+
+
+// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// /////
+//
+// KdBgmVoice（BGM専用 自前XAudio2ソースボイス：ローパスで「こもり」可能）
+//
+// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// ///// /////
+
+namespace
+{
+	// BGMのデコード済みPCMキャッシュ（ゲーム開始ロードで温めておく＝再生時カクつき防止）
+	struct BgmPcm { std::vector<uint8_t> data; WAVEFORMATEX wfx{}; };
+	std::unordered_map<std::string, std::shared_ptr<BgmPcm>> g_bgmCache;
+
+	// path をデコードしてPCMを返す（VFS優先→メモリ→一時ファイル→ディスク）。キャッシュ付き。
+	std::shared_ptr<BgmPcm> GetOrDecodeBgm(const std::string& path)
+	{
+		auto it = g_bgmCache.find(path);
+		if (it != g_bgmCache.end()) { return it->second; }
+
+		auto out = std::make_shared<BgmPcm>();
+		const std::wstring wpath = sjis_to_wide(path);
+
+		bool decoded = false;
+		std::vector<uint8_t> vault;
+		if (AssetVault::Read(path, vault))
+		{
+			decoded = DecodeAudioToPcmMem(vault.data(), vault.size(), wpath.c_str(), out->data, out->wfx);
+			if (!decoded) { decoded = DecodeAudioViaTempFile(vault.data(), vault.size(), out->data, out->wfx); }
+		}
+		if (!decoded) { decoded = DecodeAudioToPcm(wpath.c_str(), out->data, out->wfx); }
+		if (!decoded || out->data.empty()) { return nullptr; }
+
+		g_bgmCache[path] = out;
+		return out;
+	}
+}
+
+void KdBgmVoice::Preload(std::string_view path)
+{
+	if (path.empty()) { return; }
+	GetOrDecodeBgm(std::string(path));   // デコードしてキャッシュに載せるだけ
+}
+
+bool KdBgmVoice::Play(std::string_view path, bool loop)
+{
+	Stop();
+	if (path.empty()) { return false; }
+
+	// キャッシュ（無ければここでデコード）からPCM取得
+	std::shared_ptr<BgmPcm> ref = GetOrDecodeBgm(std::string(path));
+	if (!ref || ref->data.empty()) { return false; }
+
+	IXAudio2* xa = KdAudioManager::Instance().GetXAudio2();
+	if (!xa) { return false; }
+
+	m_pcm = ref->data;     // 再生用にコピー（デコードは済んでいるので軽い）
+	m_wfx = ref->wfx;
+
+	// USEFILTER 付きでソースボイス作成（後でローパスを掛けられる）
+	if (FAILED(xa->CreateSourceVoice(&m_voice, &m_wfx, XAUDIO2_VOICE_USEFILTER)))
+	{
+		m_voice = nullptr;
+		return false;
+	}
+
+	XAUDIO2_BUFFER buf{};
+	buf.AudioBytes = static_cast<UINT32>(m_pcm.size());
+	buf.pAudioData = m_pcm.data();
+	buf.Flags      = XAUDIO2_END_OF_STREAM;
+	buf.LoopCount  = loop ? XAUDIO2_LOOP_INFINITE : 0;
+	if (FAILED(m_voice->SubmitSourceBuffer(&buf))) { Stop(); return false; }
+
+	m_voice->SetVolume(0.0f);
+	SetMuffle(false);             // 初期は原音
+	if (FAILED(m_voice->Start(0))) { Stop(); return false; }
+	return true;
+}
+
+void KdBgmVoice::SetVolume(float vol)
+{
+	if (m_voice) { m_voice->SetVolume(vol); }
+}
+
+void KdBgmVoice::SetMuffle(bool on)
+{
+	if (!m_voice) { return; }
+
+	XAUDIO2_FILTER_PARAMETERS fp{};
+	fp.Type     = LowPassFilter;
+	fp.OneOverQ = 1.0f;
+	if (on)
+	{
+		const float sr     = (m_wfx.nSamplesPerSec > 0) ? static_cast<float>(m_wfx.nSamplesPerSec) : 44100.0f;
+		const float cutoff = 700.0f;   // これより上の高音を削ってこもらせる
+		float f = 2.0f * std::sin(3.14159265f * cutoff / sr);
+		if (f > XAUDIO2_MAX_FILTER_FREQUENCY) { f = XAUDIO2_MAX_FILTER_FREQUENCY; }
+		fp.Frequency = f;
+	}
+	else
+	{
+		fp.Frequency = XAUDIO2_MAX_FILTER_FREQUENCY;   // ほぼ原音（フィルタ無効相当）
+	}
+	m_voice->SetFilterParameters(&fp);
+}
+
+void KdBgmVoice::Stop()
+{
+	// エンジン破棄後（終了時）はボイスも解放済みなので触らない（ダングリング回避）
+	if (m_voice && g_audioAlive)
+	{
+		m_voice->Stop(0);
+		m_voice->FlushSourceBuffers();
+		m_voice->DestroyVoice();
+	}
+	m_voice = nullptr;
+	m_pcm.clear();
 }

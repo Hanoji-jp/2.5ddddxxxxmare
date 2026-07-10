@@ -5,6 +5,9 @@
 #include <array>
 #include <filesystem>
 
+// Unified binary save (settings + totals + records). Defined in SaveData.cpp.
+namespace SaveData { void Save(); }
+
 //==========================================================
 // StageManager
 // Per-stage map data router. Resolves a base file name to a
@@ -56,24 +59,22 @@ public:
     //------------------------------------------------------
     int  GetTotalCoins() const { return m_totalCoins; }
     int  GetTotalRocks() const { return m_totalRocks; }
-    void AddTotalCoins(int n)  { m_totalCoins += n; SaveTotals(); }
-    void AddTotalRocks(int n)  { m_totalRocks += n; SaveTotals(); }
+    void AddTotalCoins(int n)  { m_totalCoins += n; SaveData::Save(); }
+    void AddTotalRocks(int n)  { m_totalRocks += n; SaveData::Save(); }
+
+    // Setters used by SaveData::Load to populate from save.dat.
+    void SetTotals(int coins, int rocks) { m_totalCoins = coins; m_totalRocks = rocks; }
 
     //------------------------------------------------------
     // 初回起動判定（セーブデータ＝フラグファイルの有無で判定）。
     // 初回のみ Story → Stage1 へ直行。以降は Story を出さない。
     //------------------------------------------------------
-    bool IsFirstLaunch() const
-    {
-        return !std::filesystem::exists("Asset/Data/launched.flag");
-    }
-    void MarkLaunched() const
-    {
-        std::error_code ec;
-        std::filesystem::create_directories("Asset/Data/", ec);
-        std::ofstream ofs("Asset/Data/launched.flag");
-        if (ofs) { ofs << "1"; }
-    }
+    bool IsFirstLaunch() const { return !m_launched; }
+    void MarkLaunched()        { m_launched = true; SaveData::Save(); }
+
+    // Launched flag accessors used by SaveData (stored inside save.dat).
+    bool GetLaunched() const   { return m_launched; }
+    void SetLaunched(bool b)   { m_launched = b; }
 
     //------------------------------------------------------
     // セーブデータを全消去（デバッグ用）。初回起動フラグ・合計・ステージ記録をリセット。
@@ -81,11 +82,15 @@ public:
     void ResetSaveData()
     {
         std::error_code ec;
+        std::filesystem::remove("save.dat", ec);
+        // legacy files (no longer used)
         std::filesystem::remove("Asset/Data/launched.flag", ec);
-        std::filesystem::remove(TotalsPath(), ec);
-        std::filesystem::remove(RecordsPath(), ec);
+        std::filesystem::remove("Asset/Data/totals.csv", ec);
+        std::filesystem::remove("Asset/Data/stage_records.csv", ec);
+        std::filesystem::remove("Asset/Data/settings.csv", ec);
         m_totalCoins = 0;
         m_totalRocks = 0;
+        m_launched   = false;
         m_records = std::array<StageRecord, kMaxStages>{};
     }
 
@@ -107,6 +112,13 @@ public:
         return m_records[stageId];
     }
 
+    // Setter used by SaveData::Load to populate from save.dat.
+    void SetRecord(int stageId, const StageRecord& rec)
+    {
+        if (stageId < 0 || stageId >= kMaxStages) { return; }
+        m_records[stageId] = rec;
+    }
+
     // Debug: unlock all stages (transient, not saved to file).
     void SetDebugUnlockAll(bool on) { m_debugUnlockAll = on; }
     bool IsDebugUnlockAll() const   { return m_debugUnlockAll; }
@@ -119,7 +131,7 @@ public:
         r.cleared = true;
         if (coins > r.bestCoins) { r.bestCoins = coins; }
         if (r.bestTime <= 0.0f || time < r.bestTime) { r.bestTime = time; }
-        SaveRecords();
+        SaveData::Save();
     }
 
     // Stage data folder (with trailing slash), e.g. "Asset/Data/Stage01/".
@@ -134,13 +146,19 @@ public:
     // Ensures the stage folder exists so saves never fail.
     std::string ResolvePath(const char* _fileName) const
     {
+#ifndef DISTRIBUTE_BUILD
+        // Dev only: ensure the stage folder exists so editor saves never fail.
+        // In Distribute, assets come from the embedded pak (VFS), so do NOT
+        // create empty Asset/Data/StageXX folders on disk.
         std::error_code ec;
         std::filesystem::create_directories(Dir(), ec);
+#endif
         return Dir() + _fileName;
     }
 
 private:
-    StageManager() { LoadTotals(); LoadRecords(); }
+    // Save data is loaded once at startup via SaveData::Load() (not in ctor).
+    StageManager() = default;
     ~StageManager() = default;
     StageManager(const StageManager&)            = delete;
     StageManager& operator=(const StageManager&) = delete;
@@ -200,6 +218,7 @@ private:
     StageResult m_result;
     int m_totalCoins = 0;
     int m_totalRocks = 0;
+    bool m_launched  = false;        // first-launch flag (stored in save.dat)
     std::array<StageRecord, kMaxStages> m_records{};
     bool m_debugUnlockAll = false;   // Debug: unlock all stages (not saved)
 };

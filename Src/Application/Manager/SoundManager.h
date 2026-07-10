@@ -7,6 +7,7 @@
 #include <functional>
 
 class KdSoundInstance;
+class KdBgmVoice;
 
 //----------------------------------------------------------
 // ゲーム内SEの論理ID。実ファイルは SoundManager の差し替え可能テーブルが持つ
@@ -148,9 +149,8 @@ private:
 	// 実際に1曲を（クロスフェードで）鳴らす。m_bgmBasePath は変えない。
 	void StartTrack(std::string_view path);
 
-	std::shared_ptr<KdSoundInstance> m_bgm;       // 現在のBGM・通常版
-	std::shared_ptr<KdSoundInstance> m_bgmMuf;    // 現在のBGM・こもり版（通常版と同時再生＝同期）
-	std::shared_ptr<KdSoundInstance> m_bgmOld;    // 切替前のBGM（フェードアウト中）
+	std::shared_ptr<KdBgmVoice> m_bgm;       // 現在のBGM（自前ボイス。こもりはローパスで実現）
+	std::shared_ptr<KdBgmVoice> m_bgmOld;    // 切替前のBGM（フェードアウト中）
 
 	std::string m_bgmPath;      // 実際に再生中のファイル（通常 or こもり）
 	std::string m_bgmBasePath;  // 論理的な曲（こもり解除で戻る先）
@@ -161,8 +161,7 @@ private:
 	float m_masterVol = 1.0f;    // 設定：マスター音量(0..1)
 	float m_bgmUserVol= 1.0f;    // 設定：BGM音量(0..1)
 	float m_seUserVol = 1.0f;    // 設定：SE音量(0..1)
-	float m_curVol    = 0.0f;    // m_bgm（通常版）の現在音量
-	float m_mufVol    = 0.0f;    // m_bgmMuf（こもり版）の現在音量
+	float m_curVol    = 0.0f;    // m_bgm の現在音量
 	float m_targetVol = 0.0f;    // 旧：未使用（互換のため残置）
 	float m_oldVol    = 0.0f;    // m_bgmOld の現在音量
 };
